@@ -202,7 +202,10 @@ link to reset the state and start that task. `/__fbn/result?key=<key>` shows
 the verdict for the running task. Without `--key`, the key is random. Give it
 to people, not to an agent that you test on the sites. foxbench has no MCP server of its own; it is an MCP client.
 
-### The demo extension
+### The extension
+
+Install from AMO: [addons.mozilla.org/firefox/addon/foxbench](https://addons.mozilla.org/firefox/addon/foxbench/)
+(pending AMO review; the link works after approval).
 
 `extension/` is a small extension for people who want to try the tasks by
 hand. Run `foxbench serve`, load `dist-ext/` as a temporary add-on in

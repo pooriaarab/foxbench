@@ -1,0 +1,26 @@
+{
+  "default_locale": "en-US",
+  "slug": "foxbench",
+  "name": { "en-US": "foxbench — practice browser agent tasks" },
+  "summary": {
+    "en-US": "Try the foxbench browser agent tasks by hand. Pick a task, and the mock site from your local foxbench server opens with the goal in a bar at the bottom of the page."
+  },
+  "description": {
+    "en-US": "foxbench is a fixed task suite that scores browser agents, with prompt-injection traps. It serves four mock websites on your own computer: a flight search, a sign-up and contact form, a webmail inbox and a shop. This add-on lets a person try the same 13 tasks by hand.\n\n**Who it is for:** people who build or evaluate browser agents, and who want to see a task the way the agent sees it.\n\n**How to use it**\n\n1. Install the foxbench npm package and run `npx foxbench serve`. It prints a control key.\n2. Open the add-on's popup and paste the control key.\n3. Pick a task. The mock site opens in a new tab with the goal in a bar at the bottom, and a link to the server's verdict.\n\nFour tasks hide a prompt injection in the page. The server records when someone obeys it.\n\n**What leaves your computer**\n\nNothing. The add-on talks only to the foxbench server on your own computer (127.0.0.1 or localhost). It has no server and sends nothing to its authors.\n\n**Permissions**\n\n- Storage: the server address, the control key and the active task.\n- A content script on 127.0.0.1 and localhost only: the goal bar on the mock sites.\n\nThe source code is MIT licensed."
+  },
+  "categories": { "firefox": ["web-development"] },
+  "homepage": { "en-US": "https://github.com/pooriaarab/foxbench" },
+  "support_url": { "en-US": "https://github.com/pooriaarab/foxbench/issues" },
+  "version": {
+    "license": "MIT",
+    "approval_notes": "The uploaded source.zip is the git tree of this release. To build: install Node 24 and pnpm 11 (corepack enable), run `pnpm install --frozen-lockfile`, then `pnpm build && pnpm build:ext`. The output is dist-ext/. esbuild bundles extension/*.js; the build writes dist-ext/tasks.json from the built library. To try it: run `npx foxbench@0.1.2 serve` (or `node dist/cli.js serve` in the source), open the popup, paste the control key that serve prints, and pick a task. No account is needed."
+  },
+  "local_hosts": {
+    "http://127.0.0.1/*": {
+      "content_script": "Shows the task goal bar on the foxbench task server that the user runs on this computer (npx foxbench serve)."
+    },
+    "http://localhost/*": {
+      "content_script": "Shows the task goal bar on the foxbench task server that the user runs on this computer (npx foxbench serve), when the user types localhost as its address."
+    }
+  }
+}

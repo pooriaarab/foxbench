@@ -1,6 +1,6 @@
 {
   "name": "foxbench",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "A fixed task suite that scores browser agents in Firefox, with prompt-injection traps.",
   "type": "module",
   "license": "MIT",
@@ -31,9 +31,10 @@
     "typecheck": "tsc --noEmit",
     "lint": "oxlint --deny-warnings",
     "test": "vitest run --passWithNoTests",
-    "ci:local": "pnpm lint && pnpm typecheck && pnpm test && pnpm build && pnpm build:ext && pnpm lint:ext",
+    "ci:local": "pnpm lint && pnpm typecheck && pnpm test && pnpm build && pnpm build:ext && pnpm lint:ext && pnpm check:amo",
     "build:ext": "node scripts/build-ext.mjs",
     "lint:ext": "web-ext lint -s dist-ext --warnings-as-errors",
+    "check:amo": "node scripts/amo-listing.mjs check",
     "e2e": "pnpm build && pnpm build:ext && node e2e/run.mjs"
   },
   "devDependencies": {
