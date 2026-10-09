@@ -1,0 +1,109 @@
+name: Bug
+description: Something is broken, wrong, or crashing.
+labels: ["bug", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        A reproduction is required. A failing test is welcome and is not, because
+        most bugs are seen before anyone can write one. The fix's pull request
+        carries that burden instead: it shows the test failing before and passing
+        after.
+
+        Write only the sections that apply. An empty heading looks answered.
+
+  - type: textarea
+    id: impact
+    attributes:
+      label: Impact
+      description: Who is blocked, and what does it cost them. One or two sentences.
+      placeholder: Scheduled posts to LinkedIn silently fail, so a whole workspace's queue goes out empty.
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction
+      description: Concrete steps, then what should happen and what happens instead.
+      value: |
+        1.
+        2.
+        3.
+
+        Expected:
+        Actual:
+    validations:
+      required: true
+
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      description: Browser, plan, workspace, and whether this is local, staging or production.
+      placeholder: Chrome 141, Growth plan, pooriaarabtestgrowth, staging
+    validations:
+      required: true
+
+  - type: input
+    id: last-known-good
+    attributes:
+      label: Last known good
+      description: The commit, release, or date it last worked. "Never worked" is an answer.
+      placeholder: Worked on 2026-08-20, broken after #1188
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: Each one independently testable, and each one true or false.
+      value: |
+        - [ ]
+        - [ ]
+    validations:
+      required: true
+
+  - type: textarea
+    id: verify
+    attributes:
+      label: How to verify
+      description: Steps, then the expected result. Concrete enough for someone who has not read the code.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: size
+    attributes:
+      label: Size
+      description: Declare it before writing the body. Mini carries almost nothing.
+      options:
+        - mini - an obvious fix, one string or one guard
+        - standard - a bounded fix in one area
+        - deep - multiple surfaces, or the cause is not yet known
+    validations:
+      required: true
+
+  - type: dropdown
+    id: route
+    attributes:
+      label: Agent tier
+      description: >-
+        Derived, not guessed. Any high-stakes path is judgement whatever the size:
+        see .agents/issues.md.
+      options:
+        - route:mechanical - obvious fix, nothing high-stakes
+        - route:scoped - needs judgement about the codebase
+        - route:judgement - cross-cutting, or touches a high-stakes path
+    validations:
+      required: true
+
+  - type: textarea
+    id: extras
+    attributes:
+      label: Edge cases, logs, or a failing test
+      description: >-
+        Optional. Add edge cases only when more than one non-obvious case exists.
+        Logs from this repo's error-reporting tool, named in `.agents/issues.md`,
+        are useful here.
