@@ -1,8 +1,13 @@
 {
   "manifest_version": 3,
-  "name": "foxbench demo",
-  "version": "0.1.1",
+  "name": "foxbench — practice browser agent tasks",
+  "version": "0.1.2",
   "description": "Try the foxbench tasks by hand: pick a task, and the mock site opens with its goal.",
+  "icons": {
+    "48": "icons/icon-48.png",
+    "96": "icons/icon-96.png",
+    "128": "icons/icon-128.png"
+  },
   "browser_specific_settings": {
     "gecko": {
       "id": "foxbench@pooriaarab",
@@ -18,8 +23,12 @@
     "storage"
   ],
   "action": {
-    "default_title": "foxbench demo",
-    "default_popup": "popup.html"
+    "default_title": "foxbench",
+    "default_popup": "popup.html",
+    "default_icon": {
+      "48": "icons/icon-48.png",
+      "96": "icons/icon-96.png"
+    }
   },
   "content_scripts": [
     {

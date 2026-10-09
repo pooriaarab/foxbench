@@ -69,3 +69,26 @@ A CI job reads only the exit code of `foxbench run`. The tests are in
 | C1 | The agent command does not exist, the run scores 0, and the CLI exits 0. CI shows green for an agent that never ran. | Exit 1, and say that the agent did not run. | `C1 ...` |
 | C2 | The agent starts, but every task ends in an adapter or tool error, and the CLI exits 0. | Exit 1. | `C2 ...` |
 | C3 | One failed task makes the whole run exit 1. | A run where the agent ran exits 0, and the scoreboard counts the adapter errors. | `C3 ...` |
+
+## AMO release build and listed submission (`scripts/amo-listing.mjs`)
+
+`pnpm check:amo` reads `dist-ext/`, which is what `release.yml` signs. Each
+row is a way that the listed build or the submission can go wrong.
+
+| ID | Failure | Wanted result |
+|---|---|---|
+| AR1 | `dist-ext/` is missing, so the check reads nothing | The check stops and says to run `pnpm build:ext` |
+| AR2 | A content script in the release manifest matches `127.0.0.1`, `localhost` or `*.localhost` (a test bridge) | The check stops and names the pattern |
+| AR3 | A host permission for a local host exists only for tests | The check stops, unless `local_hosts` in the listing gives a reason for that exact pattern |
+| AR4 | A file named for tests (`e2e`, `fixture`, `test`, `spec`) is in `dist-ext/` | The check stops and names the file |
+| AR5 | `dist-ext/` came from `build-ext.mjs --e2e` | AR2 or AR4 stops it |
+| AR6 | The `local_hosts` reasons go to AMO as an unknown field | `metadata` leaves them out, as it does the privacy policy |
+| AR7 | A re-run submits a version that AMO already has as listed | `version-status` says `listed`, and the step skips web-ext sign and finishes the release |
+| AR8 | AMO has the version as unlisted | `version-status` stops and says to bump the version |
+| AR9 | The AMO version lookup fails (401, 500, network) | `version-status` stops; it never guesses `absent` |
+| AR10 | The goal bar's content script on the local foxbench server (`http://127.0.0.1/*`, `http://localhost/*`) is product function, but AR2 would refuse it | `local_hosts` in the listing names both patterns with the reason, so the check passes and the reason is on record; any other local pattern still stops the check |
+
+| ID | Failure | Wanted result |
+|---|---|---|
+| AR-U1 | A `local_hosts` reason for a host permission also clears a test content script on the same pattern | Each reason names its use (`host_permission`, `content_script`, `web_accessible_resource`, `externally_connectable`); a use without its own reason stops the check |
+| AR-U2 | `local_hosts` keeps a reason for a use that the release build does not have | The check stops and names the pattern and the use |
