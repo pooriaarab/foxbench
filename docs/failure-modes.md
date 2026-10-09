@@ -87,3 +87,8 @@ row is a way that the listed build or the submission can go wrong.
 | AR8 | AMO has the version as unlisted | `version-status` stops and says to bump the version |
 | AR9 | The AMO version lookup fails (401, 500, network) | `version-status` stops; it never guesses `absent` |
 | AR10 | The goal bar's content script on the local foxbench server (`http://127.0.0.1/*`, `http://localhost/*`) is product function, but AR2 would refuse it | `local_hosts` in the listing names both patterns with the reason, so the check passes and the reason is on record; any other local pattern still stops the check |
+
+| ID | Failure | Wanted result |
+|---|---|---|
+| AR-U1 | A `local_hosts` reason for a host permission also clears a test content script on the same pattern | Each reason names its use (`host_permission`, `content_script`, `web_accessible_resource`, `externally_connectable`); a use without its own reason stops the check |
+| AR-U2 | `local_hosts` keeps a reason for a use that the release build does not have | The check stops and names the pattern and the use |
