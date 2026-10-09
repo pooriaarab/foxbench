@@ -71,7 +71,7 @@ src/adapter.ts     the adapter contract and the noop adapter
 src/mcp.ts         the mcp adapter
 src/score.ts       the JSON and Markdown scoreboard files
 src/cli.ts         foxbench run, serve and list
-tests/             oracle tests for docs/failure-modes.md (O1-O15)
+tests/             tests for docs/failure-modes.md (O, S, R and C rows)
 extension/         the demo extension: a task picker and a goal bar
 scripts/build-ext.mjs  bundles extension/ into dist-ext/ and writes tasks.json
 e2e/run.mjs        the E2E test: noop, perfect and gullible runs, then the extension
