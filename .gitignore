@@ -5,3 +5,4 @@ dist/
 dist-ext/
 web-ext-artifacts/
 source.zip
+artifacts/score-*.json
