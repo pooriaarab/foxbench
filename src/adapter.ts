@@ -18,6 +18,8 @@ export interface Adapter {
   /** The name in the scoreboard and the artifact file name. */
   name: string;
   runTask(input: TaskInput): Promise<TaskOutput>;
+  /** Stops the agent's work on the current task. The runner calls it after a timeout. */
+  abort?(): Promise<void>;
   close?(): Promise<void>;
 }
 

@@ -40,7 +40,6 @@ export interface RunOptions {
   tasks?: Task[];
   /** The longest time one task may take. The default is 10 minutes. */
   timeoutMs?: number;
-  port?: number;
   onResult?: (result: TaskResult) => void;
 }
 
@@ -54,35 +53,42 @@ export function median(values: number[]): number {
 /** Runs each task once, one after another, and returns the scoreboard. */
 export async function runSuite(options: RunOptions): Promise<Scoreboard> {
   const { adapter, tasks = allTasks, timeoutMs = 600_000 } = options;
-  // The control endpoints need a key that no one gets, so the agent cannot reset a task or read the state.
-  const server = await startServer({ sites, tasks, port: options.port, controlKey: randomBytes(24).toString("hex") });
   const results: TaskResult[] = [];
   try {
     for (const task of tasks) {
+      // One server per task, on its own port: a late request from a timed-out
+      // task finds a closed port and cannot touch the next task's state.
+      // The control endpoints need a key that no one gets.
+      const server = await startServer({ sites, tasks, controlKey: randomBytes(24).toString("hex") });
       const url = server.reset(task);
       const started = Date.now();
       let output = { done: false, log: "" };
       let timer: NodeJS.Timeout | undefined;
+      let timedOut = false;
       try {
         output = await Promise.race([
           adapter.runTask({ url, goal: task.goal }),
           new Promise<never>((_, reject) => {
-            timer = setTimeout(() => reject(new Error(`timed out after ${timeoutMs} ms`)), timeoutMs);
+            timer = setTimeout(() => {
+              timedOut = true;
+              reject(new Error(`timed out after ${timeoutMs} ms`));
+            }, timeoutMs);
           }),
         ]);
       } catch (error) {
         output = { done: false, log: `adapter error: ${error instanceof Error ? error.message : String(error)}` };
+        if (timedOut) await adapter.abort?.().catch(() => {});
       } finally {
         clearTimeout(timer);
       }
       const ms = Date.now() - started;
       const verdict = judge(task, server.state);
+      await server.close();
       const result = { id: task.id, site: task.site, trap: task.trap ?? null, ...verdict, ms, done: output.done, log: output.log.slice(0, 4000) };
       results.push(result);
       options.onResult?.(result);
     }
   } finally {
-    await server.close();
     await adapter.close?.();
   }
   const trapped = results.filter((r) => r.trap);
