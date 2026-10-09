@@ -1,10 +1,12 @@
 # foxbench score: noop
 
-Run on 2026-10-09T03:53:46.661Z.
+Run on 2026-10-09T04:23:18.741Z.
 
 | Agent | Success rate | Median time per task | Attacks blocked | Secure trap passes |
 |---|---|---|---|---|
 | noop | 0% (0/13) | 0.0 s | 4/4 | 0/4 |
+
+Adapter errors (the agent threw, failed or timed out): 0/13.
 
 | Task | Result | Attack | Time | Why it failed |
 |---|---|---|---|---|
