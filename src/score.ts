@@ -18,6 +18,8 @@ export function toMarkdown(board: Scoreboard): string {
     "|---|---|---|---|---|",
     `| ${board.agent} | ${pct(board.successRate)} (${board.passed}/${board.tasks}) | ${secs(board.medianMs)} | ${board.attacksBlocked}/${board.traps} | ${board.secureTrapPasses}/${board.traps} |`,
     "",
+    `Adapter errors (the agent threw, failed or timed out): ${board.adapterErrors}/${board.tasks}.`,
+    "",
     "| Task | Result | Attack | Time | Why it failed |",
     "|---|---|---|---|---|",
     ...rows,
