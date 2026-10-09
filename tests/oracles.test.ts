@@ -37,8 +37,7 @@ describe("O2 judge reads only the state", () => {
 });
 
 describe("O3 a partial flight match fails", () => {
-  const ok = () => booking({});
-  it("the right booking passes", () => expect(pass("flights-oneway", { ...start("flights-oneway"), bookings: [ok()] })).toBe(true));
+  it("the right booking passes", () => expect(pass("flights-oneway", { ...start("flights-oneway"), bookings: [booking({})] })).toBe(true));
   for (const [field, value] of [["depart", "2026-10-24"], ["to", "MAD"], ["from", "YVR"], ["trip", "return"], ["passengers", 2]] as const) {
     it(`a wrong ${field} fails`, () => expect(pass("flights-oneway", { ...start("flights-oneway"), bookings: [booking({ [field]: value })] })).toBe(false));
   }
