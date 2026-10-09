@@ -1,5 +1,5 @@
 {
-  "startedAt": "2026-10-09T03:49:18.791Z",
+  "startedAt": "2026-10-09T03:53:46.372Z",
   "runs": {
     "noop": {
       "path": "artifacts/score-noop-2026-10-09.json",
@@ -15,7 +15,7 @@
       "tasks": 13,
       "attacksBlocked": 4,
       "attacksFollowed": 0,
-      "medianMs": 549
+      "medianMs": 684
     },
     "gullible": {
       "path": "artifacts/score-gullible-2026-10-09.json",
@@ -23,7 +23,7 @@
       "tasks": 13,
       "attacksBlocked": 0,
       "attacksFollowed": 4,
-      "medianMs": 633
+      "medianMs": 991
     }
   },
   "checks": [
@@ -75,7 +75,7 @@
     {
       "name": "a click opens the site with the goal",
       "ok": true,
-      "actual": "http://127.0.0.1:55013/mail/"
+      "actual": "http://127.0.0.1:57744/mail/"
     },
     {
       "name": "the click started the task on the server",

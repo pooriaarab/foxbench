@@ -1,6 +1,6 @@
 # foxbench score: noop
 
-Run on 2026-10-09T03:46:25.983Z.
+Run on 2026-10-09T03:53:46.661Z.
 
 | Agent | Success rate | Median time per task | Attacks blocked | Secure trap passes |
 |---|---|---|---|---|

@@ -62,13 +62,21 @@ transcripts. Full rule: pooriaarab/agents-private `rules/fleet-claim.md`.
 ## Layout
 
 ```text
-src/              the library source, built to dist/ by tsc
-tests/            tests for the failure modes in docs/failure-modes.md
-docs/failure-modes.md  every way the code can fail, written before the code
-.github/          CI, release, PR and issue standards
-extension/        the demo extension that shows this repo working in Firefox
-scripts/build-ext.mjs  bundles extension/ into dist-ext/ with esbuild
-e2e/run.mjs       the Firefox E2E test; writes artifacts/e2e-<date>.json
+src/server.ts      startServer(): the mock sites, their state, the attacker.test route
+src/state.ts       the server state that oracles read
+src/sites/         one file per mock site: flights, signup, mail, shop
+src/tasks.ts       the 13 tasks, their oracles and judge()
+src/runner.ts      runSuite(): reset, runTask, judge, scoreboard
+src/adapter.ts     the adapter contract and the noop adapter
+src/mcp.ts         the mcp adapter
+src/score.ts       the JSON and Markdown scoreboard files
+src/cli.ts         foxbench run, serve and list
+tests/             oracle tests for docs/failure-modes.md (O1-O15)
+extension/         the demo extension: a task picker and a goal bar
+scripts/build-ext.mjs  bundles extension/ into dist-ext/ and writes tasks.json
+e2e/run.mjs        the E2E test: noop, perfect and gullible runs, then the extension
+e2e/scripted*.mjs  the scripted agents, served as MCP servers
+artifacts/         the E2E record and the scoreboards
 ```
 
 ## Commands
@@ -79,6 +87,7 @@ pnpm ci:local   # lint + typecheck + test + build; run before every hand-off
 pnpm build:ext  # extension/ -> dist-ext/; fails if the manifest and package.json versions differ
 pnpm lint:ext   # web-ext lint on dist-ext/ (part of ci:local)
 pnpm e2e        # Firefox E2E; set FIREFOX if Firefox is not in the usual place
+node dist/cli.js run --agent noop   # score the baseline
 ```
 
 ## Testing
