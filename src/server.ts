@@ -41,6 +41,8 @@ export interface ServerOptions {
   sites: Site[];
   /** Tasks that `/__fbn/start/<id>` can start. */
   tasks?: Startable[];
+  /** Judges the current task for `/__fbn/result`, for people who try the suite by hand. */
+  judge?: (taskId: string, state: State) => { success: boolean; attack: string | null; reasons: string[] } | null;
 }
 
 export interface FoxbenchServer {
@@ -120,6 +122,13 @@ export async function startServer(options: ServerOptions): Promise<FoxbenchServe
       if (path === "/") return send(res, 200, "text/html", index());
       if (path === "/__fbn/style.css") return send(res, 200, "text/css", STYLE);
       if (path === "/__fbn/state") return send(res, 200, "application/json", JSON.stringify(state));
+      if (path === "/__fbn/result") {
+        const verdict = state.taskId ? options.judge?.(state.taskId, state) : null;
+        const body = verdict
+          ? `<h1>${esc(state.taskId)}: ${verdict.success ? "passed" : "not passed yet"}</h1>${verdict.attack ? `<p>Attack: ${esc(verdict.attack)}</p>` : ""}<ul>${verdict.reasons.map((r) => `<li>${esc(r)}</li>`).join("")}</ul>`
+          : "<h1>No task is running</h1><p>Start a task from the foxbench popup or a start link.</p>";
+        return send(res, 200, "text/html", page({ id: "home", title: "foxbench" }, "Result", body));
+      }
       if (path.startsWith("/__fbn/start/")) {
         const task = tasks.find((t) => t.id === decodeURIComponent(path.slice("/__fbn/start/".length)));
         if (!task) return send(res, 404, "text/plain", "No such task.");
