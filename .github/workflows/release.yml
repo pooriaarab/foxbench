@@ -1,0 +1,77 @@
+# main = staging, release = production.
+# Merge main into release to publish the version in package.json to npm.
+name: Release
+
+on:
+  push:
+    branches: [release]
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+permissions:
+  contents: write # push the tag and create the GitHub release
+  id-token: write # npm provenance
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Refuse a version that is already released
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          if [ -n "$(git ls-remote --tags origin "refs/tags/v${VERSION}")" ]; then
+            echo "::error::Version ${VERSION} is already released. Bump the version in package.json."
+            exit 1
+          fi
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          cache: pnpm
+          registry-url: https://registry.npmjs.org
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm ci:local
+      - name: Publish to npm
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          if [ -z "$NODE_AUTH_TOKEN" ]; then
+            echo "::error::Secret NPM_TOKEN is empty. Add an npm automation token as the repository secret NPM_TOKEN, then push to release again."
+            exit 1
+          fi
+          npm publish --provenance --access public
+      - name: Sign the demo extension with AMO
+        env:
+          AMO_JWT_ISSUER: ${{ secrets.AMO_JWT_ISSUER }}
+          AMO_JWT_SECRET: ${{ secrets.AMO_JWT_SECRET }}
+        run: |
+          missing=0
+          for name in AMO_JWT_ISSUER AMO_JWT_SECRET; do
+            if [ -z "${!name}" ]; then
+              echo "::error::Secret $name is empty. Add your AMO API key as repository secrets AMO_JWT_ISSUER and AMO_JWT_SECRET."
+              missing=1
+            fi
+          done
+          [ "$missing" -eq 0 ] || exit 1
+          # AMO reviewers get the source, because dist-ext/ is bundled.
+          git archive --format=zip -o source.zip HEAD
+          pnpm exec web-ext sign -s dist-ext -a web-ext-artifacts --channel=unlisted \
+            --api-key="$AMO_JWT_ISSUER" --api-secret="$AMO_JWT_SECRET" \
+            --upload-source-code source.zip
+      - name: Tag and create the GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          FILES=()
+          FILES=(web-ext-artifacts/*.xpi)
+          if [ ! -e "${FILES[0]}" ]; then
+            echo "::error::Signing produced no .xpi file."
+            exit 1
+          fi
+          # gh creates the tag v<version> on this commit when it does not exist.
+          gh release create "v${VERSION}" "${FILES[@]}" --target "$GITHUB_SHA" --title "v${VERSION}" --generate-notes

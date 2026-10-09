@@ -1,0 +1,7 @@
+node_modules/
+dist/
+*.tgz
+.DS_Store
+dist-ext/
+web-ext-artifacts/
+source.zip
