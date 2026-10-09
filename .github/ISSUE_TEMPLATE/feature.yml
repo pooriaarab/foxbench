@@ -1,0 +1,113 @@
+name: Feature
+description: Something is added or changed that a user can see.
+labels: ["feature", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Write what is blocked, not what to build. An issue that opens with a
+        solution has already thrown away what you need to check the solution
+        against.
+
+        Write only the sections that apply. An empty heading looks answered.
+
+  - type: textarea
+    id: job
+    attributes:
+      label: Job to be done
+      description: One or two sentences in the voice of whoever is blocked. What they cannot do today.
+      placeholder: I manage three brands and I cannot tell which workspace a scheduled post belongs to without opening it.
+    validations:
+      required: true
+
+  - type: textarea
+    id: today-wanted
+    attributes:
+      label: Today / Wanted
+      description: What the product does now, then what it must do instead.
+      value: |
+        Today:
+        Wanted:
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: >-
+        Each one independently testable, and each one true or false. "Improve the
+        loading state" is not a criterion, because no one can be wrong about it.
+      value: |
+        - [ ]
+        - [ ]
+    validations:
+      required: true
+
+  - type: textarea
+    id: verify
+    attributes:
+      label: How to verify
+      description: Steps, then the expected result. Concrete enough for someone who has not read the code.
+    validations:
+      required: true
+
+  - type: textarea
+    id: success-metric
+    attributes:
+      label: Success metric
+      description: >-
+        Name a real event and the analytics helper that sends it — both are
+        named in `.agents/issues.md` — or say plainly that the event has to be
+        added. Do not invent a name: the next agent will search for it and
+        conclude the code is broken.
+      value: |
+        Event:
+        Question:
+        Threshold:
+    validations:
+      required: true
+
+  - type: dropdown
+    id: size
+    attributes:
+      label: Size
+      description: Declare it before writing the body. Mini carries almost nothing.
+      options:
+        - mini - one string, one config value, a narrow rename
+        - standard - a bounded change in one area, one user-visible flow
+        - deep - multiple surfaces, a new system, or a data migration
+    validations:
+      required: true
+
+  - type: dropdown
+    id: route
+    attributes:
+      label: Agent tier
+      description: >-
+        Derived, not guessed. Any high-stakes path is judgement whatever the size:
+        see .agents/issues.md.
+      options:
+        - route:mechanical - every criterion mechanically checkable, nothing high-stakes
+        - route:scoped - one area, needs judgement about the codebase
+        - route:judgement - deep, cross-cutting, or touches a high-stakes path
+    validations:
+      required: true
+
+  - type: textarea
+    id: conditional
+    attributes:
+      label: Edge cases, flow, out of scope
+      description: >-
+        Optional, and each has a trigger. Edge cases when more than one non-obvious
+        case exists, as a table. A mermaid flow when the path branches or runs past
+        three steps. Out of scope when a reviewer would otherwise widen the change.
+
+  - type: textarea
+    id: grounding
+    attributes:
+      label: Grounding
+      description: >-
+        Optional. Required only if this issue asserts how the code works today.
+        Then cite file:line. An unverified claim becomes a fact the next agent
+        builds on.
