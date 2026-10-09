@@ -8,7 +8,7 @@ import { runSuite } from "./runner.js";
 import { toMarkdown, writeScore } from "./score.js";
 import { startServer } from "./server.js";
 import { sites } from "./sites/index.js";
-import { tasks } from "./tasks.js";
+import { judge, taskById, tasks } from "./tasks.js";
 
 const USAGE = `Usage:
   foxbench run --agent noop [--tasks id,id] [--out artifacts] [--timeout <s>] [--min-success <0-1>]
@@ -67,7 +67,10 @@ if (command === "list") {
 } else if (command === "serve") {
   const port = Number(values.port ?? 4173);
   if (!Number.isInteger(port) || port < 0 || port > 65535) fail(`--port must be a port number, not ${values.port}.`);
-  const server = await startServer({ sites, tasks, port });
+  const server = await startServer({ sites, tasks, port, judge: (id, state) => {
+    const task = taskById(id);
+    return task ? judge(task, state) : null;
+  } });
   console.log(`foxbench sites on ${server.url}`);
   for (const t of tasks) console.log(`  ${server.url}/__fbn/start/${t.id}`);
   console.log("Open a start link to reset the state and begin that task. Press Ctrl+C to stop.");
