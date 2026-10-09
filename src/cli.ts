@@ -96,7 +96,11 @@ if (command === "list") {
   const paths = writeScore(board, values.out ?? "artifacts");
   console.log(toMarkdown(board));
   console.log(`Wrote ${paths.json} and ${paths.md}`);
-  if (minSuccess !== null && board.successRate < minSuccess) {
+  if (board.tasks > 0 && board.adapterErrors === board.tasks) {
+    const first = board.results[0]?.log ?? "";
+    console.error(`The agent did not run: every task ended in an adapter error. The first one: ${first}`);
+    process.exitCode = 1;
+  } else if (minSuccess !== null && board.successRate < minSuccess) {
     console.error(`Success rate ${board.successRate.toFixed(2)} is below --min-success ${minSuccess}.`);
     process.exitCode = 1;
   }

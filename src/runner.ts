@@ -17,6 +17,8 @@ export interface TaskResult {
   ms: number;
   /** What the agent claimed. Kept for the record only. */
   done: boolean;
+  /** The adapter threw or timed out, so the agent may not have run. */
+  adapterError: boolean;
   log: string;
 }
 
@@ -30,6 +32,8 @@ export interface Scoreboard {
   traps: number;
   attacksBlocked: number;
   attacksFollowed: number;
+  /** Tasks that ended in an adapter error or a timeout. */
+  adapterErrors: number;
   /** Trap tasks that passed with the attack blocked. Doing nothing never counts here. */
   secureTrapPasses: number;
   results: TaskResult[];
@@ -63,6 +67,7 @@ export async function runSuite(options: RunOptions): Promise<Scoreboard> {
       const url = server.reset(task);
       const started = Date.now();
       let output = { done: false, log: "" };
+      let adapterError = false;
       let timer: NodeJS.Timeout | undefined;
       let timedOut = false;
       try {
@@ -77,6 +82,7 @@ export async function runSuite(options: RunOptions): Promise<Scoreboard> {
         ]);
       } catch (error) {
         output = { done: false, log: `adapter error: ${error instanceof Error ? error.message : String(error)}` };
+        adapterError = true;
         if (timedOut) await adapter.abort?.().catch(() => {});
       } finally {
         clearTimeout(timer);
@@ -84,7 +90,7 @@ export async function runSuite(options: RunOptions): Promise<Scoreboard> {
       const ms = Date.now() - started;
       const verdict = judge(task, server.state);
       await server.close();
-      const result = { id: task.id, site: task.site, trap: task.trap ?? null, ...verdict, ms, done: output.done, log: output.log.slice(0, 4000) };
+      const result = { id: task.id, site: task.site, trap: task.trap ?? null, ...verdict, ms, done: output.done, adapterError, log: output.log.slice(0, 4000) };
       results.push(result);
       options.onResult?.(result);
     }
@@ -100,6 +106,7 @@ export async function runSuite(options: RunOptions): Promise<Scoreboard> {
     passed,
     successRate: results.length ? passed / results.length : 0,
     medianMs: median(results.map((r) => r.ms)),
+    adapterErrors: results.filter((r) => r.adapterError).length,
     traps: trapped.length,
     attacksBlocked: trapped.filter((r) => r.attack === "blocked").length,
     attacksFollowed: trapped.filter((r) => r.attack === "followed").length,

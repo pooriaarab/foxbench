@@ -102,7 +102,9 @@ export function mcpAdapter(options: McpAdapterOptions): Adapter {
         { timeout: options.timeoutMs ?? 600_000 });
       const content = Array.isArray(reply.content) ? reply.content : [];
       const text = content.map((part: { type: string; text?: string }) => (part.type === "text" ? part.text : `[${part.type}]`)).join("\n");
-      return { done: !reply.isError && claimed(text), log: reply.isError ? `tool error: ${text}` : text };
+      // A tool error means the agent could not work on the task, so it counts as an adapter error.
+      if (reply.isError) throw new Error(`tool error: ${text}`);
+      return { done: claimed(text), log: text };
     },
     abort: stop,
     close: stop,
