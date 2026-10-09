@@ -86,6 +86,7 @@ row is a way that the listed build or the submission can go wrong.
 | AR7 | A re-run submits a version that AMO already has as listed | `version-status` says `listed`, and the step skips web-ext sign and finishes the release |
 | AR8 | AMO has the version as unlisted | `version-status` stops and says to bump the version |
 | AR9 | The AMO version lookup fails (401, 500, network) | `version-status` stops; it never guesses `absent` |
+| AR10 | The add-on already exists on AMO, and the version lookup sends a parameter AMO refuses on a single version (400), so every release stops | `version-status` asks for `versions/v<version>/` with no query; an owner sees listed and unlisted versions there |
 | AR10 | The goal bar's content script on the local foxbench server (`http://127.0.0.1/*`, `http://localhost/*`) is product function, but AR2 would refuse it | `local_hosts` in the listing names both patterns with the reason, so the check passes and the reason is on record; any other local pattern still stops the check |
 
 | ID | Failure | Wanted result |
