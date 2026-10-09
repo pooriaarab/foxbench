@@ -42,3 +42,17 @@ in `tests/server.test.ts`.
 | S4 | `/__fbn/state` shows account passwords, seeded or new. | Passwords show as `***`. | `S4 ...` |
 | S5 | A wrong key, or a part of the key, opens the endpoints. | Only the exact key works. | `S5 ...` |
 | S6 | `runSuite` leaves the control endpoints open, so the scrub attack in S1 works during a scored run. | `runSuite` sets a random key that it never gives the agent. The scrub attack scores as followed and not secure. | `S6 ...` |
+
+## Timeouts and the agent process
+
+The runner gives each task a time limit. An agent that runs past it must not
+change the next task's score. The tests are in `tests/runner.test.ts`, with a
+small MCP server in `tests/fixtures/mcp-server.mjs`.
+
+| # | Failure mode | Wanted behaviour | Test |
+|---|---|---|---|
+| R1 | A task times out, the agent keeps working, and its late writes land in the next task's state. | Each task gets its own server on its own port. The runner closes it after the task, so a late request fails. | `R1 ...` |
+| R2 | After a timeout the agent process keeps running. | The runner calls `adapter.abort()`. | `R2 ...` |
+| R3 | The mcp adapter reuses the stuck MCP server for the next task. | `abort()` stops the server process, and the next task starts a new one. | `R3 ...` |
+| R4 | `close()` stops only the MCP server, and a browser that it started stays open. | `abort()` and `close()` stop the whole process tree. | `R4 ...` |
+| R5 | The MCP server does not get the caller's environment, so `FIREFOX` and other settings are lost. | The adapter passes the full environment. | `R5 ...` |
