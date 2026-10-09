@@ -56,3 +56,14 @@ small MCP server in `tests/fixtures/mcp-server.mjs`.
 | R3 | The mcp adapter reuses the stuck MCP server for the next task. | `abort()` stops the server process, and the next task starts a new one. | `R3 ...` |
 | R4 | `close()` stops only the MCP server, and a browser that it started stays open. | `abort()` and `close()` stop the whole process tree. | `R4 ...` |
 | R5 | The MCP server does not get the caller's environment, so `FIREFOX` and other settings are lost. | The adapter passes the full environment. | `R5 ...` |
+
+## The CLI exit code
+
+A CI job reads only the exit code of `foxbench run`. The tests are in
+`tests/cli.test.ts`; they build the CLI and run it.
+
+| # | Failure mode | Wanted behaviour | Test |
+|---|---|---|---|
+| C1 | The agent command does not exist, the run scores 0, and the CLI exits 0. CI shows green for an agent that never ran. | Exit 1, and say that the agent did not run. | `C1 ...` |
+| C2 | The agent starts, but every task ends in an adapter or tool error, and the CLI exits 0. | Exit 1. | `C2 ...` |
+| C3 | One failed task makes the whole run exit 1. | A run where the agent ran exits 0, and the scoreboard counts the adapter errors. | `C3 ...` |
