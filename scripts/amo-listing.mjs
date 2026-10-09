@@ -154,7 +154,7 @@ function addonUrl() {
 
 // AR7-AR9. The "v" prefix makes AMO read the path as a version number.
 async function versionStatus() {
-  const url = new URL(`versions/v${manifest.version}/?filter=all_with_unlisted`, addonUrl());
+  const url = new URL(`versions/v${manifest.version}/`, addonUrl());
   const res = await fetch(url, { headers: { Authorization: jwt(), Accept: "application/json" } });
   if (res.status === 404) return console.log("absent");
   if (!res.ok) {
