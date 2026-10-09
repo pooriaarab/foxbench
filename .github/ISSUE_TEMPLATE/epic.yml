@@ -1,0 +1,57 @@
+name: Epic
+description: A body of work that has to be split before anyone starts it.
+labels: ["epic", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        An epic has no acceptance criteria of its own. Its children carry them,
+        and an epic that needs its own has not been decomposed yet.
+
+        Each slice becomes a real sub-issue through the sub-issues API, not a
+        `Parent: #NNNN` line in the body. Body text is invisible to every query,
+        filter and board that would otherwise show you the shape of the work.
+
+  - type: textarea
+    id: job
+    attributes:
+      label: Job to be done
+      description: One or two sentences in the voice of whoever is blocked.
+    validations:
+      required: true
+
+  - type: textarea
+    id: slices
+    attributes:
+      label: Slices
+      description: >-
+        Each slice must be shippable alone and fit inside one pull request under
+        500 counted lines. A slice that only makes sense merged with its siblings
+        is a boundary drawn in the wrong place. Convert each to a sub-issue once
+        this is filed.
+      value: |
+        - [ ]
+        - [ ]
+        - [ ]
+    validations:
+      required: true
+
+  - type: textarea
+    id: out-of-scope
+    attributes:
+      label: Out of scope
+      description: What this epic deliberately does not cover, so a reviewer does not widen it.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: route
+    attributes:
+      label: Agent tier
+      description: >-
+        An epic is never implemented directly. This records the tier for the
+        decomposition itself; each slice carries its own.
+      options:
+        - route:judgement - decompose first, then route each slice
+    validations:
+      required: true
