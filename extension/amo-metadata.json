@@ -14,5 +14,9 @@
   "version": {
     "license": "MIT",
     "approval_notes": "The uploaded source.zip is the git tree of this release. To build: install Node 24 and pnpm 11 (corepack enable), run `pnpm install --frozen-lockfile`, then `pnpm build && pnpm build:ext`. The output is dist-ext/. esbuild bundles extension/*.js; the build writes dist-ext/tasks.json from the built library. To try it: run `npx foxbench@0.1.2 serve` (or `node dist/cli.js serve` in the source), open the popup, paste the control key that serve prints, and pick a task. No account is needed."
+  },
+  "local_hosts": {
+    "http://127.0.0.1/*": "Shows the task goal bar on the foxbench task server that the user runs on this computer (npx foxbench serve).",
+    "http://localhost/*": "Shows the task goal bar on the foxbench task server that the user runs on this computer (npx foxbench serve), when the user types localhost as its address."
   }
 }

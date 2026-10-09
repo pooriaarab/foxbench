@@ -64,23 +64,31 @@ jobs:
           done
           [ "$missing" -eq 0 ] || exit 1
           node scripts/amo-listing.mjs check
-          node scripts/amo-listing.mjs metadata "$RUNNER_TEMP/amo-metadata.json"
-          # AMO reviewers get the source, because dist-ext/ is bundled.
-          git archive --format=zip -o source.zip HEAD
-          # A listed version waits for AMO review, which can take days. With
-          # --approval-timeout=0, web-ext returns after AMO accepts the
-          # upload, the listing and the source, and it downloads no signed
-          # file (web-ext 10, lib/util/submit-addon.js, doAfterSubmit). AMO
-          # publishes the signed file on the listing page after approval.
-          pnpm exec web-ext sign -s dist-ext -a web-ext-artifacts --channel=listed \
-            --amo-metadata "$RUNNER_TEMP/amo-metadata.json" --approval-timeout=0 \
-            --api-key="$AMO_JWT_ISSUER" --api-secret="$AMO_JWT_SECRET" \
-            --upload-source-code source.zip 2>&1 | tee "$RUNNER_TEMP/sign.log"
-          if ! grep -q "Waiting for approval and download of signed XPI skipped" "$RUNNER_TEMP/sign.log"; then
-            echo "::error::web-ext did not confirm the listed submission. Read the web-ext log above."
-            exit 1
+          # A re-run after a later step failed must not submit the same
+          # version again: AMO refuses a version number it already has.
+          STATUS=$(node scripts/amo-listing.mjs version-status)
+          if [ "${STATUS%% *}" = "listed" ]; then
+            echo "AMO already has this version as listed. Skipping web-ext sign."
+            echo "${STATUS#listed}" | tr -d ' ' > "$RUNNER_TEMP/review-url.txt"
+          else
+            node scripts/amo-listing.mjs metadata "$RUNNER_TEMP/amo-metadata.json"
+            # AMO reviewers get the source, because dist-ext/ is bundled.
+            git archive --format=zip -o source.zip HEAD
+            # A listed version waits for AMO review, which can take days. With
+            # --approval-timeout=0, web-ext returns after AMO accepts the
+            # upload, the listing and the source, and it downloads no signed
+            # file (web-ext 10, lib/util/submit-addon.js, doAfterSubmit). AMO
+            # publishes the signed file on the listing page after approval.
+            pnpm exec web-ext sign -s dist-ext -a web-ext-artifacts --channel=listed \
+              --amo-metadata "$RUNNER_TEMP/amo-metadata.json" --approval-timeout=0 \
+              --api-key="$AMO_JWT_ISSUER" --api-secret="$AMO_JWT_SECRET" \
+              --upload-source-code source.zip 2>&1 | tee "$RUNNER_TEMP/sign.log"
+            if ! grep -q "Waiting for approval and download of signed XPI skipped" "$RUNNER_TEMP/sign.log"; then
+              echo "::error::web-ext did not confirm the listed submission. Read the web-ext log above."
+              exit 1
+            fi
+            sed -n 's/.*can be downloaded from \([^ ]*\).*/\1/p' "$RUNNER_TEMP/sign.log" | tail -1 > "$RUNNER_TEMP/review-url.txt"
           fi
-          sed -n 's/.*can be downloaded from \([^ ]*\).*/\1/p' "$RUNNER_TEMP/sign.log" | tail -1 > "$RUNNER_TEMP/review-url.txt"
           # The privacy policy and the listing icon have their own AMO endpoints.
           node scripts/amo-listing.mjs after-submit
       - name: Tag and create the GitHub release
