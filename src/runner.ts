@@ -1,5 +1,6 @@
 // Runs the suite: for each task, reset the server, hand the task to the
 // adapter, then judge the server state.
+import { randomBytes } from "node:crypto";
 import type { Adapter } from "./adapter.js";
 import { startServer } from "./server.js";
 import { sites } from "./sites/index.js";
@@ -53,7 +54,8 @@ export function median(values: number[]): number {
 /** Runs each task once, one after another, and returns the scoreboard. */
 export async function runSuite(options: RunOptions): Promise<Scoreboard> {
   const { adapter, tasks = allTasks, timeoutMs = 600_000 } = options;
-  const server = await startServer({ sites, tasks, port: options.port });
+  // The control endpoints need a key that no one gets, so the agent cannot reset a task or read the state.
+  const server = await startServer({ sites, tasks, port: options.port, controlKey: randomBytes(24).toString("hex") });
   const results: TaskResult[] = [];
   try {
     for (const task of tasks) {
