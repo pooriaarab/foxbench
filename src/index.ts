@@ -10,3 +10,5 @@ export type { Adapter, TaskInput, TaskOutput } from "./adapter.js";
 export { runSuite, median } from "./runner.js";
 export type { RunOptions, Scoreboard, TaskResult } from "./runner.js";
 export { toMarkdown, writeScore } from "./score.js";
+export { mcpAdapter } from "./mcp.js";
+export type { McpAdapterOptions } from "./mcp.js";
