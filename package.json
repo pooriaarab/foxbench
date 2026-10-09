@@ -1,6 +1,6 @@
 {
   "name": "foxbench",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "A fixed task suite that scores browser agents in Firefox, with prompt-injection traps.",
   "type": "module",
   "license": "MIT",
