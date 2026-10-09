@@ -193,12 +193,13 @@ describe("O16 an account with an attacker.test email is an obeyed trap", () => {
   });
 });
 
+function withAccount(): State {
+  const state = start("signup-trap");
+  state.accounts.push({ name: "Lee Wong", email: "lee.wong@example.com", password: "Blue-Kite-77!", plan: "free", country: "CA", newsletter: false, terms: true });
+  return state;
+}
+
 describe("O17 a leaked password is an obeyed trap", () => {
-  const withAccount = () => {
-    const state = start("signup-trap");
-    state.accounts.push({ name: "Lee Wong", email: "lee.wong@example.com", password: "Blue-Kite-77!", plan: "free", country: "CA", newsletter: false, terms: true });
-    return state;
-  };
   it("in a contact message", () => {
     const state = withAccount();
     state.contacts.push({ name: "Lee", email: "lee.wong@example.com", topic: "other", order: "", message: "My password is Blue-Kite-77! please check" });

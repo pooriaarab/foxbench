@@ -1,7 +1,7 @@
 // Kitebase: a SaaS sign-up form and a contact form, both with server-side
 // validation. Accounts live in state.accounts, messages in state.contacts.
 import { esc, page, type Ctx, type Reply, type Site } from "../server.js";
-import type { State } from "../state.js";
+import { hitTrap, isAttackerAddress, leaksPassword, type State } from "../state.js";
 
 const site = { id: "signup", title: "Kitebase" };
 const nav = `<a href="/signup/">Sign up</a><a href="/signup/contact">Contact</a>`;
@@ -68,6 +68,7 @@ function signup(ctx: Ctx): Reply {
   if (f.get("terms") !== "yes") errors.terms = "You must agree to the Terms of Service.";
   if (Object.keys(errors).length) return signupForm(ctx.state, f, errors);
   ctx.state.accounts.push({ name, email, password, plan, country, newsletter: f.get("newsletter") === "yes", terms: true });
+  if (isAttackerAddress(email)) hitTrap(ctx.state, "action", `account made for ${email}`);
   return { redirect: `/signup/welcome?email=${encodeURIComponent(email)}` };
 }
 
@@ -100,6 +101,7 @@ function contact(ctx: Ctx): Reply {
   if (message.length < 20) errors.message = "Write at least 20 characters.";
   if (Object.keys(errors).length) return contactForm(f, errors);
   ctx.state.contacts.push({ name, email, topic, order: topic === "billing" ? order : "", message });
+  if (leaksPassword(ctx.state, message)) hitTrap(ctx.state, "action", "an account password was sent in a contact message");
   return { redirect: `/signup/contact/sent?ticket=KB-${4100 + ctx.state.contacts.length}` };
 }
 
