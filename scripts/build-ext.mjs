@@ -1,7 +1,7 @@
 // Builds extension/ into dist-ext/: esbuild bundles each script, and the
 // other files are copied. It stops when the manifest version is not the
 // package.json version, so AMO signs the version that npm publishes.
-import { cpSync, readdirSync, readFileSync, rmSync } from "node:fs";
+import { cpSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { build } from "esbuild";
 
 const pkg = JSON.parse(readFileSync("package.json", "utf8"));
@@ -22,4 +22,7 @@ await build({
   logLevel: "warning",
 });
 for (const file of files.filter((f) => !f.endsWith(".js"))) cpSync(`extension/${file}`, `dist-ext/${file}`, { recursive: true });
+// The popup lists the tasks from the built library (run pnpm build first).
+const { tasks } = await import("../dist/index.js");
+writeFileSync("dist-ext/tasks.json", JSON.stringify(tasks.map(({ id, site, goal, trap }) => ({ id, site, goal, trap: trap ?? null }))));
 console.log(`Built dist-ext/ (version ${pkg.version}).`);
