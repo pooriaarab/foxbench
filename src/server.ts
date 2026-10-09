@@ -1,5 +1,6 @@
 // The local server for every mock site. It keeps the state in memory, resets
 // it per task, and records each request to the attacker.test route.
+import { timingSafeEqual } from "node:crypto";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { emptyState, hitTrap, type State } from "./state.js";
 
@@ -43,6 +44,11 @@ export interface ServerOptions {
   tasks?: Startable[];
   /** Judges the current task for `/__fbn/result`, for people who try the suite by hand. */
   judge?: (taskId: string, state: State) => { success: boolean; attack: string | null; reasons: string[] } | null;
+  /**
+   * When set, `/__fbn/start`, `/__fbn/state` and `/__fbn/result` need
+   * `?key=<controlKey>`. Give the key to people, never to the agent under test.
+   */
+  controlKey?: string;
 }
 
 export interface FoxbenchServer {
@@ -98,15 +104,23 @@ function send(res: ServerResponse, status: number, type: string, body: string): 
 /** Starts the mock sites on 127.0.0.1. */
 export async function startServer(options: ServerOptions): Promise<FoxbenchServer> {
   const { sites, tasks = [], host = "127.0.0.1" } = options;
-  let state = emptyState();
+  // The trap log outlives every reset, so a reset cannot hide an obeyed trap.
+  const log: State["traps"] = [];
+  let state = emptyState(null, null, log);
   const reset = (task?: Startable): string => {
-    state = emptyState(task?.id ?? null, task?.trap ?? null);
+    state = emptyState(task?.id ?? null, task?.trap ?? null, log);
     for (const site of sites) site.seed(state);
     return task ? `${url}/${task.site}${task.path}` : url;
   };
 
+  const keyOk = (given: string | null): boolean => {
+    if (options.controlKey === undefined) return true;
+    const a = Buffer.from(given ?? "");
+    const b = Buffer.from(options.controlKey);
+    return a.length === b.length && timingSafeEqual(a, b);
+  };
   const index = () => page({ id: "home", title: "foxbench" }, "Sites", `<h1>foxbench mock sites</h1><ul>${sites
-    .map((s) => `<li><a href="/${s.id}/">${esc(s.title)}</a></li>`).join("")}</ul>${tasks.length ? `<h2>Tasks</h2><ul>${tasks
+    .map((s) => `<li><a href="/${s.id}/">${esc(s.title)}</a></li>`).join("")}</ul>${tasks.length && options.controlKey === undefined ? `<h2>Tasks</h2><ul>${tasks
     .map((t) => `<li><a href="/__fbn/start/${esc(t.id)}">${esc(t.id)}</a></li>`).join("")}</ul>` : ""}`);
 
   const server = createServer(async (req, res) => {
@@ -121,7 +135,11 @@ export async function startServer(options: ServerOptions): Promise<FoxbenchServe
       }
       if (path === "/") return send(res, 200, "text/html", index());
       if (path === "/__fbn/style.css") return send(res, 200, "text/css", STYLE);
-      if (path === "/__fbn/state") return send(res, 200, "application/json", JSON.stringify(state));
+      const control = path === "/__fbn/state" || path === "/__fbn/result" || path.startsWith("/__fbn/start/");
+      if (control && !keyOk(target.searchParams.get("key"))) return send(res, 403, "text/plain", "This control endpoint needs the control key.");
+      if (path === "/__fbn/state") {
+        return send(res, 200, "application/json", JSON.stringify(state, (k, v) => (k === "password" ? "***" : v)));
+      }
       if (path === "/__fbn/result") {
         const verdict = state.taskId ? options.judge?.(state.taskId, state) : null;
         const body = verdict

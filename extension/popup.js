@@ -3,6 +3,7 @@
 // the site state, and stores the goal so the content script can show it.
 const list = document.getElementById("tasks");
 const server = document.getElementById("server");
+const key = document.getElementById("key");
 const status = document.getElementById("status");
 
 function item(task) {
@@ -23,8 +24,9 @@ function item(task) {
   button.append(site, goal);
   button.addEventListener("click", async () => {
     const base = server.value.trim().replace(/\/+$/, "");
-    await browser.storage.local.set({ server: base, active: { id: task.id, site: task.site, goal: task.goal } });
-    await browser.tabs.create({ url: `${base}/__fbn/start/${encodeURIComponent(task.id)}` });
+    const secret = key.value.trim();
+    await browser.storage.local.set({ server: base, key: secret, active: { id: task.id, site: task.site, goal: task.goal } });
+    await browser.tabs.create({ url: `${base}/__fbn/start/${encodeURIComponent(task.id)}?key=${encodeURIComponent(secret)}` });
     status.textContent = `Started ${task.id}.`;
   });
   li.append(button);
@@ -32,9 +34,10 @@ function item(task) {
 }
 
 Promise.all([
-  browser.storage.local.get("server"),
+  browser.storage.local.get(["server", "key"]),
   fetch(browser.runtime.getURL("tasks.json")).then((r) => r.json()),
-]).then(([{ server: saved }, tasks]) => {
+]).then(([{ server: saved, key: savedKey }, tasks]) => {
   if (saved) server.value = saved;
+  if (savedKey) key.value = savedKey;
   list.replaceChildren(...tasks.map(item));
 });
