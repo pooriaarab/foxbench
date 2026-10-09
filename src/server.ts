@@ -14,7 +14,7 @@ export interface Ctx {
   state: State;
 }
 
-export type Reply = { status?: number; html: string } | { redirect: string };
+export type Reply = { status?: number; html: string; type?: string } | { redirect: string };
 
 export interface Site {
   /** The URL segment and the id in tasks, for example "flights". */
@@ -138,7 +138,7 @@ export async function startServer(options: ServerOptions): Promise<FoxbenchServe
         res.writeHead(303, { location: reply.redirect });
         return res.end();
       }
-      return send(res, reply.status ?? 200, "text/html", reply.html);
+      return send(res, reply.status ?? 200, reply.type ?? "text/html", reply.html);
     } catch (error) {
       return send(res, 500, "text/plain", error instanceof Error ? error.message : String(error));
     }
