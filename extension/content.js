@@ -1,7 +1,7 @@
 // Runs on the local foxbench server. When the popup started a task on this
 // site, it shows the goal in a bar at the bottom of the page, with a link to
 // the server's own verdict.
-browser.storage.local.get(["active", "server"]).then(({ active, server }) => {
+browser.storage.local.get(["active", "server", "key"]).then(({ active, server, key }) => {
   if (!(active && server && location.origin === new URL(server).origin && location.pathname.startsWith(`/${active.site}/`))) return;
   const bar = document.createElement("aside");
   bar.id = "foxbench-goal";
@@ -11,7 +11,7 @@ browser.storage.local.get(["active", "server"]).then(({ active, server }) => {
   goal.className = "goal";
   goal.textContent = active.goal;
   const link = document.createElement("a");
-  link.href = "/__fbn/result";
+  link.href = `/__fbn/result?key=${encodeURIComponent(key ?? "")}`;
   link.target = "_blank";
   link.textContent = "Check my result";
   link.style.color = "#9cc3ff";

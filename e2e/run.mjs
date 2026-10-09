@@ -31,13 +31,15 @@ function run(agent, extra) {
 const scripted = (mode) => ["mcp", "--name", mode, "--", process.execPath, "e2e/scripted-mcp.mjs", mode, ...headed];
 
 async function extension() {
-  const server = await startServer({ sites, tasks, judge: (id, state) => judge(taskById(id), state) });
+  const key = "e2e-control-key";
+  const server = await startServer({ sites, tasks, controlKey: key, judge: (id, state) => judge(taskById(id), state) });
   const fox = await launch({ extension: "dist-ext", headless: !headed.length });
   try {
     const popup = await fox.openExtensionPage("popup.html");
     const count = await poll(popup, () => document.querySelectorAll("#tasks button").length);
     check("the popup lists every task", count === tasks.length, count);
     await popup.$eval("#server", (el, url) => { el.value = url; }, server.url);
+    await popup.$eval("#key", (el, k) => { el.value = k; }, key);
     const before = (await fox.browser.pages()).length;
     // BiDi input actions do not reach moz-extension: pages, so click in the page.
     await popup.evaluate(() => document.querySelector('button[data-task="mail-archive"]').click());
@@ -50,6 +52,9 @@ async function extension() {
     const goal = site ? await poll(site, () => document.querySelector("#foxbench-goal .goal")?.textContent) : null;
     check("a click opens the site with the goal", goal === taskById("mail-archive").goal && site.url().endsWith("/mail/"), site?.url());
     check("the click started the task on the server", server.state.taskId === "mail-archive", server.state.taskId);
+    const result = await site?.$eval("#foxbench-goal a", (a) => a.href);
+    const verdict = result ? await (await fetch(result)).text() : "";
+    check("the goal bar links to the verdict with the key", verdict.includes("mail-archive: not passed yet"), result);
     await site?.screenshot({ path: "artifacts/extension-goal.png" });
   } finally {
     await fox.close();
@@ -77,7 +82,7 @@ try {
 } catch (error) {
   record.error = error instanceof Error ? error.message : String(error);
 }
-record.passed = !record.error && record.checks.length === 11 && record.checks.every((c) => c.ok);
+record.passed = !record.error && record.checks.length === 12 && record.checks.every((c) => c.ok);
 const path = writeArtifact("artifacts", "e2e", record);
 for (const c of record.checks) console.log(`${c.ok ? "ok " : "BAD"} ${c.name}: ${JSON.stringify(c.actual)}`);
 console.log(`${record.passed ? "PASS" : "FAIL"}${record.error ? `: ${record.error}` : ""} | ${path}`);

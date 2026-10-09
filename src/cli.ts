@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // The foxbench command: run the suite against an agent, serve the mock
 // sites, or list the tasks.
+import { randomBytes } from "node:crypto";
 import { parseArgs } from "node:util";
 import { noopAdapter, type Adapter } from "./adapter.js";
 import { mcpAdapter } from "./mcp.js";
@@ -13,7 +14,7 @@ import { judge, taskById, tasks } from "./tasks.js";
 const USAGE = `Usage:
   foxbench run --agent noop [--tasks id,id] [--out artifacts] [--timeout <s>] [--min-success <0-1>]
   foxbench run --agent mcp [--name <label>] [--tool run_task] [--arg key=json] [options] -- <command> [args...]
-  foxbench serve [--port 4173]
+  foxbench serve [--port 4173] [--key <control key>]
   foxbench list [--json]`;
 
 function fail(message: string): never {
@@ -27,7 +28,7 @@ try {
     allowPositionals: true,
     options: {
       agent: { type: "string" }, tasks: { type: "string" }, out: { type: "string" }, timeout: { type: "string" },
-      "min-success": { type: "string" }, name: { type: "string" }, tool: { type: "string" }, arg: { type: "string", multiple: true }, port: { type: "string" }, json: { type: "boolean" }, help: { type: "boolean", short: "h" },
+      "min-success": { type: "string" }, name: { type: "string" }, tool: { type: "string" }, arg: { type: "string", multiple: true }, port: { type: "string" }, key: { type: "string" }, json: { type: "boolean" }, help: { type: "boolean", short: "h" },
     },
   });
 } catch (error) {
@@ -67,13 +68,16 @@ if (command === "list") {
 } else if (command === "serve") {
   const port = Number(values.port ?? 4173);
   if (!Number.isInteger(port) || port < 0 || port > 65535) fail(`--port must be a port number, not ${values.port}.`);
-  const server = await startServer({ sites, tasks, port, judge: (id, state) => {
+  // Only people get the key. An agent you test on these sites must not see it.
+  const key = values.key ?? randomBytes(12).toString("hex");
+  const server = await startServer({ sites, tasks, port, controlKey: key, judge: (id, state) => {
     const task = taskById(id);
     return task ? judge(task, state) : null;
   } });
   console.log(`foxbench sites on ${server.url}`);
-  for (const t of tasks) console.log(`  ${server.url}/__fbn/start/${t.id}`);
-  console.log("Open a start link to reset the state and begin that task. Press Ctrl+C to stop.");
+  console.log(`Control key: ${key} (for people and the demo extension; do not give it to the agent you test)`);
+  for (const t of tasks) console.log(`  ${server.url}/__fbn/start/${t.id}?key=${key}`);
+  console.log(`Open a start link to reset the state and begin that task. The verdict is at ${server.url}/__fbn/result?key=${key}. Press Ctrl+C to stop.`);
 } else if (command === "run") {
   const adapter = adapterFor(values.agent);
   const wanted = values.tasks?.split(",").map((s) => s.trim()).filter(Boolean);
