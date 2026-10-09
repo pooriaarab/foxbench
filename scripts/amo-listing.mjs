@@ -88,7 +88,7 @@ function check() {
   for (const e of errors) console.error(`${META_FILE}: ${e}`);
   if (errors.length > 0) process.exit(1);
   console.log(`${META_FILE}: the listing for "${name}" passes (${cats.join(", ")}, privacy policy: ${en(meta.privacy_policy) ? "yes" : "not needed"}).`);
-  console.log(`dist-ext/: no test-only files or local content scripts; local hosts with a reason: ${allowed.length ? allowed.join(", ") : "none"}.`);
+  console.log(`dist-ext/: no test-named files and no local host use without a reason; with a reason: ${allowed.length ? allowed.join(", ") : "none"}.`);
 }
 
 function files(dir, prefix = "") {
@@ -96,7 +96,8 @@ function files(dir, prefix = "") {
 }
 
 // AR1-AR5: dist-ext/ is what release.yml signs, so it must hold no test-only
-// piece. A local host is allowed only with a reason in local_hosts (AR3).
+// piece. A local host is allowed only with a reason in local_hosts for that
+// pattern AND that use (AR3, AR-U1): { "<pattern>": { "host_permission": "..." } }.
 function scanReleaseBuild(fail) {
   if (!existsSync("dist-ext/manifest.json")) {
     fail("dist-ext/ is missing; run pnpm build:ext (the release build) first");
@@ -105,17 +106,19 @@ function scanReleaseBuild(fail) {
   const built = JSON.parse(readFileSync("dist-ext/manifest.json", "utf8"));
   const reasons = meta.local_hosts ?? {};
   const allowed = [];
-  const local = (where, pattern) => {
+  const local = (use, where, pattern) => {
     if (!LOCAL_HOST.test(pattern)) return;
-    if (typeof reasons[pattern] === "string" && reasons[pattern].length >= 20) allowed.push(`${pattern} (${where})`);
-    else fail(`the release build has ${where} "${pattern}"; move it to the e2e build, or give a reason in local_hosts`);
+    const reason = reasons[pattern]?.[use];
+    if (typeof reason === "string" && reason.length >= 20) allowed.push(`${pattern} ${use}`);
+    else fail(`the release build has ${where} "${pattern}"; move it to the e2e build, or give a reason in local_hosts["${pattern}"].${use}`);
   };
-  for (const cs of built.content_scripts ?? []) for (const m of cs.matches ?? []) local("a content script for", m);
-  for (const war of built.web_accessible_resources ?? []) for (const m of war.matches ?? []) local("a web-accessible resource for", m);
-  for (const m of built.externally_connectable?.matches ?? []) local("externally_connectable for", m);
-  for (const m of [...(built.host_permissions ?? []), ...(built.optional_host_permissions ?? [])]) local("the host permission", m);
+  for (const cs of built.content_scripts ?? []) for (const m of cs.matches ?? []) local("content_script", "a content script for", m);
+  for (const war of built.web_accessible_resources ?? []) for (const m of war.matches ?? []) local("web_accessible_resource", "a web-accessible resource for", m);
+  for (const m of built.externally_connectable?.matches ?? []) local("externally_connectable", "externally_connectable for", m);
+  for (const m of [...(built.host_permissions ?? []), ...(built.optional_host_permissions ?? [])]) local("host_permission", "the host permission", m);
   for (const f of files("dist-ext")) if (TEST_FILE.test(f)) fail(`the release build ships the test file dist-ext/${f}`);
-  for (const pattern of Object.keys(reasons)) if (!allowed.some((a) => a.startsWith(`${pattern} `))) fail(`local_hosts has "${pattern}", which the release build does not use`);
+  // AR-U2: no reason for a use that the release build does not have.
+  for (const [pattern, uses] of Object.entries(reasons)) for (const use of Object.keys(uses ?? {})) if (!allowed.includes(`${pattern} ${use}`)) fail(`local_hosts["${pattern}"].${use} has a reason, but the release build has no such ${use}`);
   return allowed;
 }
 
