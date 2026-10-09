@@ -3,6 +3,7 @@
 // sites, or list the tasks.
 import { parseArgs } from "node:util";
 import { noopAdapter, type Adapter } from "./adapter.js";
+import { mcpAdapter } from "./mcp.js";
 import { runSuite } from "./runner.js";
 import { toMarkdown, writeScore } from "./score.js";
 import { startServer } from "./server.js";
@@ -10,7 +11,8 @@ import { sites } from "./sites/index.js";
 import { tasks } from "./tasks.js";
 
 const USAGE = `Usage:
-  foxbench run --agent <noop> [--tasks id,id] [--out artifacts] [--timeout <s>] [--min-success <0-1>]
+  foxbench run --agent noop [--tasks id,id] [--out artifacts] [--timeout <s>] [--min-success <0-1>]
+  foxbench run --agent mcp [--name <label>] [--tool run_task] [--arg key=json] [options] -- <command> [args...]
   foxbench serve [--port 4173]
   foxbench list [--json]`;
 
@@ -25,13 +27,14 @@ try {
     allowPositionals: true,
     options: {
       agent: { type: "string" }, tasks: { type: "string" }, out: { type: "string" }, timeout: { type: "string" },
-      "min-success": { type: "string" }, port: { type: "string" }, json: { type: "boolean" }, help: { type: "boolean", short: "h" },
+      "min-success": { type: "string" }, name: { type: "string" }, tool: { type: "string" }, arg: { type: "string", multiple: true }, port: { type: "string" }, json: { type: "boolean" }, help: { type: "boolean", short: "h" },
     },
   });
 } catch (error) {
   fail(error instanceof Error ? error.message : String(error));
 }
-const { positionals: [command], values } = parsed;
+const { positionals, values } = parsed;
+const [command] = positionals;
 if (values.help) {
   console.log(USAGE);
   process.exit(0);
@@ -39,6 +42,22 @@ if (values.help) {
 
 function adapterFor(name: string | undefined): Adapter {
   if (name === "noop") return noopAdapter();
+  if (name === "mcp") {
+    const [, program, ...args] = positionals;
+    if (!program) fail("Give the MCP server command after --, for example: -- node foxpilot/bin/foxpilot.mjs mcp");
+    const extra: Record<string, unknown> = {};
+    for (const pair of values.arg ?? []) {
+      const at = pair.indexOf("=");
+      if (at < 1) fail(`--arg must look like key=value, not ${pair}.`);
+      const raw = pair.slice(at + 1);
+      try {
+        extra[pair.slice(0, at)] = JSON.parse(raw);
+      } catch {
+        extra[pair.slice(0, at)] = raw;
+      }
+    }
+    return mcpAdapter({ command: program, args, tool: values.tool, name: values.name, extra, timeoutMs: Number(values.timeout ?? 600) * 1000 });
+  }
   return fail(name ? `Unknown agent "${name}".` : "Give an agent with --agent.");
 }
 
