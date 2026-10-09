@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>foxbench</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <h1>foxbench tasks</h1>
+    <p>Run <code>npx foxbench serve</code>, then pick a task. The site opens in a new tab with the goal at the bottom.</p>
+    <label for="server">Server</label>
+    <input id="server" value="http://127.0.0.1:4173" spellcheck="false" />
+    <label for="key">Control key</label>
+    <input id="key" placeholder="printed by foxbench serve" spellcheck="false" />
+    <ul id="tasks" aria-label="Tasks"></ul>
+    <p id="status" role="status"></p>
+    <script src="popup.js"></script>
+  </body>
+</html>

@@ -1,0 +1,6 @@
+# pnpm 11 fails the install when a dependency build script is not approved.
+# esbuild needs its script to check its platform binary.
+allowBuilds:
+  esbuild: true
+minimumReleaseAgeExclude:
+  - create-foxkit@0.1.0

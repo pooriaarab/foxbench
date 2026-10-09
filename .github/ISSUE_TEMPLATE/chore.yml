@@ -1,0 +1,72 @@
+name: Chore
+description: A refactor, dependency bump, CI change, docs, or cleanup. Nothing a user sees.
+labels: ["chore", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Deliberately thin. A chore with a success metric is a feature wearing a
+        disguise, so relabel it rather than padding this form.
+
+  - type: textarea
+    id: job
+    attributes:
+      label: Job to be done
+      description: What is awkward today, and for whom. One or two sentences.
+      placeholder: Every agent touching the composer re-reads four files to find where drafts are saved.
+    validations:
+      required: true
+
+  - type: textarea
+    id: today-wanted
+    attributes:
+      label: Today / Wanted
+      value: |
+        Today:
+        Wanted:
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: Each one independently testable. For a refactor, behaviour is unchanged and something proves it.
+      value: |
+        - [ ]
+        - [ ]
+    validations:
+      required: true
+
+  - type: textarea
+    id: verify
+    attributes:
+      label: How to verify
+      description: The command and the result you expect. `bun run lint && bun run typecheck && bun run test` is usually the answer.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: size
+    attributes:
+      label: Size
+      options:
+        - mini - one file, one obvious change
+        - standard - a bounded change in one area
+        - deep - touches many files, or changes a shared pattern
+    validations:
+      required: true
+
+  - type: dropdown
+    id: route
+    attributes:
+      label: Agent tier
+      description: >-
+        Derived, not guessed. Any high-stakes path is judgement whatever the size:
+        see .agents/issues.md.
+      options:
+        - route:mechanical - mechanical and bounded, nothing high-stakes
+        - route:scoped - needs judgement about the codebase
+        - route:judgement - changes a shared pattern, or touches a high-stakes path
+    validations:
+      required: true

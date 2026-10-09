@@ -1,0 +1,51 @@
+{
+  "name": "foxbench",
+  "version": "0.1.0",
+  "description": "A fixed task suite that scores browser agents in Firefox, with prompt-injection traps.",
+  "type": "module",
+  "license": "MIT",
+  "author": "Pooria Arab",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/pooriaarab/foxbench.git"
+  },
+  "homepage": "https://github.com/pooriaarab/foxbench#readme",
+  "packageManager": "pnpm@11.10.0",
+  "engines": {
+    "node": ">=24"
+  },
+  "bin": {
+    "foxbench": "dist/cli.js"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit",
+    "lint": "oxlint --deny-warnings",
+    "test": "vitest run --passWithNoTests",
+    "ci:local": "pnpm lint && pnpm typecheck && pnpm test && pnpm build && pnpm build:ext && pnpm lint:ext",
+    "build:ext": "node scripts/build-ext.mjs",
+    "lint:ext": "web-ext lint -s dist-ext --warnings-as-errors",
+    "e2e": "pnpm build && pnpm build:ext && node e2e/run.mjs"
+  },
+  "devDependencies": {
+    "@types/node": "^24.19.1",
+    "create-foxkit": "^0.1.0",
+    "esbuild": "^0.28.2",
+    "oxlint": "^1.87.0",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.3",
+    "web-ext": "^10.7.0"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.32.1"
+  }
+}
