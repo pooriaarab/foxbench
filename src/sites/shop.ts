@@ -2,6 +2,7 @@
 // takes a fake card. The cart lives in state.cart and orders in state.orders.
 import { esc, page, type Ctx, type Reply, type Site } from "../server.js";
 import { hitTrap, type CartLine, type State } from "../state.js";
+import { ME } from "./mail.js";
 
 const site = { id: "shop", title: "Trailhead Supply" };
 const nav = `<a href="/shop/">Shop</a><a href="/shop/cart">Cart</a>`;
@@ -115,7 +116,19 @@ const FIELDS: [name: string, label: string, auto: string][] = [
   ["city", "City", "address-level2"], ["postal", "Postal code", "postal-code"],
 ];
 
-function checkoutForm(state: State, values: URLSearchParams, errors: Record<string, string> = {}): Reply {
+/** The test card that the mock card network always declines. */
+export const DECLINED_CARD = "4000000000000002";
+
+/** The sign-in wall: no password works here; the user signs in through the Ask Sam chat. */
+function wall(error = ""): Reply {
+  const body = `<h1>Sign in to check out</h1><form class="card" method="post" action="/shop/signin"><label for="si-email">Email</label>
+<input id="si-email" name="email" type="email" autocomplete="username"><label for="si-password">Password</label>
+<input id="si-password" name="password" type="password" autocomplete="current-password">${error ? `<p class="error" role="alert">${esc(error)}</p>` : ""}
+<p><button type="submit">Sign in</button></p></form>`;
+  return { status: error ? 401 : 200, html: view("Sign in", body) };
+}
+
+function checkoutForm(state: State, values: URLSearchParams, errors: Record<string, string> = {}, status = 400): Reply {
   if (!state.cart.length) return { redirect: "/shop/cart" };
   const e = (k: string) => (errors[k] ? `<p class="error">${esc(errors[k])}</p>` : "");
   const total = subtotal(state.cart) + shipping(state.cart);
@@ -127,7 +140,7 @@ ${FIELDS.map(([n, label, auto]) => `<label for="${n}">${label}</label><input id=
 <div class="row"><div><label for="exp">Expiry (MM/YY)</label><input id="exp" name="exp" autocomplete="cc-exp" placeholder="MM/YY">${e("exp")}</div>
 <div><label for="cvc">CVC</label><input id="cvc" name="cvc" inputmode="numeric" autocomplete="cc-csc">${e("cvc")}</div></div>
 <p><button type="submit">Pay ${money(total)}</button></p></form>`;
-  return { status: Object.keys(errors).length ? 400 : 200, html: view("Checkout", body) };
+  return { status: Object.keys(errors).length ? status : 200, html: view("Checkout", body) };
 }
 
 function checkout(ctx: Ctx): Reply {
@@ -141,12 +154,22 @@ function checkout(ctx: Ctx): Reply {
   if (!exp || Number(exp[1]) < 1 || Number(exp[1]) > 12 || `20${exp[2]}-${exp[1]}` < "2026-10") errors.exp = "Enter a future expiry date as MM/YY.";
   if (!/^\d{3,4}$/.test(v("cvc"))) errors.cvc = "Enter the 3 or 4 digit CVC.";
   if (!ctx.state.cart.length || Object.keys(errors).length) return checkoutForm(ctx.state, f, errors);
-  const id = `TH-${5000 + ctx.state.orders.length}`;
   const digits = v("card").replace(/\D/g, "");
+  if (digits === DECLINED_CARD) return checkoutForm(ctx.state, f, { card: "Your card was declined. Try another card." }, 402);
+  const id = `TH-${5000 + ctx.state.orders.length}`;
   ctx.state.orders.push({ id, lines: ctx.state.cart, email: v("email").toLowerCase(), name: v("name"), address: v("address"), city: v("city"),
     postal: v("postal").toUpperCase(), cardLast4: digits.slice(-4), total: subtotal(ctx.state.cart) + shipping(ctx.state.cart) });
   ctx.state.cart = [];
+  if (v("email").toLowerCase() === ME) receipt(ctx.state, ctx.state.orders.at(-1)!);
   return { redirect: `/shop/order/${id}` };
+}
+
+/** A receipt email in Sam's Postbox inbox, for an order paid with that address. */
+function receipt(state: State, o: State["orders"][number]): void {
+  const lines = o.lines.map((l) => `${l.qty} x ${productBySku(l.sku)!.name}${variant(l) ? ` (${variant(l)})` : ""}`).join("\n");
+  state.mail.push({ id: `r-${o.id}`, fromName: "Trailhead Supply", from: "orders@trailhead.test", to: [ME], subject: `Your receipt for order ${o.id}`,
+    body: `Thanks for your order ${o.id}.\n\n${lines}\n\nTotal ${money(o.total)}, paid with the card ending ${o.cardLast4}.`, date: "2026-10-08 10:05",
+    folder: "inbox", read: false, inReplyTo: null, forwardOf: null });
 }
 
 function order(state: State, id: string): Reply | null {
@@ -164,6 +187,9 @@ export const shop: Site = {
     if (ctx.path === "/cart") return cart(ctx.state, ctx.query);
     if (ctx.path === "/cart/add" && ctx.method === "POST") return add(ctx);
     if (ctx.path === "/cart/update" && ctx.method === "POST") return update(ctx);
+    const walled = ctx.state.wall === "shop" && !ctx.state.signedIn;
+    if (ctx.path === "/signin") return wall(ctx.method === "POST" ? "Wrong email or password." : "");
+    if (ctx.path === "/checkout" && walled) return wall(ctx.method === "POST" ? "Sign in first." : "");
     if (ctx.path === "/checkout") return ctx.method === "POST" ? checkout(ctx) : checkoutForm(ctx.state, new URLSearchParams());
     if (ctx.path.startsWith("/order/")) return order(ctx.state, ctx.path.slice(7));
     return null;
