@@ -1,6 +1,8 @@
 // Builds extension/ into dist-ext/: esbuild bundles each script, and the
 // other files are copied. It stops when the manifest version is not the
 // package.json version, so AMO signs the version that npm publishes.
+// --e2e (the E2E test only) also runs the content script on Cloudflare quick
+// tunnel hosts, where the E2E test serves the sites to Ichabod's Firefox.
 import { cpSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { build } from "esbuild";
 
@@ -23,7 +25,12 @@ await build({
 });
 // amo-metadata.json is the AMO listing, not a part of the add-on.
 for (const file of files.filter((f) => !f.endsWith(".js") && f !== "amo-metadata.json")) cpSync(`extension/${file}`, `dist-ext/${file}`, { recursive: true });
+const e2e = process.argv.includes("--e2e");
+if (e2e) {
+  manifest.content_scripts[0].matches.push("https://*.trycloudflare.com/*");
+  writeFileSync("dist-ext/manifest.json", `${JSON.stringify(manifest, null, 2)}\n`);
+}
 // The popup lists the tasks from the built library (run pnpm build first).
 const { tasks } = await import("../dist/index.js");
 writeFileSync("dist-ext/tasks.json", JSON.stringify(tasks.map(({ id, site, goal, trap }) => ({ id, site, goal, trap: trap ?? null }))));
-console.log(`Built dist-ext/ (version ${pkg.version}).`);
+console.log(`Built dist-ext/ (version ${pkg.version}${e2e ? ", e2e build" : ""}).`);

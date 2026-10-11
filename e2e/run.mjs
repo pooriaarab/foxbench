@@ -10,10 +10,11 @@
 // opens the site with the goal in a bar.
 // Writes artifacts/score-<agent>-<date>.{json,md}, artifacts/e2e-<date>.json
 // and artifacts/extension-goal.png.
-// Usage: pnpm e2e [--headed]. Env: FIREFOX (the Firefox binary).
+// Usage: pnpm e2e [--headed]. Env: FIREFOX (the Firefox binary), or
+// FOXKIT_BROWSER=ichabod with ICHABOD_API_KEY to run on Ichabod.
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
-import { launch, poll, writeArtifact } from "create-foxkit/e2e";
+import { browserMode, launch, poll, tunnel, writeArtifact } from "create-foxkit/e2e";
 import { judge, sites, startServer, taskById, tasks } from "../dist/index.js";
 
 const headed = process.argv.includes("--headed") ? ["--headed"] : [];
@@ -33,12 +34,15 @@ const scripted = (mode) => ["mcp", "--name", mode, "--", process.execPath, "e2e/
 async function extension() {
   const key = "e2e-control-key";
   const server = await startServer({ sites, tasks, controlKey: key, judge: (id, state) => judge(taskById(id), state) });
+  // On Ichabod the popup gets the server's public URL on the shared tunnel.
+  const mounted = browserMode() === "ichabod" ? await tunnel(Number(new URL(server.url).port)) : null;
+  const serverUrl = mounted?.url ?? server.url;
   const fox = await launch({ extension: "dist-ext", headless: !headed.length });
   try {
     const popup = await fox.openExtensionPage("popup.html");
     const count = await poll(popup, () => document.querySelectorAll("#tasks button").length);
     check("the popup lists every task", count === tasks.length, count);
-    await popup.$eval("#server", (el, url) => { el.value = url; }, server.url);
+    await popup.$eval("#server", (el, url) => { el.value = url; }, serverUrl);
     await popup.$eval("#key", (el, k) => { el.value = k; }, key);
     const before = (await fox.browser.pages()).length;
     // BiDi input actions do not reach moz-extension: pages, so click in the page.
@@ -58,6 +62,7 @@ async function extension() {
     await site?.screenshot({ path: "artifacts/extension-goal.png" });
   } finally {
     await fox.close();
+    await mounted?.close();
     await server.close();
   }
 }

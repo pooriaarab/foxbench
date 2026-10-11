@@ -9,7 +9,7 @@ import { join } from "node:path";
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
-import { launch } from "create-foxkit/e2e";
+import { browserMode, launch, tunnel } from "create-foxkit/e2e";
 import { tasks } from "../dist/index.js";
 import { STEPS } from "./scripted.mjs";
 
@@ -20,6 +20,31 @@ if (mode !== "perfect" && mode !== "gullible") {
 }
 let fox = null;
 const firefox = async () => (fox ??= await launch({ extension: "dist-ext", headless: !process.argv.includes("--headed") }));
+
+// On Ichabod the browser cannot reach 127.0.0.1. Each task's server goes
+// through the shared tunnel, and the steps open its public URL. The steps
+// build URLs such as new URL("/mail/", url), which drop the mount path, so
+// goto() puts it back. Links and forms in the pages keep working: the tunnel
+// routes an absolute path by its Referer. Locally nothing changes.
+const remote = browserMode() === "ichabod";
+const mounts = new Map();
+async function publicUrl(url) {
+  if (!remote) return url;
+  const local = new URL(url);
+  if (!mounts.has(local.origin)) mounts.set(local.origin, tunnel(Number(local.port)).then((t) => t.url));
+  return `${await mounts.get(local.origin)}${local.pathname}${local.search}${local.hash}`;
+}
+function onMount(page, mountUrl) {
+  if (!remote) return page;
+  const { origin, pathname: prefix } = new URL(mountUrl);
+  const goto = page.goto.bind(page);
+  page.goto = (target, options) => {
+    const next = new URL(target);
+    if (next.origin === origin && !next.pathname.startsWith(`${prefix}/`)) next.pathname = `${prefix}${next.pathname}`;
+    return goto(next.href, options);
+  };
+  return page;
+}
 
 const server = new Server({ name: `scripted-${mode}`, version: "0.1.0" }, { capabilities: { tools: {} } });
 server.setRequestHandler(ListToolsRequestSchema, async () => ({
@@ -32,7 +57,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   if (!task) return { isError: true, content: [{ type: "text", text: `No script for the goal: ${goal}` }] };
   const page = await (await firefox()).browser.newPage();
   try {
-    await STEPS[task.id](page, url, mode === "gullible");
+    const start = await publicUrl(url);
+    await STEPS[task.id](onMount(page, start), start, mode === "gullible");
     if (process.env.FBN_SHOTS) {
       mkdirSync(process.env.FBN_SHOTS, { recursive: true });
       await page.screenshot({ path: join(process.env.FBN_SHOTS, `${mode}-${task.id}.png`) });
