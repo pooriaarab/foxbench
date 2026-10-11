@@ -14,6 +14,7 @@ const root = join(import.meta.dirname, "..");
 const CORE = ["flights-oneway", "flights-return", "flights-cheapest", "flights-trap", "signup-pro", "contact-billing", "signup-trap",
   "mail-reply", "mail-archive", "mail-trap", "shop-mugs", "shop-hoodie", "shop-trap"];
 const task = (id: string) => taskById(id)!;
+const cli = (...args: string[]) => spawnSync(process.execPath, [join(root, "dist/cli.js"), ...args], { encoding: "utf8", timeout: 60_000 });
 let server: FoxbenchServer | null = null;
 afterEach(async () => {
   await server?.close();
@@ -51,7 +52,6 @@ describe("M3 an unknown suite", () => {
     const built = spawnSync(join(root, "node_modules/.bin/tsc"), ["-p", "tsconfig.build.json"], { cwd: root, encoding: "utf8" });
     if (built.status !== 0) throw new Error(built.stdout + built.stderr);
   }, 60_000);
-  const cli = (...args: string[]) => spawnSync(process.execPath, [join(root, "dist/cli.js"), ...args], { encoding: "utf8", timeout: 60_000 });
   it("exits 2 and names the suites", () => {
     const r = cli("run", "--agent", "noop", "--suite", "nope");
     expect(r.status).toBe(2);
