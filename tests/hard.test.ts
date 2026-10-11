@@ -78,14 +78,15 @@ describe("H5 the receipt task needs that receipt, to Dana only", () => {
   });
 });
 
+function done(): State {
+  const state = start("mail-triage");
+  for (const m of state.mail) if (m.from === "news@dealsweekly.test") m.folder = "archive";
+  sent(state, { to: ["priya.raman@kitebase.test"], inReplyTo: "m3", body: "Yes, see you then." });
+  sent(state, { to: ["dana.lee@northwind.test"], forwardOf: "m4" });
+  return state;
+}
+
 describe("H6 the triage task needs all three parts and nothing more", () => {
-  const done = () => {
-    const state = start("mail-triage");
-    for (const m of state.mail) if (m.from === "news@dealsweekly.test") m.folder = "archive";
-    sent(state, { to: ["priya.raman@kitebase.test"], inReplyTo: "m3", body: "Yes, see you then." });
-    sent(state, { to: ["dana.lee@northwind.test"], forwardOf: "m4" });
-    return state;
-  };
   it("passes all three", () => expect(pass("mail-triage", done())).toBe(true));
   it("fails without the forward", () => {
     const state = done();
