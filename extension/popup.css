@@ -1,9 +1,88 @@
-body { width: 380px; margin: 0; padding: 12px; font: 13px/1.4 system-ui, sans-serif; color: #1d2330; }
-h1 { font-size: 16px; margin: 0 0 6px; }
-label { font-weight: 600; }
-input { width: 100%; box-sizing: border-box; padding: 6px; margin: 4px 0 10px; font: inherit; }
-ul { list-style: none; margin: 0; padding: 0; max-height: 420px; overflow-y: auto; }
-li button { width: 100%; text-align: left; border: 1px solid #dde; border-radius: 6px; background: #fff; padding: 8px; margin-bottom: 6px; font: inherit; cursor: pointer; }
-li button:hover { background: #eef3ff; }
-.site { font-size: 11px; text-transform: uppercase; color: #667; }
-.trap { font-size: 11px; color: #b00020; margin-left: 6px; }
+/* fox* base, from foxmate (see fox-ui SPEC.md). Dark first, light by OS. */
+:root {
+  color-scheme: dark;
+  --bg: oklch(0.155 0.004 60);
+  --panel: oklch(0.195 0.005 60);
+  --raise: oklch(0.225 0.006 60);
+  --field: oklch(0.175 0.004 60);
+  --code: oklch(0.13 0.004 60);
+  --hover: oklch(1 0 0 / 0.06);
+  --line: oklch(1 0 0 / 0.08);
+  --line-strong: oklch(1 0 0 / 0.14);
+  --text: oklch(0.95 0.006 80);
+  --muted: oklch(0.73 0.01 70);
+  --accent: oklch(0.73 0.165 52);
+  --accent-ink: oklch(0.2 0.03 50);
+  --ask-bg: oklch(0.73 0.165 52 / 0.08);
+  --ask-line: oklch(0.73 0.165 52 / 0.35);
+  --ok: oklch(0.77 0.14 152);
+  --bad: oklch(0.7 0.17 25);
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --fast: 160ms;
+  --med: 220ms;
+  --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: light) {
+  :root {
+    color-scheme: light;
+    --bg: oklch(0.985 0.003 80);
+    --panel: oklch(1 0 0);
+    --raise: oklch(0.955 0.005 80);
+    --field: oklch(1 0 0);
+    --code: oklch(0.965 0.004 80);
+    --hover: oklch(0 0 0 / 0.05);
+    --line: oklch(0 0 0 / 0.08);
+    --line-strong: oklch(0 0 0 / 0.15);
+    --text: oklch(0.21 0.01 60);
+    --muted: oklch(0.47 0.012 60);
+    --accent: oklch(0.6 0.17 45);
+    --accent-ink: oklch(0.99 0.01 80);
+    --ask-bg: oklch(0.6 0.17 45 / 0.07);
+    --ask-line: oklch(0.6 0.17 45 / 0.35);
+    --ok: oklch(0.52 0.13 152);
+    --bad: oklch(0.53 0.19 25);
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; -webkit-font-smoothing: antialiased; }
+h1, h2, h3, p { margin: 0; }
+[hidden] { display: none !important; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+::selection { background: oklch(0.73 0.165 52 / 0.35); }
+.muted, .hint { color: var(--muted); font-size: 13px; }
+
+button {
+  font: inherit; font-size: 13.5px; font-weight: 550; color: var(--text);
+  background: transparent; border: 1px solid var(--line-strong); border-radius: 10px;
+  height: 34px; padding: 0 14px; cursor: pointer;
+  transition: background-color var(--fast) var(--ease-out), transform 120ms var(--ease-out), opacity var(--fast);
+}
+button:hover { background: var(--hover); }
+button:active:not(:disabled) { transform: scale(0.97); }
+button:disabled { opacity: 0.45; cursor: default; }
+
+input, select, textarea { width: 100%; font: inherit; color: inherit; background: var(--field); border: 1px solid var(--line-strong); border-radius: 10px; padding: 8px 10px; }
+input:focus-visible, select:focus-visible, textarea:focus-visible { outline-offset: 0; border-color: transparent; }
+label { display: block; font-size: 13px; font-weight: 550; margin: 14px 0 6px; }
+
+code { font-family: var(--mono); font-size: 12.5px; background: var(--code); border: 1px solid var(--line); border-radius: 5px; padding: 1px 5px; }
+
+/* foxbench popup */
+body { width: 380px; padding: 14px 16px 16px; }
+header { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+.mark { border-radius: 6px; }
+h1 { font-size: 17px; font-weight: 600; letter-spacing: -0.01em; }
+.intro { color: var(--muted); font-size: 13px; }
+label:first-of-type { margin-top: 12px; }
+h2 { font-size: 13.5px; font-weight: 600; margin: 18px 0 8px; }
+
+ul { list-style: none; margin: 0; padding: 0 4px 0 0; max-height: 420px; overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--line-strong) transparent; display: flex; flex-direction: column; gap: 6px; }
+li button { display: block; width: 100%; height: auto; padding: 10px 12px; text-align: left; font-size: 14px; font-weight: 400; line-height: 1.45; background: var(--panel); border-color: var(--line); border-radius: 12px; }
+li button:hover { background: var(--raise); border-color: var(--line-strong); }
+li button:active:not(:disabled) { transform: scale(0.99); }
+.site { display: flex; align-items: center; gap: 8px; margin-bottom: 2px; font-size: 12px; font-weight: 550; color: var(--muted); }
+.trap { display: inline-flex; align-items: center; gap: 5px; margin-left: 0; font-weight: 500; color: var(--bad); }
+.trap::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--bad); }
+#tasks:empty::before { content: "Loading the tasks."; display: block; padding: 12px 14px; font-size: 13px; color: var(--muted); border: 1px dashed var(--line-strong); border-radius: 12px; }
+#status { margin-top: 10px; font-size: 13px; color: var(--ok); }
+#status:empty { display: none; }
