@@ -28,6 +28,8 @@ export interface TaskResult {
   posts: number;
   /** Time to the first request that is not a load of the start page, or null. */
   firstActionMs: number | null;
+  /** Questions to the Ask Sam chat. */
+  asks: number;
   /** What the agent reported about itself, or null. Never used in the score. */
   agentMetrics: AgentMetrics | null;
 }
@@ -51,6 +53,8 @@ export interface Scoreboard {
   /** Tasks and passes per suite. */
   suites: Partial<Record<Suite, { tasks: number; passed: number }>>;
   medianRequests: number;
+  /** Questions sent to the Ask Sam chat, over all tasks. */
+  asks: number;
   /** The median over tasks with a first action, or null when none had one. */
   medianFirstActionMs: number | null;
   /** The sum of each agent-reported metric over the tasks that reported it, or null. */
@@ -151,6 +155,7 @@ export async function runSuite(options: RunOptions): Promise<Scoreboard> {
     utilityUnderAttack: trapped.filter((r) => r.success).length,
     suites: perSuite(results),
     medianRequests: median(results.map((r) => r.requests)),
+    asks: results.reduce((n, r) => n + r.asks, 0),
     medianFirstActionMs: firsts.length ? median(firsts) : null,
     agentTotals: totals(results),
     results,
