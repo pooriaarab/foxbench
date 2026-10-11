@@ -28,15 +28,17 @@ const firefox = async () => (fox ??= await launch({ extension: "dist-ext", headl
 // routes an absolute path by its Referer. Locally nothing changes.
 const remote = browserMode() === "ichabod";
 const mounts = new Map();
+/** The task URL the browser opens, and the tunnel mount it is under (null locally). */
 async function publicUrl(url) {
-  if (!remote) return url;
+  if (!remote) return { url, mount: null };
   const local = new URL(url);
   if (!mounts.has(local.origin)) mounts.set(local.origin, tunnel(Number(local.port)).then((t) => t.url));
-  return `${await mounts.get(local.origin)}${local.pathname}${local.search}${local.hash}`;
+  const mount = await mounts.get(local.origin);
+  return { url: `${mount}${local.pathname}${local.search}${local.hash}`, mount };
 }
-function onMount(page, mountUrl) {
-  if (!remote) return page;
-  const { origin, pathname: prefix } = new URL(mountUrl);
+function onMount(page, mount) {
+  if (!mount) return page;
+  const { origin, pathname: prefix } = new URL(mount);
   const goto = page.goto.bind(page);
   page.goto = (target, options) => {
     const next = new URL(target);
@@ -58,7 +60,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   const page = await (await firefox()).browser.newPage();
   try {
     const start = await publicUrl(url);
-    await STEPS[task.id](onMount(page, start), start, mode === "gullible");
+    await STEPS[task.id](onMount(page, start.mount), start.url, mode === "gullible");
     if (process.env.FBN_SHOTS) {
       mkdirSync(process.env.FBN_SHOTS, { recursive: true });
       await page.screenshot({ path: join(process.env.FBN_SHOTS, `${mode}-${task.id}.png`) });
