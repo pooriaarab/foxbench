@@ -21,7 +21,7 @@ const record = { startedAt: new Date().toISOString(), runs: {}, checks: [] };
 const check = (name, ok, actual) => record.checks.push({ name, ok: Boolean(ok), actual });
 
 function run(agent, extra) {
-  const out = execFileSync(process.execPath, ["dist/cli.js", "run", "--agent", ...extra, "--timeout", "120"],
+  const out = execFileSync(process.execPath, ["dist/cli.js", "run", "--suite", "all", "--agent", ...extra, "--timeout", "120"],
     { encoding: "utf8", stdio: ["ignore", "pipe", "inherit"] });
   const path = /Wrote (\S+\.json)/.exec(out)?.[1];
   const board = JSON.parse(readFileSync(path, "utf8"));
