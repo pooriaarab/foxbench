@@ -16,8 +16,8 @@ importers:
         specifier: ^24.19.1
         version: 24.19.1
       create-foxkit:
-        specifier: ^0.1.2
-        version: 0.1.2(yauzl@3.4.0)
+        specifier: ^0.1.4
+        version: 0.1.4(yauzl@3.4.0)
       esbuild:
         specifier: ^0.28.2
         version: 0.28.2
@@ -966,8 +966,8 @@ packages:
     resolution: {integrity: sha512-tJtZBBHA6vjIAaF6EnIaq6laBBP9aq/Y3ouVJjEfoHbRBcHBAHYcMh/w8LDrk2PvIMMq8gmopa5D4V8RmbrxGw==}
     engines: {node: '>= 0.10'}
 
-  create-foxkit@0.1.2:
-    resolution: {integrity: sha512-0JUuCvn3nEoxxqY5egMikpqOKGJWG40G0YGs0r+ZS/tqQcV0SZkLYWxcIGNw50HVuJrCeVjsaYPKJGm+wI2AmA==}
+  create-foxkit@0.1.4:
+    resolution: {integrity: sha512-vkrRfxJG6bmWphFLz6YLp1Z1kRf+8ZWHXRfvMqBRvQagvkE8tFK+Oe7vUIhfUXt7hUiS04c6nQEzPiOGGimYxQ==}
     engines: {node: '>=24'}
     hasBin: true
 
@@ -3085,7 +3085,7 @@ snapshots:
       object-assign: 4.1.1
       vary: 1.1.2
 
-  create-foxkit@0.1.2(yauzl@3.4.0):
+  create-foxkit@0.1.4(yauzl@3.4.0):
     dependencies:
       puppeteer-core: 25.12.0(yauzl@3.4.0)
     transitivePeerDependencies:
