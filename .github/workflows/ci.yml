@@ -26,7 +26,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm ci:local
   e2e:
-    runs-on: ubuntu-latest
+    runs-on: ubicloud-standard-2
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -36,10 +36,11 @@ jobs:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - uses: browser-actions/setup-firefox@0bc507ddf224827e3b1af68e014d5e42ab93e795 # v1.7.2
-        id: firefox
-        with:
-          firefox-version: latest
+      # The browser is on Ichabod; cloudflared lets it reach the pages the test serves.
+      - run: |
+          sudo curl -fsSL -o /usr/local/bin/cloudflared https://github.com/cloudflare/cloudflared/releases/download/2026.10.0/cloudflared-linux-amd64
+          sudo chmod +x /usr/local/bin/cloudflared
       - run: pnpm e2e
         env:
-          FIREFOX: ${{ steps.firefox.outputs.firefox-path }}
+          FOXKIT_BROWSER: ichabod
+          ICHABOD_API_KEY: ${{ secrets.ICHABOD_API_KEY }}
