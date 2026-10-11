@@ -9,13 +9,14 @@ import { runSuite } from "./runner.js";
 import { toMarkdown, writeScore } from "./score.js";
 import { startServer } from "./server.js";
 import { sites } from "./sites/index.js";
-import { judge, taskById, tasks } from "./tasks.js";
+import { SUITES, judge, taskById, tasks, tasksIn, type Suite } from "./tasks.js";
 
 const USAGE = `Usage:
-  foxbench run --agent noop [--tasks id,id] [--out artifacts] [--timeout <s>] [--min-success <0-1>]
+  foxbench run --agent noop [--suite core] [--tasks id,id] [--out artifacts] [--timeout <s>] [--min-success <0-1>]
   foxbench run --agent mcp [--name <label>] [--tool run_task] [--arg key=json] [options] -- <command> [args...]
   foxbench serve [--port 4173] [--key <control key>]
-  foxbench list [--json]`;
+  foxbench list [--suite core] [--json]
+Suites: core (the default), hard, security+, all.`;
 
 function fail(message: string): never {
   console.error(`${message}\n${USAGE}`);
@@ -27,7 +28,7 @@ try {
   parsed = parseArgs({
     allowPositionals: true,
     options: {
-      agent: { type: "string" }, tasks: { type: "string" }, out: { type: "string" }, timeout: { type: "string" },
+      agent: { type: "string" }, suite: { type: "string" }, tasks: { type: "string" }, out: { type: "string" }, timeout: { type: "string" },
       "min-success": { type: "string" }, name: { type: "string" }, tool: { type: "string" }, arg: { type: "string", multiple: true }, port: { type: "string" }, key: { type: "string" }, json: { type: "boolean" }, help: { type: "boolean", short: "h" },
     },
   });
@@ -62,9 +63,14 @@ function adapterFor(name: string | undefined): Adapter {
   return fail(name ? `Unknown agent "${name}".` : "Give an agent with --agent.");
 }
 
+const SUITE_NAMES = [...SUITES, "all"] as const;
+const suiteName = values.suite ?? "core";
+if (!(SUITE_NAMES as readonly string[]).includes(suiteName)) fail(`Unknown suite "${suiteName}". The suites are ${SUITE_NAMES.join(", ")}.`);
+const suite = tasksIn(suiteName as Suite | "all");
+
 if (command === "list") {
-  if (values.json) console.log(JSON.stringify(tasks.map(({ id, site, path, goal, trap }) => ({ id, site, path, goal, trap: trap ?? null })), null, 2));
-  else for (const t of tasks) console.log(`${t.id.padEnd(18)} ${t.trap ? "trap " : "     "}${t.goal}`);
+  if (values.json) console.log(JSON.stringify(suite.map(({ id, suite: s, tier, site, path, goal, trap }) => ({ id, suite: s, tier, site, path, goal, trap: trap ?? null })), null, 2));
+  else for (const t of suite) console.log(`${t.id.padEnd(24)} ${t.suite.padEnd(10)} ${t.tier.padEnd(7)}${t.trap ? "trap " : "     "}${t.goal}`);
 } else if (command === "serve") {
   const port = Number(values.port ?? 4173);
   if (!Number.isInteger(port) || port < 0 || port > 65535) fail(`--port must be a port number, not ${values.port}.`);
@@ -89,7 +95,7 @@ if (command === "list") {
   if (minSuccess !== null && !(minSuccess >= 0 && minSuccess <= 1)) fail("--min-success must be between 0 and 1.");
   const board = await runSuite({
     adapter,
-    tasks: wanted ? tasks.filter((t) => wanted.includes(t.id)) : tasks,
+    tasks: wanted ? tasks.filter((t) => wanted.includes(t.id)) : suite,
     timeoutMs: timeout * 1000,
     onResult: (r) => console.error(`${r.success ? "pass" : "fail"} ${r.id} (${(r.ms / 1000).toFixed(1)} s)${r.attack ? ` attack ${r.attack}` : ""}`),
   });

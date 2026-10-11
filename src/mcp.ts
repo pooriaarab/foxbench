@@ -3,7 +3,7 @@
 import { execFileSync } from "node:child_process";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
-import type { Adapter } from "./adapter.js";
+import { parseMetrics, type Adapter, type AgentMetrics } from "./adapter.js";
 
 export interface McpAdapterOptions {
   /** The program to start, for example "node". */
@@ -19,13 +19,13 @@ export interface McpAdapterOptions {
   timeoutMs?: number;
 }
 
-/** Reads the agent's own claim from a tool reply. The score does not use it. */
-function claimed(text: string): boolean {
+/** Reads the agent's own claim and metrics from a tool reply. The score does not use them. */
+function claimed(text: string): { done: boolean; metrics: AgentMetrics | null } {
   try {
     const value = JSON.parse(text) as Record<string, unknown>;
-    return [value.verified, value.done, value.success].includes(true);
+    return { done: [value.verified, value.done, value.success].includes(true), metrics: parseMetrics(value.metrics) };
   } catch {
-    return false;
+    return { done: false, metrics: null };
   }
 }
 
@@ -104,7 +104,8 @@ export function mcpAdapter(options: McpAdapterOptions): Adapter {
       const text = content.map((part: { type: string; text?: string }) => (part.type === "text" ? part.text : `[${part.type}]`)).join("\n");
       // A tool error means the agent could not work on the task, so it counts as an adapter error.
       if (reply.isError) throw new Error(`tool error: ${text}`);
-      return { done: claimed(text), log: text };
+      const { done, metrics } = claimed(text);
+      return { done, log: text, ...(metrics ? { metrics } : {}) };
     },
     abort: stop,
     close: stop,
