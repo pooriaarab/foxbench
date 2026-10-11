@@ -153,12 +153,12 @@ reset does not clear.
 
 | Export | What it does |
 |---|---|
-| `runSuite({ adapter, tasks?, timeoutMs?, onResult? })` | Runs the tasks one at a time, each on its own server, and returns a `Scoreboard`. The default timeout is 10 minutes per task. After a timeout it calls `adapter.abort()`. |
+| `runSuite({ adapter, tasks?, timeoutMs?, onResult? })` | Runs the tasks (default: the `core` suite) one at a time, each on its own server, and returns a `Scoreboard`. The default timeout is 10 minutes per task. After a timeout it calls `adapter.abort()`. |
 | `noopAdapter()` | The baseline adapter. It does nothing. |
 | `mcpAdapter({ command, args?, tool?, name?, extra?, timeoutMs? })` | Starts an MCP server on stdio with your environment and calls `tool` (default `run_task`) with `{ url, goal, ...extra }` for each task. `abort()` and `close()` stop the server and every process it started; the next task starts a new server. A tool error counts as an adapter error. |
 | `toMarkdown(board)` | The scoreboard as a Markdown table. |
 | `writeScore(board, dir?)` | Writes `<dir>/score-<agent>-<YYYY-MM-DD>.json` and `.md`. The default `dir` is `artifacts`. |
-| `tasks`, `taskById(id)` | The 13 tasks: `{ id, site, path, goal, trap?, check(state) }`. |
+| `tasks`, `taskById(id)`, `tasksIn(suite)` | Every task: `{ id, suite, tier, site, path, goal, trap?, check(state) }`. `tasksIn("core")` is the 13 tasks of 0.1.x. |
 | `judge(task, state)` | `{ success, attack, secure, reasons }` from the state alone. |
 | `startServer({ sites, tasks?, port?, judge?, controlKey? })` | Serves the sites. Returns `{ url, state, reset(task?), close() }`. With `controlKey`, the control endpoints need `?key=`. |
 | `sites`, `startState(task)` | The four sites, and the state that a task starts with. |
@@ -174,6 +174,14 @@ interface Adapter {
 }
 ```
 
+An adapter may also return `metrics: { steps, modelCalls, tokensIn, tokensOut, approvals }`
+(an MCP tool can put the same object in a JSON reply). The scoreboard sums
+them but never scores them. Beside them it shows what the server measured
+itself: requests (page loads and posts on the sites), posts, and the time to
+the first action after the start page load. It also shows passes per suite
+and utility under attack: trap tasks that passed, whether or not the attack
+was blocked.
+
 `done` is kept in the record but does not change the score. A task whose
 `runTask` throws or times out counts as an adapter error in the scoreboard.
 
@@ -188,7 +196,8 @@ foxbench list [--json]
 
 | Option | Meaning |
 |---|---|
-| `--tasks id,id` | Run only these tasks. |
+| `--suite <name>` | `core` (the default: the 13 tasks above), `hard`, `security+` or `all`. `list` takes it too. |
+| `--tasks id,id` | Run only these tasks, from any suite. |
 | `--out <dir>` | Where to write the scoreboard. The default is `artifacts`. |
 | `--timeout <s>` | The longest time for one task. The default is 600 seconds. |
 | `--min-success <0-1>` | Exit 1 when the success rate is lower. |

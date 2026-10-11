@@ -8,7 +8,9 @@ const secs = (ms: number) => `${(ms / 1000).toFixed(1)} s`;
 
 export function toMarkdown(board: Scoreboard): string {
   const rows = board.results.map((r) =>
-    `| ${r.id} | ${r.success ? "pass" : "fail"} | ${r.attack ?? "-"} | ${secs(r.ms)} | ${r.reasons.join("; ").replaceAll("|", "\\|") || "-"} |`);
+    `| ${r.id} | ${r.suite} | ${r.success ? "pass" : "fail"} | ${r.attack ?? "-"} | ${secs(r.ms)} | ${r.requests} | ${r.reasons.join("; ").replaceAll("|", "\\|") || "-"} |`);
+  const suites = Object.entries(board.suites).map(([name, s]) => `${name} ${s.passed}/${s.tasks}`).join(", ");
+  const reported = board.agentTotals ? Object.entries(board.agentTotals).map(([k, v]) => `${k} ${v}`).join(", ") : "not reported";
   return [
     `# foxbench score: ${board.agent}`,
     "",
@@ -20,8 +22,13 @@ export function toMarkdown(board: Scoreboard): string {
     "",
     `Adapter errors (the agent threw, failed or timed out): ${board.adapterErrors}/${board.tasks}.`,
     "",
-    "| Task | Result | Attack | Time | Why it failed |",
-    "|---|---|---|---|---|",
+    `Passed per suite: ${suites || "none"}. Utility under attack (trap tasks passed): ${board.utilityUnderAttack}/${board.traps}.`,
+    "",
+    `Median requests per task: ${board.medianRequests}. Median time to the first action: ${board.medianFirstActionMs === null ? "none" : secs(board.medianFirstActionMs)}.`,
+    `Agent-reported totals: ${reported}.`,
+    "",
+    "| Task | Suite | Result | Attack | Time | Requests | Why it failed |",
+    "|---|---|---|---|---|---|---|",
     ...rows,
     "",
   ].join("\n");

@@ -79,6 +79,14 @@ export interface TrapHit {
   at: string;
 }
 
+/** One page load or form post below a site, for the run metrics. */
+export interface Request {
+  /** Milliseconds since the task started. */
+  ms: number;
+  method: string;
+  path: string;
+}
+
 export interface State {
   /** The task that the last reset started, or null for free use. */
   taskId: string | null;
@@ -92,10 +100,22 @@ export interface State {
   orders: Order[];
   /** The trap log. A reset keeps the same array, so it only grows. */
   traps: TrapHit[];
+  /** The start page of the task, for example "/shop/". */
+  startPath: string;
+  /** When the task started, in epoch milliseconds. */
+  startedAt: number;
+  /** Page loads and form posts below a site since the reset. */
+  requests: Request[];
 }
 
-export function emptyState(taskId: string | null = null, trap: string | null = null, traps: TrapHit[] = []): State {
-  return { taskId, trap, bookings: [], accounts: [], contacts: [], mail: [], cart: [], orders: [], traps };
+export function emptyState(taskId: string | null = null, trap: string | null = null, traps: TrapHit[] = [], startPath = "/"): State {
+  return { taskId, trap, bookings: [], accounts: [], contacts: [], mail: [], cart: [], orders: [], traps, startPath, startedAt: Date.now(), requests: [] };
+}
+
+/** What the server saw the agent do: requests, posts and the time to the first action. */
+export function serverMetrics(state: State): { requests: number; posts: number; firstActionMs: number | null } {
+  const first = state.requests.find((r) => r.method !== "GET" || r.path !== state.startPath);
+  return { requests: state.requests.length, posts: state.requests.filter((r) => r.method === "POST").length, firstActionMs: first ? first.ms : null };
 }
 
 /** Records a trap hit for the running task. The time is kept for the log only. */

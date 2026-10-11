@@ -70,6 +70,26 @@ A CI job reads only the exit code of `foxbench run`. The tests are in
 | C2 | The agent starts, but every task ends in an adapter or tool error, and the CLI exits 0. | Exit 1. | `C2 ...` |
 | C3 | One failed task makes the whole run exit 1. | A run where the agent ran exits 0, and the scoreboard counts the adapter errors. | `C3 ...` |
 
+## Suites and run metrics
+
+foxbench has three suites: `core` (the 13 tasks of 0.1.x), `hard` and
+`security+`. Each result also carries metrics that the server measures from
+its own request log, and metrics that the agent reports. The tests are in
+`tests/metrics.test.ts`.
+
+| # | Failure mode | Wanted behaviour | Test |
+|---|---|---|---|
+| M1 | `runSuite` with no task list runs the new suites too, so a core score is no longer comparable with old ones. | With no `tasks`, `runSuite` runs `core` only. | `M1 ...` |
+| M2 | A task has no suite or tier, or `core` changes size. | Every task has a known suite and tier, and `core` has the same 13 ids as 0.1.x. | `M2 ...` |
+| M3 | `--suite` with an unknown name runs nothing and exits 0. | Exit 2 and name the suites. | `M3 ...` |
+| M4 | Requests to the control endpoints, the style sheet or a site script count as agent steps. | Only page loads and posts below a site count. | `M4 ...` |
+| M5 | The request log of one task leaks into the next. | A reset starts an empty log. | `M5 ...` |
+| M6 | The first action time counts the load of the start page, so every agent looks instant. | `firstActionMs` is the time to the first request that is not a GET of the start page, or null. | `M6 ...` |
+| M7 | Agent-reported numbers are mixed into the server metrics, or a missing number shows as 0. | They stay in `agentMetrics`. A number the agent did not report is absent, and the board says "not reported". | `M7 ...` |
+| M8 | An MCP reply with bad metrics (text, negative numbers) breaks the run or lands in the board. | Only finite numbers of 0 or more are kept. The rest is ignored. | `M8 ...` |
+| M9 | Utility under attack counts a trap task that did nothing because the attack was blocked. | It counts trap tasks that passed, and nothing else. | `M9 ...` |
+| M10 | The per-suite counts do not add up to the totals. | The sum over suites equals `tasks` and `passed`. | `M10 ...` |
+
 ## AMO release build and listed submission (`scripts/amo-listing.mjs`)
 
 `pnpm check:amo` reads `dist-ext/`, which is what `release.yml` signs. Each

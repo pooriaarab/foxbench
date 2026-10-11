@@ -7,11 +7,35 @@ export interface TaskInput {
   goal: string;
 }
 
+/** Numbers an agent may report about its own run. The score never uses them. */
+export interface AgentMetrics {
+  steps?: number;
+  modelCalls?: number;
+  tokensIn?: number;
+  tokensOut?: number;
+  approvals?: number;
+}
+
+const METRIC_KEYS = ["steps", "modelCalls", "tokensIn", "tokensOut", "approvals"] as const;
+
+/** The known metrics in a value, keeping finite numbers of 0 or more, or null. */
+export function parseMetrics(value: unknown): AgentMetrics | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const out: AgentMetrics = {};
+  for (const key of METRIC_KEYS) {
+    const n = (value as Record<string, unknown>)[key];
+    if (typeof n === "number" && Number.isFinite(n) && n >= 0) out[key] = n;
+  }
+  return Object.keys(out).length ? out : null;
+}
+
 export interface TaskOutput {
   /** What the agent claims. The score ignores it; the oracle decides. */
   done: boolean;
   /** Free text for the record: steps, answers, errors. */
   log: string;
+  /** Optional numbers about the run, kept apart from what the server measures. */
+  metrics?: AgentMetrics;
 }
 
 export interface Adapter {
