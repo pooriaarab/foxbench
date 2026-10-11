@@ -16,8 +16,8 @@ importers:
         specifier: ^24.19.1
         version: 24.19.1
       create-foxkit:
-        specifier: ^0.1.0
-        version: 0.1.0(yauzl@3.4.0)
+        specifier: ^0.1.2
+        version: 0.1.2(yauzl@3.4.0)
       esbuild:
         specifier: ^0.28.2
         version: 0.28.2
@@ -453,6 +453,7 @@ packages:
   '@puppeteer/browsers@3.2.3':
     resolution: {integrity: sha512-2Bt3m6dDAJqmZehn0wiXSYyQmuhyiHHZ7FjvrVaS1W2RoFGV6eCK71UvKYkNJjkwC1Q9nobjhvTMhLQztFVINA==}
     engines: {node: '>=22.12.0'}
+    hasBin: true
     peerDependencies:
       proxy-agent: '>=8.0.1'
       yauzl: ^2.10.0 || ^3.4.0
@@ -965,9 +966,10 @@ packages:
     resolution: {integrity: sha512-tJtZBBHA6vjIAaF6EnIaq6laBBP9aq/Y3ouVJjEfoHbRBcHBAHYcMh/w8LDrk2PvIMMq8gmopa5D4V8RmbrxGw==}
     engines: {node: '>= 0.10'}
 
-  create-foxkit@0.1.0:
-    resolution: {integrity: sha512-kJyZJJC6vD7JOhvECrmOHQXQMnzwgjVmlN3rfDFp0v/DspwBd5DMPeSbOpgF8LLRQutqVr1jzs06K648W8rtaA==}
+  create-foxkit@0.1.2:
+    resolution: {integrity: sha512-0JUuCvn3nEoxxqY5egMikpqOKGJWG40G0YGs0r+ZS/tqQcV0SZkLYWxcIGNw50HVuJrCeVjsaYPKJGm+wI2AmA==}
     engines: {node: '>=24'}
+    hasBin: true
 
   cross-spawn@7.0.6:
     resolution: {integrity: sha512-uV2QOWP2nWzsy2aMp8aRibhi9dlzF5Hgh5SHaB9OiTGEyDTiJJyx0uy51QXdyWbtAHNua4XJzUKca3OzKUd3vA==}
@@ -1160,6 +1162,7 @@ packages:
     resolution: {integrity: sha512-XoMjdBOwe/esVgEvLmNsD3IRHkm7fbKIUGvrleloJXUZgDHig2IPWNniv+GwjyJXzuNqVjlr5+4yVUZjycJwfQ==}
     engines: {node: ^18.18.0 || ^20.9.0 || >=21.1.0}
     deprecated: This version is no longer supported. Please see https://eslint.org/version-support for other options.
+    hasBin: true
     peerDependencies:
       jiti: '*'
     peerDependenciesMeta:
@@ -1757,6 +1760,7 @@ packages:
   oxlint@1.87.0:
     resolution: {integrity: sha512-drxVlaW7Oqq7wSy1CN25znRu00aRq8n57Q2wniJRxCmtYVz07ufCm7EVDPQFZURrTgQIjzKrVEHAD/HcvJXObg==}
     engines: {node: ^20.19.0 || >=22.12.0}
+    hasBin: true
     peerDependencies:
       oxlint-tsgolint: '>=7.0.2003'
       vite-plus: '*'
@@ -2211,6 +2215,7 @@ packages:
   vitest@5.0.3:
     resolution: {integrity: sha512-xMw97S3rjdtj5dkVat7jCsqWBpvchs3RlpQctUqwJD0KkERk40vz2fJ77lDwW/Vzh/pk18eItYAzkodhSes3jQ==}
     engines: {node: ^22.12.0 || ^24.0.0 || >=26.0.0}
+    hasBin: true
     peerDependencies:
       '@edge-runtime/vm': '*'
       '@opentelemetry/api': ^1.9.0
@@ -3080,7 +3085,7 @@ snapshots:
       object-assign: 4.1.1
       vary: 1.1.2
 
-  create-foxkit@0.1.0(yauzl@3.4.0):
+  create-foxkit@0.1.2(yauzl@3.4.0):
     dependencies:
       puppeteer-core: 25.12.0(yauzl@3.4.0)
     transitivePeerDependencies:
