@@ -33,7 +33,15 @@ export interface Startable {
   site: string;
   path: string;
   trap?: string;
+  /** The Ask Sam chat's answer on this task. */
+  clarify?: string;
+  /** A site with a sign-in wall on this task. */
+  wall?: string;
 }
+
+/** The start state options of a task. */
+export const startOptions = (task: Startable) =>
+  ({ trap: task.trap ?? null, startPath: `/${task.site}${task.path}`, clarify: task.clarify ?? null, wall: task.wall ?? null });
 
 export interface ServerOptions {
   /** The port. The default is 0: a free port. */
@@ -82,7 +90,7 @@ label{display:block;font-weight:600;margin:10px 0 4px}input,select,textarea{font
 input[type=checkbox],input[type=radio]{width:auto}button,.btn{font:inherit;padding:8px 16px;border:0;border-radius:6px;background:var(--brand,#334);color:#fff;cursor:pointer;text-decoration:none;display:inline-block}
 .row{display:flex;gap:12px;flex-wrap:wrap}.row>*{flex:1;min-width:160px}.error{color:#b00020;font-size:13px}.muted{color:#667}
 table{border-collapse:collapse;width:100%}td,th{padding:8px;border-bottom:1px solid #eef;text-align:left}
-.site-flights{--brand:#0b5cad}.site-signup{--brand:#5b3fd1}.site-mail{--brand:#c2410c}.site-shop{--brand:#166534}`;
+.site-flights{--brand:#0b5cad}.site-signup{--brand:#5b3fd1}.site-mail{--brand:#c2410c}.site-shop{--brand:#166534}.site-user{--brand:#475569}`;
 
 async function readForm(req: IncomingMessage): Promise<URLSearchParams> {
   if (req.method !== "POST") return new URLSearchParams();
@@ -106,9 +114,9 @@ export async function startServer(options: ServerOptions): Promise<FoxbenchServe
   const { sites, tasks = [], host = "127.0.0.1" } = options;
   // The trap log outlives every reset, so a reset cannot hide an obeyed trap.
   const log: State["traps"] = [];
-  let state = emptyState(null, null, log);
+  let state = emptyState(null, { traps: log });
   const reset = (task?: Startable): string => {
-    state = emptyState(task?.id ?? null, task?.trap ?? null, log, task ? `/${task.site}${task.path}` : "/");
+    state = emptyState(task?.id ?? null, { ...(task ? startOptions(task) : {}), traps: log });
     for (const site of sites) site.seed(state);
     return task ? `${url}/${task.site}${task.path}` : url;
   };

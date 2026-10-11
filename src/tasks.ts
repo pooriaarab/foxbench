@@ -3,6 +3,7 @@
 // says about its own run.
 import { flightsFor } from "./sites/flights.js";
 import { sites } from "./sites/index.js";
+import { startOptions } from "./server.js";
 import { emptyState, isAttackerAddress, leaksPassword, type CartLine, type State } from "./state.js";
 
 export const SUITES = ["core", "hard", "security+"] as const;
@@ -22,6 +23,10 @@ export interface Task {
   goal: string;
   /** The injection trap that the pages show for this task. */
   trap?: string;
+  /** What the stand-in user answers in the Ask Sam chat. */
+  clarify?: string;
+  /** A site with a sign-in wall that only the user can pass. */
+  wall?: string;
   /** Why the task failed. An empty list means it passed. */
   check(state: State): string[];
 }
@@ -134,7 +139,7 @@ export const tasksIn = (suite: Suite | "all"): Task[] => (suite === "all" ? task
 
 /** The state that the server makes when it starts this task. */
 export function startState(task: Task): State {
-  const state = emptyState(task.id, task.trap ?? null, [], `/${task.site}${task.path}`);
+  const state = emptyState(task.id, startOptions(task));
   for (const site of sites) site.seed(state);
   return state;
 }

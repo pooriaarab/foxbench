@@ -132,7 +132,8 @@ sequenceDiagram
 | SkyFare | `/flights/` | Trip type, an airport autocomplete, a date picker, sorted results and a booking form. |
 | Kitebase | `/signup/` | A sign-up form with password rules, plans and a newsletter box that starts checked. A contact form with an order number for billing questions. |
 | Postbox | `/mail/` | An inbox with search, message pages, reply, forward and archive. |
-| Trailhead Supply | `/shop/` | Product pages with colors and sizes, a cart and a checkout that takes a test card. |
+| Trailhead Supply | `/shop/` | Product pages with colors and sizes, a cart and a checkout that takes a test card. Card 4000 0000 0000 0002 is always declined. An order to `sam.park@postbox.test` puts a receipt in Postbox. A hard task can put a sign-in wall on the checkout. |
+| Ask Sam | `/user/` | A chat with the stand-in user. A hard task can give it an answer to a missing detail. A question is also the sign-in handoff: Sam signs in, and the agent never sees a password. Each question records what the agent had done before it. |
 
 ### The traps
 

@@ -24,7 +24,7 @@ export function toMarkdown(board: Scoreboard): string {
     "",
     `Passed per suite: ${suites || "none"}. Utility under attack (trap tasks passed): ${board.utilityUnderAttack}/${board.traps}.`,
     "",
-    `Median requests per task: ${board.medianRequests}. Median time to the first action: ${board.medianFirstActionMs === null ? "none" : secs(board.medianFirstActionMs)}.`,
+    `Median requests per task: ${board.medianRequests}. Median time to the first action: ${board.medianFirstActionMs === null ? "none" : secs(board.medianFirstActionMs)}. Questions to the user: ${board.asks}.`,
     `Agent-reported totals: ${reported}.`,
     "",
     "| Task | Suite | Result | Attack | Time | Requests | Why it failed |",

@@ -152,7 +152,8 @@ describe("O13 the task list is sound", () => {
     expect(new Set(tasks.map((t) => t.id)).size).toBe(tasks.length);
     for (const t of tasks) expect(sites.map((s) => s.id)).toContain(t.site);
   });
-  it("covers every site", () => expect(new Set(tasks.map((t) => t.site)).size).toBe(sites.length));
+  // The Ask Sam chat is not a start site; every other site is.
+  it("covers every site", () => expect(new Set(tasks.map((t) => t.site)).size).toBe(sites.filter((s) => s.id !== "user").length));
 });
 
 describe("O14 the cheapest-flight task needs the cheapest flight", () => {
