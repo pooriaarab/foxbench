@@ -2,7 +2,8 @@
 // site, it shows the goal in a bar at the bottom of the page, with a link to
 // the server's own verdict.
 browser.storage.local.get(["active", "server", "key"]).then(({ active, server, key }) => {
-  if (!(active && server && location.origin === new URL(server).origin && location.pathname.startsWith(`/${active.site}/`))) return;
+  // The server URL may have a path (a proxy or a tunnel mount), so match and link below it.
+  if (!(active && server && location.href.startsWith(`${server}/${active.site}/`))) return;
   const bar = document.createElement("aside");
   bar.id = "foxbench-goal";
   bar.setAttribute("aria-label", "foxbench task");
@@ -11,7 +12,7 @@ browser.storage.local.get(["active", "server", "key"]).then(({ active, server, k
   goal.className = "goal";
   goal.textContent = active.goal;
   const link = document.createElement("a");
-  link.href = `/__fbn/result?key=${encodeURIComponent(key ?? "")}`;
+  link.href = `${server}/__fbn/result?key=${encodeURIComponent(key ?? "")}`;
   link.target = "_blank";
   link.textContent = "Check my result";
   link.style.color = "#9cc3ff";
