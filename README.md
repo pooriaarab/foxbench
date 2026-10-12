@@ -183,6 +183,32 @@ Every hard and security+ goal ends with the same sentence about the Ask Sam
 chat, so the goal does not show which tasks need a question. The `asks`
 metric shows how often an agent asked.
 
+## External benchmarks
+
+foxbench's own tasks borrow ideas from public benchmarks. `external/` runs
+public benchmarks themselves in Firefox, with each benchmark's own success
+check, so a score can sit beside published numbers. It uses the same adapter
+contract and writes the same scoreboard files. It is not part of the npm
+package.
+
+| Suite | Cases | Where it comes from | The check |
+|---|---|---|---|
+| `miniwob` | 30 MiniWoB++ tasks: clicks, forms, search, date pickers, multi-step | [MiniWoB++](https://github.com/Farama-Foundation/miniwob-plusplus) (MIT), fetched at a pinned commit at run time | The reward that the task's own script computes in the page. A raw reward above 0 passes, as in BrowserGym. |
+
+```bash
+pnpm build && pnpm build:ext
+node external/run.mjs miniwob --agent noop
+node external/run.mjs miniwob --agent mcp --name my-agent -- node my-agent.mjs mcp
+```
+
+A MiniWoB task runs the way BrowserGym runs it: the seed is fixed, the time
+limit is 1,000,000 ms, the in-page goal and timer are hidden, and the goal goes
+to the agent as text. A small script in the page posts the reward to the
+server. When the episode ends, the runner stops the agent. `--agent perfect`
+and `--agent wrong` are scripted agents that check the harness on six tasks.
+The first run fetches MiniWoB++ into `~/.cache/foxbench-external` (or
+`FOXBENCH_CACHE`) and reads each task's goal in a headless Firefox.
+
 ## API
 
 | Export | What it does |
