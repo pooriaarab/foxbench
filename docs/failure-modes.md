@@ -58,6 +58,7 @@ small MCP server in `tests/fixtures/mcp-server.mjs`.
 | R3 | The mcp adapter reuses the stuck MCP server for the next task. | `abort()` stops the server process, and the next task starts a new one. | `R3 ...` |
 | R4 | `close()` stops only the MCP server, and a browser that it started stays open. | `abort()` and `close()` stop the whole process tree. | `R4 ...` |
 | R5 | The MCP server does not get the caller's environment, so `FIREFOX` and other settings are lost. | The adapter passes the full environment. | `R5 ...` |
+| R6 | An agent keys a cache by origin (foxmate's workflow cache), and each task's own port gives each task a new origin, so a second run never replays and a cache win cannot be measured | `runSuite({ fixedPorts: <base> })` and `foxbench run --fixed-ports <base>` give each site one port for the whole run: the base plus the site's place in the site list. A site keeps its origin across its tasks and across runs. Each task still gets a fresh server and state, but R1 is weaker: a late request from a timed-out task can reach the next task on the same site. So the option is off by default, and the board records `fixedPorts`. | `R6 ...` |
 
 ## The CLI exit code
 
