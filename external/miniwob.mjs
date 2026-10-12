@@ -1,0 +1,162 @@
+// MiniWoB++ as a foxbench external suite. MiniWoB++ (MIT) is fetched at run
+// time at a pinned commit; foxbench vendors none of its files. Each task runs
+// the way BrowserGym runs it: the human display (goal, timer, reward) is
+// removed, the seed is set, the episode has no time limit, and the goal goes
+// to the agent as text. The verdict is MiniWoB's own reward, computed by the
+// task's script in the page: BrowserGym counts a raw reward above 0 as a
+// success. A small script in the page posts that reward to the server.
+import { execFileSync } from "node:child_process";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { homedir } from "node:os";
+import { extname, join, normalize } from "node:path";
+import { serveCase } from "./runner.mjs";
+
+export const MINIWOB_REPO = "https://github.com/Farama-Foundation/miniwob-plusplus.git";
+export const MINIWOB_COMMIT = "33c3b4ddef8c6eb67c57a29663d844b1eda7e614";
+
+/** 30 tasks over five kinds of web work. The seed of each is fixed, so two runs see the same problem. */
+export const MINIWOB_TASKS = [
+  ...["click-button", "click-button-sequence", "click-checkboxes", "click-collapsible", "click-dialog", "click-link", "click-option", "click-tab-2", "click-widget", "navigate-tree"].map((id) => [id, "click"]),
+  ...["enter-text", "enter-password", "focus-text", "login-user", "login-user-popup", "form-sequence-2", "use-spinner", "choose-list"].map((id) => [id, "form"]),
+  ...["search-engine", "use-autocomplete", "phone-book", "social-media"].map((id) => [id, "search"]),
+  ...["choose-date-easy", "choose-date", "enter-date", "enter-time"].map((id) => [id, "date"]),
+  ...["book-flight", "email-inbox", "multi-orderings", "social-media-some"].map((id) => [id, "multi-step"]),
+].map(([id, kind], i) => ({ id, kind, seed: 1000 + i }));
+
+export const cacheDir = () => process.env.FOXBENCH_CACHE ?? join(homedir(), ".cache", "foxbench-external");
+
+/** Fetches MiniWoB++ at the pinned commit once, and returns its html directory. */
+export function fetchMiniwob(dir = cacheDir()) {
+  const repo = join(dir, `miniwob-${MINIWOB_COMMIT.slice(0, 12)}`);
+  if (!existsSync(join(repo, "miniwob", "html", "core", "core.js"))) {
+    mkdirSync(repo, { recursive: true });
+    const git = (...args) => execFileSync("git", ["-C", repo, ...args], { stdio: "ignore" });
+    git("init", "-q");
+    git("fetch", "-q", "--depth", "1", MINIWOB_REPO, MINIWOB_COMMIT);
+    git("checkout", "-q", "FETCH_HEAD");
+  }
+  return join(repo, "miniwob", "html");
+}
+
+// BrowserGym's setup script (browsergym/miniwob/base.py), plus two posts:
+// the goal the page made, and the reward when the episode ends.
+const bootstrap = (seed, nonce) => `<script>
+window.addEventListener("load", function () { setTimeout(function () {
+  var post = function (path, data) { fetch(path + "?nonce=${nonce}", { method: "POST", body: JSON.stringify(data), keepalive: true }); };
+  var ids = ["reward-display", "click-canvas", "sync-task-cover"], kept = {}, query = null;
+  var removeDisplay = function () {
+    core.clearTimer();
+    document.body.removeEventListener("click", core.canvasDrawClick);
+    query = document.getElementById("query").cloneNode(true);
+    document.getElementById("query").innerHTML = "";
+    ids.forEach(function (id) { var el = document.getElementById(id); if (el) { el.remove(); kept[id] = el; } });
+  };
+  var bringBackDisplay = function () {
+    document.getElementById("query").innerHTML = query.innerHTML;
+    Object.keys(kept).forEach(function (id) { document.body.appendChild(kept[id]); });
+    core.createDisplay();
+  };
+  var endLegacy = core.endEpisode, startLegacy = core.startEpisodeReal, utteranceLegacy = core.getUtterance;
+  core.getUtterance = function () { bringBackDisplay(); var u = utteranceLegacy(); removeDisplay(); return u; };
+  core.endEpisode = function (reward, timed, reason) {
+    var open = core.EP_TIMER !== null;
+    bringBackDisplay(); endLegacy(reward, timed, reason); removeDisplay();
+    if (open) post("/__ext/reward", { raw: WOB_RAW_REWARD_GLOBAL, reward: WOB_REWARD_GLOBAL, reason: String(WOB_REWARD_REASON) });
+  };
+  core.startEpisodeReal = function () { bringBackDisplay(); startLegacy(); removeDisplay(); };
+  removeDisplay();
+  Math.seedrandom(${seed});
+  core.EPISODE_MAX_TIME = 1000000;
+  core.startEpisodeReal();
+  var ready = function () { if (WOB_TASK_READY) post("/__ext/start", { goal: core.getUtterance() }); else setTimeout(ready, 50); };
+  ready();
+}, 0); });
+</script>`;
+
+const TYPES = { ".html": "text/html; charset=utf-8", ".js": "text/javascript", ".css": "text/css", ".png": "image/png", ".gif": "image/gif", ".jpg": "image/jpeg", ".svg": "image/svg+xml", ".json": "application/json" };
+
+/** Starts one task's server. `goal` is the goal from prepare, or null while preparing. */
+export async function startMiniwob(html, task, goal) {
+  const nonce = Math.random().toString(36).slice(2);
+  const state = { goals: [], rewards: [] };
+  let signal;
+  const ended = new Promise((resolve) => { signal = resolve; });
+  const path = `/miniwob/${task.id}.html`;
+  const server = await serveCase(async (req, body, url) => {
+    if (url.pathname.startsWith("/__ext/")) {
+      if (req.method !== "POST" || url.searchParams.get("nonce") !== nonce) return { status: 403, type: "text/plain", body: "forbidden" };
+      const data = JSON.parse(body || "{}");
+      if (url.pathname === "/__ext/start") state.goals.push(String(data.goal));
+      if (url.pathname === "/__ext/reward") {
+        state.rewards.push({ raw: Number(data.raw), reward: Number(data.reward), reason: data.reason });
+        signal();
+      }
+      return { type: "text/plain", body: "ok" };
+    }
+    const file = normalize(join(html, url.pathname));
+    if (!file.startsWith(html) || !existsSync(file) || url.pathname.endsWith("/")) return null;
+    const type = TYPES[extname(file)] ?? "application/octet-stream";
+    if (url.pathname !== path) return { type, body: readFileSync(file) };
+    return { type, body: readFileSync(file, "utf8").replace("</body>", `${bootstrap(task.seed, nonce)}</body>`) };
+  });
+  return {
+    url: `${server.url}${path}`,
+    goal,
+    startPath: path,
+    log: server.log,
+    state,
+    ended,
+    async judge() {
+      const reasons = [];
+      // The first episode's reward counts; a later one comes from a reload.
+      const first = state.rewards[0];
+      const mismatch = state.goals.find((g) => g !== goal);
+      if (mismatch !== undefined) reasons.push(`harness: the page made another goal: ${mismatch}`);
+      if (!first) reasons.push("the episode did not end (no MiniWoB reward)");
+      else if (!(first.raw > 0)) reasons.push(`MiniWoB reward ${first.raw}${first.reason && first.reason !== "null" ? ` (${first.reason})` : ""}`);
+      return { success: Boolean(first && first.raw > 0 && mismatch === undefined), reasons, extra: { reward: first?.raw ?? null, kind: task.kind } };
+    },
+    close: server.close,
+  };
+}
+
+/**
+ * The goal each task's seed makes, read in a real Firefox the way BrowserGym
+ * reads it (core.getUtterance after the episode starts). Cached per commit.
+ */
+export async function prepareGoals(html, { firefox, extension = "dist-ext" } = {}) {
+  const file = join(cacheDir(), `miniwob-goals-${MINIWOB_COMMIT.slice(0, 12)}.json`);
+  const cached = existsSync(file) ? JSON.parse(readFileSync(file, "utf8")) : {};
+  const missing = MINIWOB_TASKS.filter((t) => !cached[`${t.id}#${t.seed}`]);
+  if (missing.length) {
+    const { launch } = await import("create-foxkit/e2e");
+    const fox = await launch({ extension, headless: true, ...(firefox ? { firefox } : {}) });
+    try {
+      for (const task of missing) {
+        const run = await startMiniwob(html, task, null);
+        const page = await fox.open(run.url);
+        for (let i = 0; i < 100 && !run.state.goals.length; i++) await new Promise((r) => setTimeout(r, 50));
+        await page.close();
+        await run.close();
+        if (!run.state.goals.length) throw new Error(`MiniWoB task ${task.id} did not start in Firefox`);
+        cached[`${task.id}#${task.seed}`] = run.state.goals[0];
+      }
+    } finally {
+      await fox.close();
+    }
+    mkdirSync(cacheDir(), { recursive: true });
+    writeFileSync(file, `${JSON.stringify(cached, null, 2)}\n`);
+  }
+  return cached;
+}
+
+/** The suite for runExternal. Fetches MiniWoB++ and prepares the goals first. */
+export async function miniwobSuite(options = {}) {
+  const html = fetchMiniwob();
+  const goals = await prepareGoals(html, options);
+  return {
+    name: "miniwob",
+    cases: MINIWOB_TASKS,
+    start: (task) => startMiniwob(html, task, goals[`${task.id}#${task.seed}`]),
+  };
+}
