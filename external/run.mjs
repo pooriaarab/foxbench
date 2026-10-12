@@ -1,19 +1,26 @@
 #!/usr/bin/env node
 // Scores an agent on an external benchmark with that benchmark's own check.
 //   node external/run.mjs miniwob   --agent noop|perfect|wrong   [options]
+//   node external/run.mjs agentdojo --agent noop|perfect|gullible [options]
 //   node external/run.mjs <suite>   --agent mcp [--name <label>] -- <command> [args...]
 // Options: --tasks id,id  --out <dir> (default artifacts/external/<suite>)
 //          --timeout <s> (default 600)  --headed  --firefox <path>
-// Needs: pnpm build, pnpm build:ext and git.
+// Needs: pnpm build, pnpm build:ext, git, and uv for agentdojo.
 import { parseArgs } from "node:util";
 import { mcpAdapter, noopAdapter, toMarkdown, writeScore } from "../dist/index.js";
+import { agentdojoSuite } from "./agentdojo.mjs";
 import { miniwobSuite } from "./miniwob.mjs";
 import { runExternal } from "./runner.mjs";
-import { miniwobScripted, SCRIPTED_MINIWOB } from "./scripted.mjs";
+import { agentdojoScripted, miniwobScripted, SCRIPTED_MINIWOB } from "./scripted.mjs";
 
 /** The numbers each benchmark reports, beside foxbench's own board. */
 export function summary(board) {
+  const benign = board.results.filter((r) => !r.trap);
   const line = [`${board.agent}: ${board.passed}/${board.tasks} passed (${Math.round(board.successRate * 100)}%), median ${(board.medianMs / 1000).toFixed(1)} s per task, ${board.adapterErrors} adapter errors.`];
+  if (board.traps) {
+    line.push(`Utility without attack: ${benign.filter((r) => r.success).length}/${benign.length}. Utility under attack: ${board.utilityUnderAttack}/${board.traps}.`,
+      `Attack success rate (AgentDojo security true): ${board.attacksFollowed}/${board.traps} (${Math.round((board.attacksFollowed / board.traps) * 100)}%).`);
+  }
   if (board.agentTotals) line.push(`Agent-reported totals: ${Object.entries(board.agentTotals).map(([k, v]) => `${k} ${v}`).join(", ")}.`);
   return line.join("\n");
 }
@@ -26,9 +33,9 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   });
   const [which, ...command] = positionals;
   const firefox = values.firefox ?? process.env.FIREFOX;
-  const suite = which === "miniwob" ? await miniwobSuite({ firefox }) : null;
+  const suite = which === "miniwob" ? await miniwobSuite({ firefox }) : which === "agentdojo" ? agentdojoSuite() : null;
   if (!suite) {
-    console.error("The first argument must be miniwob.");
+    console.error("The first argument must be miniwob or agentdojo.");
     process.exit(2);
   }
   let cases = suite.cases;
@@ -37,8 +44,9 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   const agents = {
     noop: () => noopAdapter(),
     mcp: () => mcpAdapter({ command: command[0], args: command.slice(1), ...(values.name ? { name: values.name } : {}) }),
-    perfect: () => miniwobScripted("perfect", { headless: !values.headed, firefox }),
+    perfect: () => (which === "miniwob" ? miniwobScripted("perfect", { headless: !values.headed, firefox }) : agentdojoScripted("perfect", suite.cases)),
     wrong: () => miniwobScripted("wrong", { headless: !values.headed, firefox }),
+    gullible: () => agentdojoScripted("gullible", suite.cases),
   };
   if (!agents[values.agent] || (values.agent === "mcp" && !command.length)) {
     console.error(`--agent must be one of ${Object.keys(agents).join(", ")}; mcp needs a command after --.`);
