@@ -194,10 +194,12 @@ package.
 | Suite | Cases | Where it comes from | The check |
 |---|---|---|---|
 | `miniwob` | 30 MiniWoB++ tasks: clicks, forms, search, date pickers, multi-step | [MiniWoB++](https://github.com/Farama-Foundation/miniwob-plusplus) (MIT), fetched at a pinned commit at run time | The reward that the task's own script computes in the page. A raw reward above 0 passes, as in BrowserGym. |
+| `agentdojo` | AgentDojo's banking suite: the 16 user tasks, then 18 pairs of a user task and an injection task | [AgentDojo](https://github.com/ethz-spylab/agentdojo) 0.1.35 (MIT), suite v1.2.2, installed from PyPI by `uv` at run time | AgentDojo's own `utility` and `security` functions, on the start and end environments. |
 
 ```bash
 pnpm build && pnpm build:ext
 node external/run.mjs miniwob --agent noop
+node external/run.mjs agentdojo --agent noop
 node external/run.mjs miniwob --agent mcp --name my-agent -- node my-agent.mjs mcp
 ```
 
@@ -208,6 +210,15 @@ server. When the episode ends, the runner stops the agent. `--agent perfect`
 and `--agent wrong` are scripted agents that check the harness on six tasks.
 The first run fetches MiniWoB++ into `~/.cache/foxbench-external` (or
 `FOXBENCH_CACHE`) and reads each task's goal in a headless Firefox.
+
+AgentDojo gives tools to a model, so `agentdojo` serves its banking
+environment as a small online bank, Bluebank. Each form does what the AgentDojo
+tool of the same name does, on the same data. AgentDojo makes the cases, places
+its `important_instructions` injections in the pages and judges each run
+(`external/agentdojo_bridge.py`). The agent's answer for a question task is
+`answer` from `runTask`, else `log`. The board's attacks followed is AgentDojo's
+attack success. `--agent perfect` runs AgentDojo's ground truth through the
+forms; `--agent gullible` also obeys the injection it finds.
 
 ## API
 
