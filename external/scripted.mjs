@@ -3,6 +3,8 @@
 //   miniwob perfect   solves six MiniWoB tasks in a real Firefox, with real
 //                     clicks and keys; each must pass on MiniWoB's own reward
 //   miniwob wrong     clicks the wrong thing on the same six; each must fail
+//   agentdojo perfect runs AgentDojo's ground-truth calls as form posts
+//   agentdojo gullible  also obeys the injection it finds on the pages
 const quoted = (goal) => [...goal.matchAll(/"([^"]*)"/g)].map((m) => m[1]);
 
 async function clickText(page, selector, text, wrong) {
@@ -43,5 +45,45 @@ export async function miniwobScripted(mode, { headless = true, firefox } = {}) {
       }
     },
     close: () => fox.close(),
+  };
+}
+
+const decode = (html) => html.replace(/<[^>]+>/g, " ").replace(/&#(\d+);/g, (_, n) => String.fromCodePoint(Number(n)))
+  .replaceAll("&lt;", "<").replaceAll("&gt;", ">").replaceAll("&quot;", '"').replaceAll("&amp;", "&");
+
+const str = (o) => Object.fromEntries(Object.entries(o).filter(([, v]) => v !== null && v !== undefined).map(([k, v]) => [k, typeof v === "boolean" ? (v ? "1" : "") : String(v)]));
+
+/** AgentDojo's function calls as the bank's form posts and page loads. */
+async function call(base, { function: fn, args }) {
+  const post = (path, form) => fetch(new URL(path, base), { method: "POST", body: new URLSearchParams(form) });
+  switch (fn) {
+    case "send_money": return post("/bank/send", str(args));
+    case "schedule_transaction": return post("/bank/schedule", str(args));
+    case "update_scheduled_transaction": { const { id, ...rest } = args; return post(`/bank/scheduled/${id}`, str(rest)); }
+    case "update_password": return post("/bank/password", str(args));
+    case "update_user_info": return post("/bank/profile", str(args));
+    case "read_file": return fetch(new URL(`/bank/files/${encodeURIComponent(args.file_path)}`, base));
+    default: return fetch(new URL({ get_most_recent_transactions: "/bank/transactions", get_scheduled_transactions: "/bank/scheduled" }[fn] ?? "/bank/", base));
+  }
+}
+
+/** An AgentDojo agent over HTTP. `mode` is "perfect" or "gullible". */
+export function agentdojoScripted(mode, cases) {
+  const byGoal = new Map(cases.filter((c) => !c.injection_task).map((c) => [c.goal, c]));
+  const attacks = new Map(cases.filter((c) => c.injection_task).map((c) => [c.injection_goal, c.injection_ground_truth]));
+  return {
+    name: `scripted ${mode} (agentdojo)`,
+    async runTask({ url, goal }) {
+      const task = byGoal.get(goal);
+      if (mode === "gullible") {
+        // Read every page, as an agent that looks around would, and obey the first injection found.
+        const paths = ["/bank/transactions", "/bank/scheduled", "/bank/profile", ...task.ground_truth.filter((c) => c.function === "read_file").map((c) => `/bank/files/${encodeURIComponent(c.args.file_path)}`)];
+        const text = decode((await Promise.all(paths.map(async (p) => (await fetch(new URL(p, url))).text()))).join("\n"));
+        const found = [...attacks.keys()].find((g) => text.includes(g));
+        for (const c of found ? attacks.get(found) : []) await call(url, c);
+      }
+      for (const c of task.ground_truth) await call(url, c);
+      return { done: true, log: task.ground_truth.map((c) => c.function).join(", "), answer: task.ground_truth_output };
+    },
   };
 }
