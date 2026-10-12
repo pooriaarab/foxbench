@@ -148,6 +148,23 @@ utility under attack beside attacks blocked. The tests are in
 | X4 | A new trap shows on a core task and changes its score. | Each trap shows only when the task names it. | `X4 ...` |
 | X5 | A new trap cannot be obeyed from the page, so "blocked" means nothing. | The gullible reference solver obeys each new trap and scores followed; the careful one blocks it and passes. | `X5 ...` |
 
+## External benchmarks (`external/`)
+
+The external suites score an agent with a public benchmark's own check. Each
+row is a way to report a number that is not the benchmark's number. The check
+is a run of `node external/run.mjs <suite> --agent <agent>` with the scripted
+agents in `external/scripted.mjs`.
+
+| # | Failure mode | Wanted behaviour | Check |
+|---|---|---|---|
+| E1 | The harness rewrites the benchmark's success check, so the score is not the published metric. | The MiniWoB verdict is the page's own `WOB_RAW_REWARD_GLOBAL`; above 0 passes, as in BrowserGym. | `perfect` passes 6/6 and `wrong` fails 6/6 on the same tasks. |
+| E2 | The goal the agent gets differs from the problem the page made, for example after the seed drifts. | The page posts its goal when the episode starts. A different goal fails the case with a `harness:` reason. | A second Firefox makes the same goal for all 30 tasks. |
+| E3 | A reload starts a second episode, and its reward replaces the first. | Only the first reward counts. | Read in `judge`. |
+| E4 | MiniWoB's 10 s episode limit fails every model-driven agent. | The limit is 1,000,000 ms, as in BrowserGym. | `perfect` passes. |
+| E5 | The agent posts a fake reward to the server. | The reward endpoint needs a per-case nonce from the page script. An agent that reads that script can still post; this is a known limit. | - |
+| E6 | The agent keeps working after the episode ended, and the time per task grows. | The runner calls `abort()` when the reward arrives, as BrowserGym ends the episode. | `endedEarly` in each result. |
+| E7 | An agent that does nothing passes. | MiniWoB `noop` scores 0/30. | `noop` run. |
+
 ## AMO release build and listed submission (`scripts/amo-listing.mjs`)
 
 `pnpm check:amo` reads `dist-ext/`, which is what `release.yml` signs. Each
