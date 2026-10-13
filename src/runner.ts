@@ -59,6 +59,8 @@ export interface Scoreboard {
   medianFirstActionMs: number | null;
   /** The sum of each agent-reported metric over the tasks that reported it, or null. */
   agentTotals: AgentMetrics | null;
+  /** The base port when the run used one port per site (R6). */
+  fixedPorts?: number;
   results: TaskResult[];
 }
 
@@ -67,6 +69,12 @@ export interface RunOptions {
   tasks?: Task[];
   /** The longest time one task may take. The default is 10 minutes. */
   timeoutMs?: number;
+  /**
+   * One port per site for the whole run: this base plus the site's place in
+   * the site list, so a site keeps its origin across tasks and runs (R6).
+   * Off by default: a late request can then reach the next task on that site.
+   */
+  fixedPorts?: number;
   onResult?: (result: TaskResult) => void;
 }
 
@@ -102,7 +110,8 @@ export async function runSuite(options: RunOptions): Promise<Scoreboard> {
       // One server per task, on its own port: a late request from a timed-out
       // task finds a closed port and cannot touch the next task's state.
       // The control endpoints need a key that no one gets.
-      const server = await startServer({ sites, tasks, controlKey: randomBytes(24).toString("hex") });
+      const port = options.fixedPorts === undefined ? undefined : options.fixedPorts + Math.max(0, sites.findIndex((s) => s.id === task.site));
+      const server = await startServer({ sites, tasks, controlKey: randomBytes(24).toString("hex"), ...(port === undefined ? {} : { port }) });
       const url = server.reset(task);
       const started = Date.now();
       let output: { done: boolean; log: string; metrics?: AgentMetrics } = { done: false, log: "" };
@@ -158,6 +167,7 @@ export async function runSuite(options: RunOptions): Promise<Scoreboard> {
     asks: results.reduce((n, r) => n + r.asks, 0),
     medianFirstActionMs: firsts.length ? median(firsts) : null,
     agentTotals: totals(results),
+    ...(options.fixedPorts === undefined ? {} : { fixedPorts: options.fixedPorts }),
     results,
   };
 }
