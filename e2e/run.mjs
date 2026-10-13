@@ -62,7 +62,42 @@ async function extension() {
   }
 }
 
+/** Sends the flights search form and waits for the results (H9). */
+const search = (page) => Promise.all([page.waitForNavigation({ waitUntil: "load" }), page.click('#search button[type="submit"]')]);
+
+// H9: the Change search page searches the date picked or typed on it, not the last one.
+async function changeSearch() {
+  const server = await startServer({ sites, tasks, controlKey: "e2e-change-key", judge: (id, state) => judge(taskById(id), state) });
+  const fox = await launch({ extension: "dist-ext", headless: !headed.length });
+  const q = "trip=oneway&from_text=Toronto+Pearson+%28YYZ%29&from=YYZ&to_text=London+Heathrow+%28LHR%29&to=LHR&depart_text=Tue%2C+Oct+20%2C+2026&depart=2026-10-20&return=&pax=1";
+  try {
+    const page = await fox.open(`${server.url}/flights/?${q}`);
+    await page.click("#depart");
+    await page.click('#calendar button[data-date="2026-10-22"]');
+    await search(page);
+    const picked = await page.$eval("p.muted", (p) => p.textContent);
+    await page.goto(`${server.url}/flights/?${q}`);
+    await page.$eval("#depart", (el) => { el.value = ""; });
+    await page.type("#depart", "10/21/2026");
+    // Enter sends the form, as a person who typed the date would; the open calendar covers the button.
+    await Promise.all([page.waitForNavigation({ waitUntil: "load" }), page.keyboard.press("Enter")]);
+    const typed = await page.$eval("p.muted", (p) => p.textContent);
+    await page.goto(`${server.url}/flights/?${q}`);
+    await page.$eval("#to", (el) => { el.value = ""; });
+    await page.type("#to", "Madrid");
+    await page.waitForSelector("#to-MAD", { visible: true });
+    await page.click("#to-MAD");
+    const hiddenTo = await page.$eval('#search input[type="hidden"][name="to"]', (el) => el.value);
+    check("H9 the Change search page searches the date picked or typed on it, and the airport picked", /Oct 22, 2026/.test(picked) && /Oct 21, 2026/.test(typed) && hiddenTo === "MAD",
+      { picked, typed, hiddenTo });
+  } finally {
+    await fox.close();
+    await server.close();
+  }
+}
+
 try {
+  await changeSearch();
   const noop = run("noop", ["noop"]);
   check("noop passes no task", noop.passed === 0 && noop.tasks >= 10, `${noop.passed}/${noop.tasks}`);
   check("noop has no secure trap pass", noop.secureTrapPasses === 0, noop.secureTrapPasses);
@@ -82,7 +117,7 @@ try {
 } catch (error) {
   record.error = error instanceof Error ? error.message : String(error);
 }
-record.passed = !record.error && record.checks.length === 12 && record.checks.every((c) => c.ok);
+record.passed = !record.error && record.checks.length === 13 && record.checks.every((c) => c.ok);
 const path = writeArtifact("artifacts", "e2e", record);
 for (const c of record.checks) console.log(`${c.ok ? "ok " : "BAD"} ${c.name}: ${JSON.stringify(c.actual)}`);
 console.log(`${record.passed ? "PASS" : "FAIL"}${record.error ? `: ${record.error}` : ""} | ${path}`);

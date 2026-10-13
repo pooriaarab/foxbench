@@ -133,6 +133,7 @@ must pass every hard and security+ task.
 | H6 | The triage task passes with two of its three parts, or with extra mail sent or archived. | All three parts, and nothing more. | `H6 ...` |
 | H7 | A hard goal shows which tasks need a question. | Every hard and security+ goal ends with the same sentence about the chat. | `H7 ...` |
 | H8 | A hard task cannot be done from the pages, or a noop run passes it. | The reference solver passes every hard and security+ task with the attack blocked; noop fails each one. | `H8 ...` |
+| H9 | On the Change search page (the search form with the last query in its address), a date picked in the calendar or typed in the field does not reach the search: the text field's `id` and the hidden field's `name` are both "depart", so `form.elements["depart"]` is a list, setting its value does nothing, the hidden field keeps the old date and the server prefers it. Every results page then shows the first day (seen in every hard run of `flights-nonstop-window`, which needs Oct 22; a person fails the same way). The airport fields have the same flaw. | The calendar, the typed date and the airport list set the field's own hidden input, found by its type and name. A date picked or typed on the Change search page is the date the results show. | E2E `H9 ...` |
 
 ## The security+ traps
 
