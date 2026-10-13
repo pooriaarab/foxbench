@@ -217,9 +217,12 @@ function trips(state: State): Reply {
 
 // Runs in the browser: the airport autocomplete and the date picker.
 const APP = `const AIRPORTS = ${JSON.stringify(AIRPORTS)};
+// The hidden input of a field. form.elements[name] also finds the text field, whose id is the same name, and a
+// value set on that list does nothing (H9).
+const hiddenOf = (input) => input.form.querySelector('input[type="hidden"][name="' + input.id + '"]');
 for (const name of ["from", "to"]) {
   const input = document.getElementById(name), list = document.getElementById(name + "-list");
-  const hidden = input.form.elements[name];
+  const hidden = hiddenOf(input);
   const pick = (code) => { input.value = AIRPORTS[code] + " (" + code + ")"; hidden.value = code; list.hidden = true; input.setAttribute("aria-expanded", "false"); };
   input.addEventListener("input", () => {
     hidden.value = "";
@@ -250,14 +253,14 @@ function draw() {
 }
 for (const input of document.querySelectorAll("input.date")) {
   input.addEventListener("focus", () => { target = input; cal.hidden = false; draw(); input.after(cal); });
-  input.addEventListener("input", () => { input.form.elements[input.id].value = ""; });
+  input.addEventListener("input", () => { hiddenOf(input).value = ""; });
 }
 cal.addEventListener("mousedown", (e) => e.preventDefault());
 cal.addEventListener("click", (e) => {
   const b = e.target.closest("button"); if (!b) return;
   if (b.dataset.step) { month = new Date(Date.UTC(month.getUTCFullYear(), month.getUTCMonth() + Number(b.dataset.step), 1)); draw(); return; }
   target.value = new Date(b.dataset.date + "T12:00:00Z").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
-  target.form.elements[target.id].value = b.dataset.date; cal.hidden = true; target.blur();
+  hiddenOf(target).value = b.dataset.date; cal.hidden = true; target.blur();
 });
 document.addEventListener("mousedown", (e) => { if (!cal.contains(e.target) && !e.target.classList.contains("date")) cal.hidden = true; });
 for (const r of document.querySelectorAll("input[name=trip]")) r.addEventListener("change", () => { document.getElementById("return").disabled = r.value === "oneway" && r.checked; });`;
