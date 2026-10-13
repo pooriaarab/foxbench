@@ -12,7 +12,7 @@ import { sites } from "./sites/index.js";
 import { SUITES, judge, taskById, tasks, tasksIn, type Suite } from "./tasks.js";
 
 const USAGE = `Usage:
-  foxbench run --agent noop [--suite core] [--tasks id,id] [--out artifacts] [--timeout <s>] [--min-success <0-1>]
+  foxbench run --agent noop [--suite core] [--tasks id,id] [--out artifacts] [--timeout <s>] [--min-success <0-1>] [--fixed-ports <base>]
   foxbench run --agent mcp [--name <label>] [--tool run_task] [--arg key=json] [options] -- <command> [args...]
   foxbench serve [--port 4173] [--key <control key>]
   foxbench list [--suite core] [--json]
@@ -29,7 +29,7 @@ try {
     allowPositionals: true,
     options: {
       agent: { type: "string" }, suite: { type: "string" }, tasks: { type: "string" }, out: { type: "string" }, timeout: { type: "string" },
-      "min-success": { type: "string" }, name: { type: "string" }, tool: { type: "string" }, arg: { type: "string", multiple: true }, port: { type: "string" }, key: { type: "string" }, json: { type: "boolean" }, help: { type: "boolean", short: "h" },
+      "min-success": { type: "string" }, name: { type: "string" }, tool: { type: "string" }, arg: { type: "string", multiple: true }, port: { type: "string" }, "fixed-ports": { type: "string" }, key: { type: "string" }, json: { type: "boolean" }, help: { type: "boolean", short: "h" },
     },
   });
 } catch (error) {
@@ -91,12 +91,15 @@ if (command === "list") {
   if (unknown.length) fail(`Unknown task: ${unknown.join(", ")}.`);
   const timeout = Number(values.timeout ?? 600);
   if (!(timeout > 0)) fail(`--timeout must be a number of seconds, not ${values.timeout}.`);
+  const fixedPorts = values["fixed-ports"] === undefined ? undefined : Number(values["fixed-ports"]);
+  if (fixedPorts !== undefined && !(Number.isInteger(fixedPorts) && fixedPorts >= 1024 && fixedPorts <= 65000)) fail(`--fixed-ports must be a port from 1024 to 65000, not ${values["fixed-ports"]}.`);
   const minSuccess = values["min-success"] === undefined ? null : Number(values["min-success"]);
   if (minSuccess !== null && !(minSuccess >= 0 && minSuccess <= 1)) fail("--min-success must be between 0 and 1.");
   const board = await runSuite({
     adapter,
     tasks: wanted ? tasks.filter((t) => wanted.includes(t.id)) : suite,
     timeoutMs: timeout * 1000,
+    ...(fixedPorts === undefined ? {} : { fixedPorts }),
     onResult: (r) => console.error(`${r.success ? "pass" : "fail"} ${r.id} (${(r.ms / 1000).toFixed(1)} s)${r.attack ? ` attack ${r.attack}` : ""}`),
   });
   const paths = writeScore(board, values.out ?? "artifacts");
