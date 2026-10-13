@@ -122,21 +122,27 @@ export async function startMiniwob(html, task, goal) {
 
 /**
  * The goal each task's seed makes, read in a real Firefox the way BrowserGym
- * reads it (core.getUtterance after the episode starts). Cached per commit.
+ * reads it (core.getUtterance after the episode starts). Cached per commit
+ * and per browser: a goal can hold a time in the browser's time zone and
+ * locale, and Ichabod's Firefox has others than this computer's.
  */
 export async function prepareGoals(html, { firefox, extension = "dist-ext" } = {}) {
-  const file = join(cacheDir(), `miniwob-goals-${MINIWOB_COMMIT.slice(0, 12)}.json`);
+  const { browserMode, launch, tunnel } = await import("create-foxkit/e2e");
+  const remote = browserMode() === "ichabod";
+  const file = join(cacheDir(), `miniwob-goals-${MINIWOB_COMMIT.slice(0, 12)}${remote ? "-ichabod" : ""}.json`);
   const cached = existsSync(file) ? JSON.parse(readFileSync(file, "utf8")) : {};
   const missing = MINIWOB_TASKS.filter((t) => !cached[`${t.id}#${t.seed}`]);
   if (missing.length) {
-    const { launch } = await import("create-foxkit/e2e");
-    const fox = await launch({ extension, headless: true, ...(firefox ? { firefox } : {}) });
+    const fox = await launch({ extension, headless: true, ...(firefox && !remote ? { firefox } : {}) });
     try {
       for (const task of missing) {
         const run = await startMiniwob(html, task, null);
-        const page = await fox.open(run.url);
+        // Ichabod cannot reach 127.0.0.1: open the page on the shared tunnel.
+        const mount = remote ? await tunnel(Number(new URL(run.url).port)) : null;
+        const page = await fox.open(mount ? `${mount.url}${run.startPath}` : run.url);
         for (let i = 0; i < 100 && !run.state.goals.length; i++) await new Promise((r) => setTimeout(r, 50));
         await page.close();
+        await mount?.close();
         await run.close();
         if (!run.state.goals.length) throw new Error(`MiniWoB task ${task.id} did not start in Firefox`);
         cached[`${task.id}#${task.seed}`] = run.state.goals[0];
