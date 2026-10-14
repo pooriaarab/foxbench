@@ -1,0 +1,25 @@
+{
+  "how": "20 of BrowserGym 625 episodes, one per task: a Fisher-Yates shuffle of the 125 tasks with an LCG (1103515245, 12345, 2^31) seeded 20261014 picks 20 tasks; the next LCG draws mod 5 pick each one seed",
+  "quick": [
+    "click-button#1",
+    "click-pie-nodelay#1",
+    "circle-center#2",
+    "click-test-2#1",
+    "click-dialog#4",
+    "click-menu#4",
+    "click-checkboxes#3",
+    "find-midpoint#1",
+    "click-checkboxes-large#2",
+    "click-collapsible#1",
+    "use-slider-2#0",
+    "social-media-some#4",
+    "choose-date-medium#4",
+    "drag-shapes-2#0",
+    "email-inbox#4",
+    "click-dialog-2#0",
+    "email-inbox-star-reply#1",
+    "click-color#4",
+    "find-greatest#3",
+    "count-sides#4"
+  ]
+}
