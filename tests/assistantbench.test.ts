@@ -3,10 +3,11 @@
 // fetches both at their pinned refs into the cache. The scorer runs through
 // uv; without uv on the PATH these tests are skipped (CI installs uv).
 import { execFileSync, spawnSync } from "node:child_process";
-import { beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { noopAdapter, type Adapter } from "../src/adapter.js";
 import { AB_DATASET_REF, AB_SCORER_REF, assistantbenchBenchmark, loadTasks, scorerCommand, scorerDir, type AssistantbenchTask } from "../src/bench/assistantbench.js";
 import { benchContext } from "../src/bench/registry.js";
+import type { Env } from "../src/bench/types.js";
 import { runBenchmarks } from "../src/bench/run.js";
 import { toMarkdown } from "../src/score.js";
 
@@ -15,6 +16,7 @@ if (!hasUv) console.warn("tests/assistantbench.test.ts: uv is not on the PATH, s
 const bench = assistantbenchBenchmark();
 const ctx = benchContext();
 let tasks: AssistantbenchTask[] = [];
+let env: Env = {};
 
 /** The gold answer in the format the goal asks for: a JSON list for several plain items, else as upstream writes it. */
 function perfectAnswer(gold: string): string {
@@ -40,8 +42,9 @@ describe.skipIf(!hasUv)("AssistantBench", () => {
   beforeAll(async () => {
     expect(await bench.check(ctx)).toEqual({ ready: true });
     tasks = await loadTasks(ctx);
-    await bench.up(ctx);
+    env = await bench.up(ctx);
   }, 300_000);
+  afterAll(() => bench.down(env));
 
   it("A1 the dataset and the scorer are the pinned refs", () => {
     expect(AB_DATASET_REF).toMatch(/^[0-9a-f]{40}$/);
@@ -89,7 +92,6 @@ describe.skipIf(!hasUv)("AssistantBench", () => {
   });
 
   it("A8 the agent starts on a local page with the question and a search form", async () => {
-    const env = await bench.up(ctx);
     const episode = await bench.start(env, { id: tasks[0]!.id, tags: [] });
     try {
       expect(episode.goal).toContain(tasks[0]!.task);

@@ -596,6 +596,7 @@ and run the real upstream scorer on the real dev answers.
 | A7 | `check()` says ready when `uv` or `git` is missing, and every case fails in the judge. | `check()` is not ready, with a fix. | `A7 ...` |
 | A8 | The start page names the site's own address, so the agent goes around the recording proxy. | The agent gets the proxy's URL of a local start page with the question and a search form; the goal names no address. | `A8 ...` |
 | A9 | Live sites change, so a pass today is a fail next month. | A known limit of live-web benchmarks (plan 6.1 rule 4): the board's date is the run date; compare only with runs from the same week. | - |
+| A10 | A scorer process per case loads numpy and scipy each time, so a run, and CI next to other tests, slows down until other tests time out. | One scorer process per run, started in `up` and closed in `down`; a scorer error on one answer scores that answer 0 with the error's name and the process goes on. | `A4 ...` (33 cases in seconds) |
 
 ## AMO release build and listed submission (`scripts/amo-listing.mjs`)
 

@@ -4,10 +4,11 @@
 // the live web. Its answer is scored by AssistantBench's own question_scorer
 // (partial credit), fetched from BrowserGym at a pinned commit and run
 // through uv. The dataset and the scorer stay in the cache, never committed.
-import { execFile, spawnSync } from "node:child_process";
+import { execFile, spawn, spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
 import { join } from "node:path";
+import { createInterface } from "node:readline";
 import { promisify } from "node:util";
 import { pickSubset } from "./subsets.js";
 import type { BenchContext, Benchmark, Case, Episode, Readiness } from "./types.js";
@@ -40,8 +41,11 @@ sys.path.insert(0, sys.argv[1])
 from evaluation.evaluator import question_scorer
 for line in sys.stdin:
     q = json.loads(line)
-    accuracy, has_answer = question_scorer(q["prediction"], q["gold"])
-    print(json.dumps({"accuracy": float(accuracy)}), flush=True)
+    try:
+        accuracy, has_answer = question_scorer(q["prediction"], q["gold"])
+        print(json.dumps({"accuracy": float(accuracy)}), flush=True)
+    except Exception as error:
+        print(json.dumps({"accuracy": 0.0, "error": type(error).__name__}), flush=True)
 `;
 
 /** The 33 dev tasks, fetched once at the pinned revision. */
@@ -80,18 +84,31 @@ const fetchScorer = (ctx: BenchContext): Promise<string> => locked(scorerDir(ctx
 export const scorerCommand = (ctx: BenchContext): [string, string[]] =>
   ["uv", ["run", "--isolated", "--no-project", "--with", "numpy", "--with", "scipy", "python", "-I", helperFile(ctx), join(scorerDir(ctx), EVALUATOR)]];
 
-/** Upstream's accuracy, from 0 to 1, for one answer. */
-async function score(ctx: BenchContext, prediction: string, gold: string): Promise<number> {
+export interface Scorer {
+  score(prediction: string, gold: string): Promise<{ accuracy: number; error?: string }>;
+  close(): void;
+}
+
+/** One scorer process per run, so numpy and scipy load once, not once per case. Calls are answered in order. */
+function startScorer(ctx: BenchContext): Scorer {
   const [cmd, args] = scorerCommand(ctx);
-  const child = execFile(cmd, args, { env: ctx.env, timeout: 300_000 });
-  child.stdin!.end(`${JSON.stringify({ prediction, gold })}\n`);
-  let out = "";
-  child.stdout!.on("data", (d: Buffer) => { out += String(d); });
+  const child = spawn(cmd, args, { env: ctx.env, stdio: ["pipe", "pipe", "pipe"] });
+  const waiting: ((line: string) => void)[] = [];
+  createInterface({ input: child.stdout }).on("line", (line) => waiting.shift()?.(line));
   let err = "";
-  child.stderr!.on("data", (d: Buffer) => { err += String(d); });
-  const code = await new Promise<number | null>((resolve) => child.on("close", resolve));
-  if (code !== 0) throw new Error(`the AssistantBench scorer exited ${code}: ${err.trim().split("\n").slice(-3).join(" ")}`);
-  return (JSON.parse(out.trim().split("\n").at(-1)!) as { accuracy: number }).accuracy;
+  child.stderr.on("data", (d: Buffer) => { err = (err + String(d)).slice(-2000); });
+  const exited = new Promise<never>((_, reject) => {
+    child.on("error", reject);
+    child.on("close", (code) => reject(new Error(`the AssistantBench scorer exited ${code}: ${err.trim().split("\n").slice(-3).join(" ")}`)));
+  });
+  exited.catch(() => {});
+  return {
+    score: (prediction, gold) => Promise.race([new Promise<{ accuracy: number; error?: string }>((resolve) => {
+      waiting.push((line) => resolve(JSON.parse(line) as { accuracy: number; error?: string }));
+      child.stdin.write(`${JSON.stringify({ prediction, gold })}\n`);
+    }), exited]),
+    close: () => child.stdin.end(),
+  };
 }
 
 // The answer format follows the scorer: it reads a JSON list as several items (A4).
@@ -114,7 +131,6 @@ const golds = new WeakMap<Episode, string>();
 
 export const assistantbenchBenchmark = (): Benchmark => {
   let tasks: AssistantbenchTask[] = [];
-  let context: BenchContext | null = null;
   return {
     id: "assistantbench",
     title: "AssistantBench (dev)",
@@ -135,10 +151,9 @@ export const assistantbenchBenchmark = (): Benchmark => {
       return pickSubset("assistantbench", all, subset);
     },
     async up(ctx) {
-      context = ctx;
       tasks = await loadTasks(ctx);
       await fetchScorer(ctx);
-      return {};
+      return { scorer: startScorer(ctx) };
     },
     async start(_env, item) {
       const task = tasks.find((t) => t.id === item.id);
@@ -148,14 +163,14 @@ export const assistantbenchBenchmark = (): Benchmark => {
       golds.set(episode, task.answer);
       return episode;
     },
-    async judge(_env, episode, output) {
+    async judge(env, episode, output) {
       const gold = golds.get(episode);
-      if (gold === undefined || !context) throw new Error("assistantbench did not start this episode");
-      const accuracy = await score(context, String(output.answer ?? output.log ?? ""), gold);
+      if (gold === undefined) throw new Error("assistantbench did not start this episode");
+      const { accuracy, error } = await (env.scorer as Scorer).score(String(output.answer ?? output.log ?? ""), gold);
       const success = accuracy === 1;
-      return { success, score: accuracy, attack: null, reasons: success ? [] : [`accuracy ${accuracy.toFixed(2)}`], judgedBy: "programmatic" };
+      return { success, score: accuracy, attack: null, reasons: success ? [] : [error ? `the scorer raised ${error}` : `accuracy ${accuracy.toFixed(2)}`], judgedBy: "programmatic" };
     },
-    down: async () => {},
+    down: async (env) => (env.scorer as Scorer | undefined)?.close(),
     baselines: [
       { agent: "HAL Browser-Use + o3 (mean accuracy)", subset: "full", score: 0.3881, source: "https://hal.cs.princeton.edu/assistantbench" },
       { agent: "HAL Browser-Use + GPT-5 (mean accuracy)", subset: "full", score: 0.3523, source: "https://hal.cs.princeton.edu/assistantbench" },
