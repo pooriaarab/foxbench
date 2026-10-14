@@ -2,6 +2,7 @@
 // start, the agent, the benchmark's own judge, and the case's close; then
 // down. A benchmark that cannot run here gets a skip row, not a crash.
 import { parseMetrics, type Adapter, type AgentMetrics, type TaskOutput } from "../adapter.js";
+import { detectorScores, type DetectorScore } from "./detector.js";
 import { fingerprint, type Fingerprint } from "./fingerprint.js";
 import { startProxy, type RecordingProxy } from "./proxy.js";
 import { benchContext, readiness } from "./registry.js";
@@ -73,6 +74,8 @@ export interface Scoreboard {
   agentTotals: AgentMetrics | null;
   /** The base port when the run used one port per site (R6). */
   fixedPorts?: number;
+  /** Precision, recall and F1 for each detector benchmark that ran (BS3). */
+  detectors?: Record<string, DetectorScore>;
   /** Median, p90, median over passed and tokens per pass, overall and per benchmark (F1-F3). */
   speed: { all: Speed; byBenchmark: Record<string, Speed> };
   /** The machine, Firefox, foxbench, mode, and what the operator reports about the agent (F4-F7). */
@@ -147,11 +150,18 @@ async function runCase(bench: Benchmark, env: Env, item: Case, options: BenchRun
   let ran = { output: { done: false, log: "" } as TaskOutput, adapterError: false, endedEarly: false, ms: 0 };
   try {
     episode = await bench.start(env, item);
-    // The agent gets the proxy's URL, never the site's own (P1).
-    proxy = await startProxy(episode.url, { ...(episode.headers ? { headers: episode.headers } : {}), ...(episode.port ? { port: episode.port } : {}) });
-    const start = new URL(episode.url);
-    ran = await play(options.adapter, episode, proxy.origin + start.pathname + start.search, options.timeoutMs ?? 600_000, options.graceMs ?? 30_000);
-    verdict = await bench.judge(env, episode, ran.output, { requests: proxy.trace });
+    if (bench.detector) {
+      // A detector check has no agent and no site: judge() alone scores the case (BS6).
+      const started = Date.now();
+      verdict = await bench.judge(env, episode, ran.output, { requests: [] });
+      ran.ms = Date.now() - started;
+    } else {
+      // The agent gets the proxy's URL, never the site's own (P1).
+      proxy = await startProxy(episode.url, { ...(episode.headers ? { headers: episode.headers } : {}), ...(episode.port ? { port: episode.port } : {}) });
+      const start = new URL(episode.url);
+      ran = await play(options.adapter, episode, proxy.origin + start.pathname + start.search, options.timeoutMs ?? 600_000, options.graceMs ?? 30_000);
+      verdict = await bench.judge(env, episode, ran.output, { requests: proxy.trace });
+    }
   } catch (error) {
     verdict = { success: false, attack: null, reasons: [`harness: ${message(error)}`], judgedBy: "programmatic" };
   }
@@ -207,7 +217,8 @@ export async function runBenchmarks(options: BenchRunOptions): Promise<Scoreboar
   } finally {
     await options.adapter.close?.();
   }
-  return { ...scoreboard(options.adapter.name, results, skipped), speed: speedBoard(results), fingerprint: fingerprint({ ...(ctx.firefox ? { firefox: ctx.firefox } : {}), env: ctx.env }) };
+  const detectors = detectorScores(results, options.runs.map((r) => r.benchmark));
+  return { ...scoreboard(options.adapter.name, results, skipped), ...(Object.keys(detectors).length ? { detectors } : {}), speed: speedBoard(results), fingerprint: fingerprint({ ...(ctx.firefox ? { firefox: ctx.firefox } : {}), env: ctx.env }) };
 }
 
 function scoreboard(agent: string, results: TaskResult[], skipped: Scoreboard["skipped"]): Omit<Scoreboard, "speed" | "fingerprint"> {

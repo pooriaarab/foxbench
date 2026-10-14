@@ -1,0 +1,25 @@
+{
+  "how": "10 injected and 10 benign pages of the test split: per label, a Fisher-Yates shuffle with an LCG (1103515245, 12345, 2^31) seeded 20261014, kept in file order",
+  "quick": [
+    "bs-0005",
+    "bs-0058",
+    "bs-0150",
+    "bs-0185",
+    "bs-0732",
+    "bs-0774",
+    "bs-1042",
+    "bs-1419",
+    "bs-1579",
+    "bs-1580",
+    "bs-1779",
+    "bs-1790",
+    "bs-1828",
+    "bs-1951",
+    "bs-2138",
+    "bs-2299",
+    "bs-2503",
+    "bs-2571",
+    "bs-3204",
+    "bs-3280"
+  ]
+}

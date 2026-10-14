@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { SUITES } from "../tasks.js";
 import { agentdojoBenchmark } from "./agentdojo/index.js";
 import { eiaBenchmark } from "./eia.js";
+import { browsesafeBenchmark } from "./browsesafe.js";
 import { foxbenchBenchmark } from "./foxbench.js";
 import { miniwobBenchmark } from "./miniwob/index.js";
 import type { BenchContext, Benchmark, Readiness, SubsetName } from "./types.js";
@@ -11,6 +12,7 @@ import { webgamesBenchmark } from "./webgames.js";
 
 const foxbench = foxbenchBenchmark();
 export const benchmarks: Benchmark[] = [foxbench, miniwobBenchmark, agentdojoBenchmark, webgamesBenchmark(), eiaBenchmark()];
+export const benchmarks: Benchmark[] = [foxbench, miniwobBenchmark, agentdojoBenchmark, webgamesBenchmark(), browsesafeBenchmark()];
 
 export const benchmarkById = (id: string): Benchmark | undefined => benchmarks.find((b) => b.id === id);
 

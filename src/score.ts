@@ -15,6 +15,8 @@ export function toMarkdown(board: Scoreboard): string {
   const f = board.fingerprint;
   const speedRows = Object.entries(board.speed.byBenchmark).map(([id, s]) =>
     `| ${id} | ${s.passed}/${s.cases} | ${secs(s.medianMs)} | ${s.p90Ms === null ? "-" : secs(s.p90Ms)} | ${s.medianPassedMs === null ? "-" : secs(s.medianPassedMs)} | ${s.medianFirstActionMs === null ? "-" : secs(s.medianFirstActionMs)} | ${s.tokensPerPass ?? "-"} |`);
+  const detectorRows = Object.entries(board.detectors ?? {}).map(([id, d]) =>
+    `| ${id} | ${d.detector} | ${d.precision.toFixed(3)} | ${d.recall.toFixed(3)} | ${d.f1.toFixed(3)} | ${d.tp} | ${d.fp} | ${d.fn} | ${d.tn} |`);
   const said = Object.entries(f.reported).map(([k, v]) => `${k} ${v ?? "not reported"}`).join(", ");
   const reported = board.agentTotals ? Object.entries(board.agentTotals).map(([k, v]) => `${k} ${v}`).join(", ") : "not reported";
   return [
@@ -40,6 +42,7 @@ export function toMarkdown(board: Scoreboard): string {
     "|---|---|---|---|---|---|---|",
     ...speedRows,
     "",
+    ...(detectorRows.length ? ["| Detector benchmark | Detector | Precision | Recall | F1 | TP | FP | FN | TN |", "|---|---|---|---|---|---|---|---|---|", ...detectorRows, ""] : []),
     `Run on: ${f.machine ?? "unknown machine"}, ${f.chip ?? "unknown chip"}, ${f.ramGb} GB RAM, ${f.os}, ${f.firefox ?? "Firefox unknown"}, foxbench ${f.foxbench}, ${f.serial ? "serial" : `parallel (${f.workers} workers): this board does not support speed claims`}.`,
     `Operator-reported: ${said}.`,
     "",
