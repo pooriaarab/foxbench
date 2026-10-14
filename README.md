@@ -298,6 +298,19 @@ when the agent command does not exist. It exits 2 for bad input.
 A benchmark that cannot run here gets a skip row with the reason and the fix;
 the run goes on. `foxbench doctor` prints each check without running.
 
+### WebGames
+
+`--suite webgames` runs [WebGames](https://github.com/convergence-ai/webgames)
+(Apache-2.0 code, MIT data): 150 small challenges for web agents. The first
+run fetches the upstream repo at a pinned commit into the cache
+(`~/.cache/foxbench`, or `FOXBENCH_CACHE`), builds it with `vite build` and
+serves it from 127.0.0.1; it needs `git` and `pnpm`. A case passes when the
+agent's answer holds the task's password. The three reCAPTCHA cases need the
+internet and fail at start with `skipped: needs the internet (reCAPTCHA)`.
+`--subset quick` is 20 cases from the other 147. A password that is part of
+a longer one (`CircleMaster2024` in `EasyCircleMaster2024`) counts only when
+it stands alone, which is stricter than upstream's check.
+
 `foxbench serve` prints a control key and a start link for each task. Open a
 link to reset the state and start that task. `/__fbn/result?key=<key>` shows
 the verdict for the running task. Without `--key`, the key is random. Give it
