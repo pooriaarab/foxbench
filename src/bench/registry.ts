@@ -9,6 +9,7 @@ import { foxbenchBenchmark } from "./foxbench.js";
 import { miniwobBenchmark } from "./miniwob/index.js";
 import type { BenchContext, Benchmark, Readiness, SubsetName } from "./types.js";
 import { DEFAULT_USER_MODEL } from "./user.js";
+import { webarenaVerified } from "./wav/index.js";
 import { waiBenchmark } from "./wai/index.js";
 import { webgamesBenchmark } from "./webgames.js";
 
@@ -22,6 +23,7 @@ export const benchmarks: Benchmark[] = [
   eiaBenchmark(),
   browsesafeBenchmark(),
   waiBenchmark(),
+  webarenaVerified(),
 ];
 
 export const benchmarkById = (id: string): Benchmark | undefined => benchmarks.find((b) => b.id === id);
