@@ -5,14 +5,9 @@ import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, beforeAll, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 
 const root = join(import.meta.dirname, "..");
-beforeAll(() => {
-  const built = spawnSync(join(root, "node_modules/.bin/tsc"), ["-p", "tsconfig.build.json"], { cwd: root, encoding: "utf8" });
-  if (built.status !== 0) throw new Error(built.stdout + built.stderr);
-}, 60_000);
-
 let home = "";
 afterEach(() => {
   // Close any tunnel a test left up.
