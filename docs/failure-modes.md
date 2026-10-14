@@ -228,6 +228,22 @@ argv and prints canned JSON.
 | V12 | The tunnel starts before the VM listens and gcloud's connection test fails. | `up` restarts the tunnel until gcloud says `Listening on port`, for up to 5 minutes, then stops and names the log. The state file stays so `down` can delete the VM. | - (needs a real VM) |
 | V13 | IAP cannot reach the VM because no firewall rule allows Google's IAP range. | A setup step, not code: `README.md` gives the firewall rule for the `foxbench` network tag that every VM gets. | - |
 
+## Speed and the run fingerprint (`src/bench/speed.ts`, `src/bench/fingerprint.ts`)
+
+A speed claim needs the right statistic and the machine it came from. Each
+row is a way that a board could support a speed claim it should not. The
+tests are in `tests/speed.test.ts`.
+
+| # | Failure mode | Wanted behaviour | Test |
+|---|---|---|---|
+| F1 | Only the median over all cases is shown; failed cases take about twice as long, so the number hides how fast a pass is, or a run with no pass shows a 0 s pass time. | Per benchmark and overall: median, p90, and the median over passed cases, which is null when nothing passed. | `F1 ...` |
+| F2 | p90 is interpolated or off by one on a small run. | Nearest rank: the value at rank ceil(0.9 n) of the sorted times. | `F2 ...` |
+| F3 | Tokens per pass divides by zero, or shows 0 when the agent reported no tokens. | All reported tokens (in and out) over the number of passes; null when nothing passed or no case reported tokens. | `F3 ...` |
+| F4 | A parallel run's times are read as a speed claim. | The board records `serial` and `workers`; the Markdown says a parallel board does not support speed claims. | `F4 ...` |
+| F5 | The fingerprint throws when Firefox or a tool is missing, or guesses a value. | It never throws; what it cannot read is null. | `F5 ...` |
+| F6 | The fingerprint leaks who ran it: hostname, user name, home path. | Only the machine model, chip, RAM, OS, versions and mode. | `F6 ...` |
+| F7 | What the operator says about the agent (model, quant, flags, network) is mixed with what foxbench measured. | Reported facts come from `FOXBENCH_*` variables and sit under `reported`, apart from the measured ones. | `F7 ...` |
+
 ## External benchmarks (`external/`)
 
 The external suites score an agent with a public benchmark's own check. Each
