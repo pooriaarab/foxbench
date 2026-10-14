@@ -6,6 +6,7 @@ import { execFile } from "node:child_process";
 import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync } from "node:fs";
 import { join, resolve, sep } from "node:path";
 import { promisify } from "node:util";
+import quick from "../subsets/webarena-infinity.json" with { type: "json" };
 import { pickSubset } from "../subsets.js";
 import type { BenchContext, Benchmark, Case, Env, Episode, Readiness } from "../types.js";
 import { fetchUpstream, WAI_REF, WAI_REPO } from "./fetch.js";
@@ -14,17 +15,18 @@ import { runVerifier, writeHelper } from "./verify.js";
 
 export { WAI_REF } from "./fetch.js";
 const run = promisify(execFile);
-const KIND = "real";
+const KINDS = ["real", "function"] as const;
+type Kind = (typeof KINDS)[number];
 
 interface TaskDef { id: string; difficulty?: "easy" | "medium" | "hard"; instruction: string; verify: string }
 type WaiEnv = { upstream: string; helper: string; stage: string; env: NodeJS.ProcessEnv; servers: Map<string, Promise<AppServer>> };
 const running = new WeakMap<Episode, { app: string; verify: string; port: number }>();
 
-const apps = (upstream: string) => readdirSync(join(upstream, "apps")).filter((a) => existsSync(join(upstream, "apps", a, `${KIND}-tasks.json`))).toSorted();
-const tasksOf = (upstream: string, app: string): TaskDef[] => JSON.parse(readFileSync(join(upstream, "apps", app, `${KIND}-tasks.json`), "utf8"));
+const apps = (upstream: string) => readdirSync(join(upstream, "apps")).filter((a) => KINDS.every((k) => existsSync(join(upstream, "apps", a, `${k}-tasks.json`)))).toSorted();
+const tasksOf = (upstream: string, app: string, kind: Kind): TaskDef[] => JSON.parse(readFileSync(join(upstream, "apps", app, `${kind}-tasks.json`), "utf8"));
 
-/** Case ids are `<app>/real/<task id>`. */
-const toCase = (app: string, t: TaskDef): Case => ({ id: `${app}/${KIND}/${t.id}`, tags: [app, KIND, ...(t.difficulty ? [t.difficulty] : [])], ...(t.difficulty ? { tier: t.difficulty } : {}), goal: t.instruction });
+/** Case ids are `<app>/<real|function>/<task id>`. Only real tasks have a tier upstream (WL2). */
+const toCase = (app: string, kind: Kind, t: TaskDef): Case => ({ id: `${app}/${kind}/${t.id}`, tags: [app, kind, ...(t.difficulty ? [t.difficulty] : [])], ...(t.difficulty ? { tier: t.difficulty } : {}), goal: t.instruction });
 
 async function tool(env: NodeJS.ProcessEnv, cmd: string, ...args: string[]): Promise<string | null> {
   return run(cmd, args, { env }).then((r) => r.stdout, () => null);
@@ -47,7 +49,8 @@ export const waiBenchmark = (options: { startTimeoutMs?: number } = {}): Benchma
   },
   async load(ctx: BenchContext, subset) {
     const upstream = await fetchUpstream(ctx.cacheDir);
-    return pickSubset("webarena-infinity", apps(upstream).flatMap((app) => tasksOf(upstream, app).map((t) => toCase(app, t))), subset);
+    const all = apps(upstream).flatMap((app) => KINDS.flatMap((kind) => tasksOf(upstream, app, kind).map((t) => toCase(app, kind, t))));
+    return pickSubset("webarena-infinity", all, subset, { "webarena-infinity": quick });
   },
   async up(ctx): Promise<Env> {
     const upstream = await fetchUpstream(ctx.cacheDir);
@@ -55,8 +58,8 @@ export const waiBenchmark = (options: { startTimeoutMs?: number } = {}): Benchma
   },
   async start(raw, item) {
     const env = raw as WaiEnv;
-    const [app, , taskId] = item.id.split("/") as [string, string, string];
-    const task = tasksOf(env.upstream, app).find((t) => t.id === taskId);
+    const [app, kind, taskId] = item.id.split("/") as [string, Kind, string];
+    const task = tasksOf(env.upstream, app, kind).find((t) => t.id === taskId);
     if (!task) throw new Error(`webarena-infinity has no task ${item.id}`);
     // The verifier must be a file inside its own app (WI7).
     const appDir = resolve(env.upstream, "apps", app);
