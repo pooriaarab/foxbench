@@ -361,8 +361,21 @@ GCP VM from the env's startup script  and opens an IAP
 tunnel from `127.0.0.1` ports to it. It runs `gcloud` (or `FOXBENCH_GCLOUD`)
 with your own login. Give the project, zone and account with `--project`,
 `--zone` and `--account`, or `FOXBENCH_GCP_PROJECT`, `FOXBENCH_GCP_ZONE` and
-`FOXBENCH_GCP_ACCOUNT`. The only env so far is `smoke`, a static page on
-`http://127.0.0.1:18080`.
+`FOXBENCH_GCP_ACCOUNT`. The envs:
+
+- `smoke`: a static page on `http://127.0.0.1:18080`.
+- `wav-core`: the WebArena-Verified shopping, shopping_admin, reddit and
+  gitlab sites (`am1n3e/webarena-verified-*:0.1.0`, Apache-2.0) on an
+  n2-standard-8 with 200 GB. Each site port (7770, 7780, 9999, 8023) and
+  env-ctrl port (7771, 7781, 9998, 8024) is tunnelled to that port plus 10000;
+  the agent sees the site port itself, through the recording proxy. The VM
+  pulls the images through Cloud NAT, which takes about 15 minutes, and GitLab
+  then boots for a few more. `foxbench doctor` says when every site is ready.
+  To use local Docker instead, publish each container on the tunnel ports,
+  for example `docker run -d -p 17770:80 -p 17771:8877 -e
+  WA_ENV_CTRL_EXTERNAL_SITE_URL=http://127.0.0.1:7770
+  am1n3e/webarena-verified-shopping:0.1.0`. Set `FOXBENCH_WAV_HOST` when
+  that Docker host is not `127.0.0.1`.
 
 Every VM is Spot unless you pass `--no-spot`, has no external IP, has the
 label `foxbench-env=<env>` and the network tag `foxbench`, and deletes itself

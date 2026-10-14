@@ -27,10 +27,11 @@ systemd-run --unit=foxbench-smoke python3 -m http.server 8080 --directory /srv/f
 `,
   },
   {
-    // WebArena-Verified shopping, shopping_admin, reddit and gitlab. The images are about
-    // 33 GB to pull and 56 GB unpacked, so 200 GB leaves room for both and for GitLab's
-    // writes. GitLab wants 4 GB and each Magento site runs MySQL and Elasticsearch; the
-    // four use about 14 GB at rest, so 32 GB (n2-standard-8) leaves headroom under load.
+    // WebArena-Verified shopping, shopping_admin, reddit and gitlab. Measured on one host:
+    // the images pull 33 GB and take 91 GB on disk (layers plus unpacked), so 200 GB leaves
+    // room for the containers' writes. At rest the four use about 6 GB (GitLab 3.8 GB);
+    // 32 GB covers MySQL, Elasticsearch and GitLab under load, and 8 vCPUs shorten GitLab's
+    // boot, which every gitlab reset repeats.
     name: "wav-core",
     machineType: "n2-standard-8",
     diskGb: 200,

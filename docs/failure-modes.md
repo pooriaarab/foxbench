@@ -285,7 +285,7 @@ container starts with the proxy's URL as its base. The tests are in
 | W5 | env-ctrl answers but reports a service down (`success: false`), and the run goes ahead. | That site is not ready. | `W5 ...` |
 | W6 | A probe hangs on a dead tunnel, so `foxbench doctor` hangs. | Each probe times out after 10 s. | `W6 ...` |
 | W7 | The containers run on another host (local Docker), and the benchmark cannot reach them. | `FOXBENCH_WAV_HOST` replaces `127.0.0.1` as the host of the tunnel ports. | `W7 ...` |
-| W8 | The VM is too small: GitLab needs 4 GB and the two Magento sites run MySQL and Elasticsearch each, or the disk cannot hold the pulled and unpacked images. | n2-standard-8 (32 GB) and a 200 GB disk. The images are about 33 GB to pull and about 56 GB unpacked. | `W8 ...` |
+| W8 | The VM is too small: GitLab needs 4 GB and the two Magento sites run MySQL and Elasticsearch each, or the disk cannot hold the pulled and unpacked images. | n2-standard-8 (8 vCPU, 32 GB) and a 200 GB disk. Measured: the images pull 33 GB and take 91 GB on disk; the four sites use about 6 GB of RAM at rest. | `W8 ...` |
 | W9 | The agent's browser reaches an env-ctrl port (it is on `127.0.0.1` too) and stops or restarts a site. | A known limit: env-ctrl has no key. The agent gets only the proxy's URL, and no page links to the env-ctrl ports. | - |
 
 ## MiniWoB++ and AgentDojo (`src/bench/miniwob/`, `src/bench/agentdojo/`)
