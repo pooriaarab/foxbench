@@ -1,5 +1,5 @@
-// A tiny MCP server for tests/runner.test.ts. run_task returns its pid and
-// the FBN_PROBE environment variable. A goal that contains "hang" never
+// A tiny MCP server for tests/runner.test.ts. run_task returns its pid, its
+// arguments and the FBN_PROBE environment variable. A goal that contains "hang" never
 // returns. With FBN_CHILD_FILE set, it starts a long sleep (like a browser)
 // and writes the sleep's pid to that file.
 import { spawn } from "node:child_process";
@@ -18,6 +18,6 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
 }));
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
   if (String(request.params.arguments?.goal).includes("hang")) await new Promise(() => {});
-  return { content: [{ type: "text", text: JSON.stringify({ pid: process.pid, probe: process.env.FBN_PROBE ?? null }) }] };
+  return { content: [{ type: "text", text: JSON.stringify({ pid: process.pid, args: request.params.arguments, probe: process.env.FBN_PROBE ?? null }) }] };
 });
 await server.connect(new StdioServerTransport());

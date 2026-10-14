@@ -7,6 +7,7 @@ import { noopAdapter, type Adapter } from "./adapter.js";
 import { benchContext, benchmarks, readiness, resolveSuites } from "./bench/registry.js";
 import { mcpAdapter } from "./mcp.js";
 import { foxbenchBenchmark } from "./bench/foxbench.js";
+import { loadPresets } from "./bench/presets.js";
 import { missingRequired, runBenchmarks } from "./bench/run.js";
 import type { Readiness, SubsetName } from "./bench/types.js";
 import { toMarkdown, writeScore } from "./score.js";
@@ -17,6 +18,7 @@ import { judge, taskById, tasks } from "./tasks.js";
 const USAGE = `Usage:
   foxbench run --agent noop [--suite core] [--subset quick|published|full|tag:<t>] [--require id,id] [--tasks id,id] [--out artifacts] [--timeout <s>] [--min-success <0-1>] [--fixed-ports <base>]
   foxbench run --agent mcp [--name <label>] [--tool run_task] [--arg key=json] [options] -- <command> [args...]
+  foxbench run --agent <preset> [options]   (a preset in foxbench.agents.json, here or in ~/.config/foxbench/)
   foxbench serve [--port 4173] [--key <control key>]
   foxbench list [--suite <name>] [--json]   (no --suite: every benchmark and whether it is ready)
   foxbench doctor [--require id,id]         (each benchmark's check, with the fix)
@@ -55,6 +57,12 @@ if (values.help) {
 }
 
 function adapterFor(name: string | undefined): Adapter {
+  let loaded;
+  try {
+    loaded = loadPresets();
+  } catch (error) {
+    fail(error instanceof Error ? error.message : String(error));
+  }
   if (name === "noop") return noopAdapter();
   if (name === "mcp") {
     const [, program, ...args] = positionals;
@@ -72,7 +80,10 @@ function adapterFor(name: string | undefined): Adapter {
     }
     return mcpAdapter({ command: program, args, tool: values.tool, name: values.name, extra, timeoutMs: Number(values.timeout ?? 600) * 1000 });
   }
-  return fail(name ? `Unknown agent "${name}".` : "Give an agent with --agent.");
+  const preset = name ? loaded.presets[name] : undefined;
+  if (preset) return mcpAdapter({ command: preset.command, args: preset.args ?? [], tool: preset.tool, name: preset.name ?? name, extra: preset.arg ?? {}, timeoutMs: Number(values.timeout ?? 600) * 1000 });
+  const found = Object.entries(loaded.presets).map(([n, p]) => `${n} (from ${p.file})`).join(", ");
+  return fail(name ? `Unknown agent "${name}". Presets: ${found || "none"}; read ${loaded.files.join(" and ")}.` : "Give an agent with --agent.");
 }
 
 const status = (r: Readiness) => (r.ready ? "ready" : `skipped: ${r.reason}${r.fix ? ` (fix: ${r.fix})` : ""}`);
