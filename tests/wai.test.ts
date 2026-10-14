@@ -68,7 +68,7 @@ describe("WebArena-Infinity", () => {
     expect((await board(scripted("perfect"))).map((r) => r[1])).toEqual([true, true, true]);
   }, 180_000);
 
-  it("WI2 WI3 WI4 resets between cases, hides the verifiers, gives each case its own origin, and WI8 stops the servers", async () => {
+  it("WI2 WI3 resets between cases, hides the verifiers, and WI8 stops the servers", async () => {
     const env: Env = await bench.up(ctx);
     const item = cases.find((c) => c.id === IDS[0])!;
     const first = await bench.start(env, item);
@@ -80,13 +80,19 @@ describe("WebArena-Infinity", () => {
     // The seed is kept from the first push, so a reset puts it back (WI2).
     const verdict = await bench.judge(env, second, { done: false, log: "" }, { requests: [] });
     expect(verdict.success).toBe(false);
-    expect(new URL(second.url).host).not.toBe(new URL(first.url).host);
     for (const hidden of ["real-tasks/task_e1.py", "real-tasks.json", "function-tasks.json", "sanity_check_real.py", "Dockerfile"]) {
       expect((await fetch(`${origin(second.url)}/${hidden}`)).status, hidden).toBe(404);
     }
     expect((await fetch(`${origin(second.url)}/index.html`)).status).toBe(200);
     await bench.down(env);
     await expect(fetch(`${origin(second.url)}/api/state`)).rejects.toThrow();
+  }, 180_000);
+
+  it("WI4 gives each case a new origin", async () => {
+    const seen: string[] = [];
+    await run({ name: "urls", runTask: async ({ url }) => { seen.push(new URL(url).origin); return { done: false, log: "" }; } });
+    expect(seen.length).toBe(IDS.length);
+    expect(new Set(seen).size).toBe(IDS.length);
   }, 180_000);
 
   it("WI7 refuses a verifier outside its app", async () => {

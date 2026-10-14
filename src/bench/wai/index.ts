@@ -30,8 +30,6 @@ async function tool(env: NodeJS.ProcessEnv, cmd: string, ...args: string[]): Pro
   return run(cmd, args, { env }).then((r) => r.stdout, () => null);
 }
 
-let counter = 0;
-
 /** `startTimeoutMs` is how long an app server gets to answer. */
 export const waiBenchmark = (options: { startTimeoutMs?: number } = {}): Benchmark => ({
   id: "webarena-infinity",
@@ -66,8 +64,9 @@ export const waiBenchmark = (options: { startTimeoutMs?: number } = {}): Benchma
     if (!env.servers.has(app)) env.servers.set(app, startApp(env.upstream, env.stage, app, env.env, options.startTimeoutMs ?? 10_000));
     const server = await env.servers.get(app)!.catch((error) => { env.servers.delete(app); throw error; });
     await resetApp(server);
-    // A new origin per case, so the page's localStorage from an earlier case cannot be pushed over the reset (WI4).
-    const url = `http://wai-${++counter}.localhost:${server.port}/`;
+    // The run loop puts a proxy on a new port in front of each case, so the agent's browser gets a new origin and a page's
+    // localStorage from an earlier case cannot be pushed over the reset (WI4).
+    const url = `http://127.0.0.1:${server.port}/`;
     const episode: Episode = { url, goal: task.instruction, startPath: "/" };
     running.set(episode, { app, verify: task.verify, port: server.port });
     return episode;
