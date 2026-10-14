@@ -7,7 +7,6 @@ import { runSuite } from "../src/runner.js";
 import { toMarkdown } from "../src/score.js";
 import { startServer, type FoxbenchServer } from "../src/server.js";
 import { sites } from "../src/sites/index.js";
-import { serverMetrics } from "../src/state.js";
 import { SUITES, TIERS, taskById, tasks, tasksIn, type Task } from "../src/tasks.js";
 
 const root = join(import.meta.dirname, "..");
@@ -59,36 +58,37 @@ describe("M3 an unknown suite", () => {
   });
 });
 
-describe("M4 only site requests count", () => {
+/** Runs one task with an agent that makes these requests below the URL's origin. */
+const visit = async (id: string, requests: (string | [string, Record<string, string>])[]) => (await runSuite({ tasks: [task(id)], adapter: {
+  name: "visitor",
+  async runTask({ url }) {
+    for (const r of requests) await fetch(typeof r === "string" ? new URL(r, url) : new URL(r[0], url), typeof r === "string" ? {} : { method: "POST", body: new URLSearchParams(r[1]), redirect: "manual" });
+    return { done: true, log: "" };
+  },
+} })).results[0]!;
+
+describe("M4 only page loads and posts count", () => {
   it("leaves out control endpoints, the style sheet and the site script", async () => {
-    await open(task("flights-oneway"));
-    for (const path of ["/__fbn/style.css", "/__fbn/state", "/flights/app.js", "/", "/flights/", "/flights/trips"]) await fetch(server!.url + path);
-    await post("/shop/cart/add", { sku: "trail-mug", color: "Slate", qty: "1" });
-    expect(server!.state.requests.map((r) => `${r.method} ${r.path}`)).toEqual(["GET /flights/", "GET /flights/trips", "POST /shop/cart/add"]);
-    expect(serverMetrics(server!.state)).toMatchObject({ requests: 3, posts: 1 });
+    const r = await visit("flights-oneway", ["/__fbn/style.css", "/__fbn/state", "/flights/app.js", "/", "/flights/", "/flights/trips", ["/shop/cart/add", { sku: "trail-mug", color: "Slate", qty: "1" }]]);
+    expect(r).toMatchObject({ requests: 4, posts: 1 });
   });
 });
 
-describe("M5 a reset starts an empty log", () => {
+describe("M5 each case starts an empty log", () => {
   it("drops the requests of the task before", async () => {
-    await open(task("flights-oneway"));
-    await fetch(`${server!.url}/flights/trips`);
-    server!.reset(task("shop-mugs"));
-    expect(server!.state.requests).toEqual([]);
+    let calls = 0;
+    const board = await runSuite({ tasks: [task("flights-oneway"), task("shop-mugs")], adapter: { name: "once", runTask: async ({ url }) => {
+      if (calls++ === 0) await fetch(new URL("/flights/trips", url));
+      return { done: false, log: "" };
+    } } });
+    expect(board.results.map((r) => r.requests)).toEqual([1, 0]);
   });
 });
 
 describe("M6 the first action is not the start page load", () => {
-  it("is null when the agent only loads the start page", async () => {
-    const url = await open(task("shop-mugs"));
-    await fetch(url);
-    expect(serverMetrics(server!.state).firstActionMs).toBeNull();
-  });
+  it("is null when the agent only loads the start page", async () => expect((await visit("shop-mugs", ["/shop/"])).firstActionMs).toBeNull());
   it("is the time to the first other request", async () => {
-    const url = await open(task("shop-mugs"));
-    await fetch(url);
-    await fetch(`${server!.url}/shop/p/trail-mug`);
-    const ms = serverMetrics(server!.state).firstActionMs;
+    const ms = (await visit("shop-mugs", ["/shop/", "/shop/p/trail-mug"])).firstActionMs;
     expect(ms).not.toBeNull();
     expect(ms!).toBeGreaterThanOrEqual(0);
   });
