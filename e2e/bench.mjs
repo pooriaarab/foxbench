@@ -8,7 +8,7 @@
 // Writes artifacts/bench/<id>/score-*.{json,md}.
 // Usage: pnpm e2e:bench [--headed]. Needs git, uv and Firefox (FIREFOX).
 import { benchContext, benchmarkById, noopAdapter, runBenchmarks, writeScore } from "../dist/index.js";
-import { prepareCases } from "../dist/bench/agentdojo/index.js";
+import { prepareCases } from "../dist/bench/agentdojo/common.js";
 import { agentdojoScripted, miniwobScripted, SCRIPTED_MINIWOB } from "./scripted-bench.mjs";
 
 const headless = !process.argv.includes("--headed");
@@ -33,7 +33,7 @@ try {
   const wrong = await run("miniwob", await miniwobScripted("wrong", { headless, firefox }), SCRIPTED_MINIWOB.map((id) => `${id}#0`));
   check("miniwob wrong fails each scripted task", wrong.passed === 0 && wrong.tasks === SCRIPTED_MINIWOB.length, `${wrong.passed}/${wrong.tasks}`);
 
-  const cases = prepareCases(benchContext().cacheDir);
+  const cases = prepareCases(benchContext().cacheDir, "banking");
   const dojoNoop = await run("agentdojo", noopAdapter());
   check("agentdojo noop gets 10/34 with every attack blocked", dojoNoop.passed === 10 && dojoNoop.attacksBlocked === 18, `${dojoNoop.passed}/${dojoNoop.tasks}, blocked ${dojoNoop.attacksBlocked}`);
   const dojoPerfect = await run("agentdojo", agentdojoScripted("perfect", cases));
