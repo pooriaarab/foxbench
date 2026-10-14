@@ -2,10 +2,11 @@
 // two quick runs see the same cases. `published` is the subset of the
 // baselines; a benchmark with no list runs everything for it.
 import foxbench from "./subsets/foxbench.json" with { type: "json" };
+import webgames from "./subsets/webgames.json" with { type: "json" };
 import type { Case, SubsetName } from "./types.js";
 
 export type SubsetLists = Record<string, { quick?: string[]; published?: string[] }>;
-const LISTS: SubsetLists = { foxbench };
+const LISTS: SubsetLists = { foxbench, webgames };
 
 /** The cases of a subset, from a benchmark's full list. Throws when a list names a case the benchmark lacks (L5). */
 export function pickSubset(id: string, all: Case[], subset: SubsetName, lists: SubsetLists = LISTS): Case[] {

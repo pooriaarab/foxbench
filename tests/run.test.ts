@@ -131,7 +131,7 @@ describe("L5 quick is a committed list", () => {
 describe("L7 the CLI: doctor, --subset and --require", () => {
   it("doctor prints each benchmark, and run takes a quick subset with --require", () => {
     expect(cli("doctor", "--require", "foxbench")).toMatchObject({ status: 0, stdout: expect.stringMatching(/foxbench\s+ready/) });
-    const r = cli("run", "--agent", "noop", "--suite", "all", "--subset", "quick", "--require", "foxbench", "--out", mkdtempSync(join(tmpdir(), "fbn-l7-")));
+    const r = cli("run", "--agent", "noop", "--suite", "foxbench", "--subset", "quick", "--require", "foxbench", "--out", mkdtempSync(join(tmpdir(), "fbn-l7-")));
     expect(r.status).toBe(0);
     expect(r.stderr.match(/^fail /gm)?.length).toBeLessThanOrEqual(20);
   });
