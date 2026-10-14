@@ -1,7 +1,7 @@
 // Tests for the suite and metric failure modes in docs/failure-modes.md (M1-M10).
 import { spawnSync } from "node:child_process";
 import { join } from "node:path";
-import { afterEach, beforeAll, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import { noopAdapter, parseMetrics, type Adapter } from "../src/adapter.js";
 import { runSuite } from "../src/runner.js";
 import { toMarkdown } from "../src/score.js";
@@ -48,10 +48,6 @@ describe("M2 every task has a suite and a tier", () => {
 });
 
 describe("M3 an unknown suite", () => {
-  beforeAll(() => {
-    const built = spawnSync(join(root, "node_modules/.bin/tsc"), ["-p", "tsconfig.build.json"], { cwd: root, encoding: "utf8" });
-    if (built.status !== 0) throw new Error(built.stdout + built.stderr);
-  }, 60_000);
   it("exits 2 and names the suites", () => {
     const r = cli("run", "--agent", "noop", "--suite", "nope");
     expect(r.status).toBe(2);
