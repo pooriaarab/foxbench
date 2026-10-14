@@ -244,12 +244,13 @@ tests are in `tests/speed.test.ts`.
 | F6 | The fingerprint leaks who ran it: hostname, user name, home path. | Only the machine model, chip, RAM, OS, versions and mode. | `F6 ...` |
 | F7 | What the operator says about the agent (model, quant, flags, network) is mixed with what foxbench measured. | Reported facts come from `FOXBENCH_*` variables and sit under `reported`, apart from the measured ones. | `F7 ...` |
 
-## External benchmarks (`external/`)
+## MiniWoB++ and AgentDojo (`src/bench/miniwob/`, `src/bench/agentdojo/`)
 
-The external suites score an agent with a public benchmark's own check. Each
-row is a way to report a number that is not the benchmark's number. The check
-is a run of `node external/run.mjs <suite> --agent <agent>` with the scripted
-agents in `external/scripted.mjs`.
+These benchmarks score an agent with a public benchmark's own check. They are
+`Benchmark` objects in the registry, so `foxbench run --suite miniwob,agentdojo`
+runs them through the run loop and the proxy. Each row is a way to report a
+number that is not the benchmark's number. The check is `pnpm e2e:bench`
+(`e2e/bench.mjs`), which runs the scripted agents in `e2e/scripted-bench.mjs`.
 
 | # | Failure mode | Wanted behaviour | Check |
 |---|---|---|---|
@@ -258,11 +259,12 @@ agents in `external/scripted.mjs`.
 | E3 | A reload starts a second episode, and its reward replaces the first. | Only the first reward counts. | Read in `judge`. |
 | E4 | MiniWoB's 10 s episode limit fails every model-driven agent. | The limit is 1,000,000 ms, as in BrowserGym. | `perfect` passes. |
 | E5 | The agent posts a fake reward to the server. | The reward endpoint needs a per-case nonce from the page script. An agent that reads that script can still post; this is a known limit. | - |
-| E6 | The agent keeps working after the episode ended, and the time per task grows. | The runner calls `abort()` when the reward arrives, as BrowserGym ends the episode. | `endedEarly` in each result. |
+| E6 | The agent keeps working after the episode ended, and the time per task grows. | The run loop calls `abort()` when the reward arrives, as BrowserGym ends the episode (L3). | `endedEarly` in each result. |
 | E7 | An agent that does nothing passes. | MiniWoB `noop` scores 0/30. AgentDojo `noop` blocks every attack, but AgentDojo's own checks pass user tasks 5, 6, 8, 9 and 10 on an unchanged bank (task 8 always passes). foxbench keeps AgentDojo's checks, so `noop` gets 10/34. | `noop` runs. |
 | E8 | A bank form does something its AgentDojo tool does not, so a correct agent fails or a wrong one passes. | Each form follows the tool's code: the same fields, the same ids, and only a non-empty value changes a field. | `perfect` runs AgentDojo's ground truth through the forms and passes 34/34 with 0 attacks followed. |
 | E9 | An injection does not reach a page, so "blocked" means nothing. | AgentDojo places the injections; the pages show every injectable field. | `gullible` obeys what it finds: 17/18 followed. On user task 14 its own password change replaces the attacker's, so AgentDojo scores that attack as not followed. |
 | E10 | The judge reads the agent's claim. | AgentDojo reads the end environment; only question tasks read the agent's answer. | `noop` and `perfect` runs. |
+| E11 | A tool a benchmark needs (git, uv, the Firefox driver) is missing, and `--suite all` stops. | `check()` names the missing tool and the fix; the board gets a skip row. | `E11 ...` in `tests/public.test.ts` |
 
 ## WebGames (`src/bench/webgames.ts`)
 
