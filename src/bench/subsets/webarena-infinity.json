@@ -1,0 +1,25 @@
+{
+  "how": "20 of the 2,357 cases: for each of the 13 apps in name order, one real task of tier easy, medium or hard in turn; then one function task for each app at an even position; Python random.Random(20261014).choice within each stratum",
+  "quick": [
+    "elation-clinical-records/real/task_e18",
+    "elation-patient-communication/real/task_m6",
+    "elation-prescriptions/real/task_h20",
+    "figma-slides/real/task_e16",
+    "figma-text-and-typography/real/task_m19",
+    "gitlab-plan-and-track/real/task_h66",
+    "gmail/real/task_e11",
+    "gmail-accounts-and-contacts/real/task_m12",
+    "handshake-career-exploration/real/task_h82",
+    "linear-account-settings/real/task_e17",
+    "paypal-my-wallet/real/task_m12",
+    "superhuman-general/real/task_h20",
+    "xero-invoicing/real/task_e18",
+    "elation-clinical-records/function/task_28",
+    "elation-prescriptions/function/task_52",
+    "figma-text-and-typography/function/task_40",
+    "gmail/function/task_29",
+    "handshake-career-exploration/function/task_29",
+    "paypal-my-wallet/function/task_28",
+    "xero-invoicing/function/task_18"
+  ]
+}

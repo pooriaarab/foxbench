@@ -26,23 +26,23 @@ const origin = (url: string) => `http://127.0.0.1:${new URL(url).port}`;
 const put = (url: string, state: unknown) => fetch(`${origin(url)}/api/state`, { method: "PUT", body: JSON.stringify(state) });
 
 /** What the page does: push the seed on load, then push the state the task needs (perfect) or an unrelated one (wrong). */
-function scripted(kind: "perfect" | "wrong" | "liar"): Adapter {
+function scripted(who: "perfect" | "wrong" | "liar"): Adapter {
   return {
-    name: kind,
+    name: who,
     async runTask({ url, goal }: TaskInput): Promise<TaskOutput> {
-      const id = cases.find((c) => c.goal === goal)!.id;
+      const id = cases.find((c) => IDS.includes(c.id) && c.goal === goal)!.id;
       const [app, kind, task] = id.split("/");
-      if (kind === "liar") return { done: true, log: "claims done" };
+      if (who === "liar") return { done: true, log: "claims done" };
       const states = solved(app!, kind!, task!);
       await put(url, states.seed);
-      await put(url, kind === "perfect" ? states.solved : { ...(states.seed as object), unrelated: true });
-      return { done: true, log: `${kind} pushed state` };
+      await put(url, who === "perfect" ? states.solved : { ...(states.seed as object), unrelated: true });
+      return { done: true, log: `${who} pushed state` };
     },
   };
 }
 
 const run = (adapter: Adapter, ids = IDS) => runBenchmarks({ adapter, runs: [{ benchmark: bench, subset: "full" }], ids });
-const board = async (a: Adapter) => (await run(a)).results.map((r) => [r.id, r.success, r.reasons.length > 0]);
+const board = async (a: Adapter) => (await run(a)).results.map((r) => [r.id, r.success, r.reasons.length > 0]).toSorted();
 
 beforeAll(async () => {
   process.env.FOXBENCH_CACHE = cache;
@@ -62,9 +62,9 @@ describe("WebArena-Infinity", () => {
   }, 180_000);
 
   it("WI5 WI6 noop and a liar score 0, perfect passes, wrong fails, on real and function cases", async () => {
-    expect(await board(noopAdapter())).toEqual(IDS.map((id) => [id, false, true]));
-    expect(await board(scripted("liar"))).toEqual(IDS.map((id) => [id, false, true]));
-    expect(await board(scripted("wrong"))).toEqual(IDS.map((id) => [id, false, true]));
+    expect(await board(noopAdapter())).toEqual(IDS.toSorted().map((id) => [id, false, true]));
+    expect(await board(scripted("liar"))).toEqual(IDS.toSorted().map((id) => [id, false, true]));
+    expect(await board(scripted("wrong"))).toEqual(IDS.toSorted().map((id) => [id, false, true]));
     expect((await board(scripted("perfect"))).map((r) => r[1])).toEqual(IDS.map(() => true));
   }, 180_000);
 
