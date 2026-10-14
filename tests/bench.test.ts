@@ -149,5 +149,6 @@ describe("foxbench list reads the registry", () => {
     expect(rows.map((r) => r.id)).toEqual(benchmarks.map((b) => b.id));
     expect(rows[0]).toMatchObject({ id: "foxbench", ready: true, cases: tasksIn("all").length });
     expect(cli().stdout).toMatch(/foxbench\s+ready/);
-  });
+    // list loads every benchmark's cases, and a cold cache fetches the BrowseSafe-Bench file.
+  }, 120_000);
 });
