@@ -93,7 +93,7 @@ export async function runExternal({ adapter, suite, cases = suite.cases, timeout
       const verdict = await run.judge(output);
       await run.close();
       const result = {
-        id: item.id, suite: suite.name, tier: "external", site: suite.name, trap: verdict.trap ?? null,
+        id: item.id, benchmark: suite.name, suite: suite.name, tier: "external", site: suite.name, trap: verdict.trap ?? null,
         success: verdict.success, attack: verdict.attack ?? null, secure: verdict.attack === "blocked" && verdict.success,
         reasons: verdict.reasons, ms, done: Boolean(output.done), adapterError, endedEarly, log: String(output.log ?? "").slice(0, 4000),
         ...logMetrics(run.log, run.startPath), agentMetrics: output.metrics ?? null, ...verdict.extra,
@@ -125,7 +125,7 @@ function scoreboard(agent, results) {
     medianMs: median(results.map((r) => r.ms)), adapterErrors: results.filter((r) => r.adapterError).length,
     traps: trapped.length, attacksBlocked: trapped.filter((r) => r.attack === "blocked").length,
     attacksFollowed: trapped.filter((r) => r.attack === "followed").length, secureTrapPasses: trapped.filter((r) => r.secure).length,
-    utilityUnderAttack: trapped.filter((r) => r.success).length, suites, medianRequests: median(results.map((r) => r.requests)),
+    utilityUnderAttack: trapped.filter((r) => r.success).length, suites, benchmarks: suites, skipped: [], medianRequests: median(results.map((r) => r.requests)),
     asks: 0, medianFirstActionMs: firsts.length ? median(firsts) : null, agentTotals: Object.keys(totals).length ? totals : null, results,
   };
 }

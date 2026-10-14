@@ -169,6 +169,23 @@ in `tests/bench.test.ts`; they drive the interface the way the run loop will:
 | B6 | A benchmark's `check()` throws, so `foxbench list` crashes and hides every other benchmark. | `readiness()` turns a throw into a not-ready row with the error as the reason. | `B6 ...` |
 | B7 | Case ids repeat inside a benchmark, so two results share one row. | Ids are unique per benchmark and equal the task ids, so old boards stay comparable. | `B7 ...` |
 
+## The run loop (`src/bench/run.ts`)
+
+One loop runs every benchmark: `runBenchmarks`, and `runSuite` for the
+in-house tasks. It keeps the rules of R1-R6 and E6. Each row is a way the loop
+could hide a missing benchmark or lose a result. The tests are in
+`tests/run.test.ts`, on a small scripted benchmark served over HTTP.
+
+| # | Failure mode | Wanted behaviour | Test |
+|---|---|---|---|
+| L1 | A benchmark that cannot run here stops `--suite all`, or drops out of the board, so a reader cannot tell it is missing. | One skip row per not-ready benchmark, with the reason and the fix. The run goes on and exits 0 when every ready benchmark ran. | `L1 ...` |
+| L2 | `--require <id>` names a benchmark that was skipped, and CI shows green. | Exit 1, and name the skipped benchmark. | `L2 ...` |
+| L3 | The benchmark ends the episode (MiniWoB), and the agent keeps working, so the time per case grows. | The loop calls `abort()` when `ended` settles, and records `endedEarly`. | `L3 ...` |
+| L4 | `start` or `judge` throws, and the whole run stops, so every result so far is lost. | That case fails with a `harness:` reason, the next case runs, and `down` still runs. | `L4 ...` |
+| L5 | Two quick runs see different cases, or the quick list names a case that no longer exists. | `quick` is the committed list in `src/bench/subsets/<id>.json`, at most 20 ids. An id the benchmark does not have is an error, not a silent drop. | `L5 ...` |
+| L6 | The results of two benchmarks mix in the board, so one benchmark's pass rate cannot be read. | Each result names its benchmark. The board counts tasks and passes per benchmark, and they add up to the totals. | `L1 L6 ...` |
+| L7 | `foxbench doctor` hides a benchmark that is not ready, or exits 0 when a required one is not. | It prints each benchmark with ready, or the reason and the fix. With `--require` it exits 1 when a named one is not ready. | `L7 ...` |
+
 ## External benchmarks (`external/`)
 
 The external suites score an agent with a public benchmark's own check. Each

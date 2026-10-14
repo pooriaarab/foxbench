@@ -1,23 +1,26 @@
 #!/usr/bin/env node
-// The foxbench command: run the suite against an agent, serve the mock
-// sites, or list the tasks.
+// The foxbench command: run benchmarks against an agent, serve the mock
+// sites, list the benchmarks and their cases, or check what can run here.
 import { randomBytes } from "node:crypto";
 import { parseArgs } from "node:util";
 import { noopAdapter, type Adapter } from "./adapter.js";
 import { benchContext, benchmarks, readiness, resolveSuites } from "./bench/registry.js";
 import { mcpAdapter } from "./mcp.js";
-import { runSuite } from "./runner.js";
+import { foxbenchBenchmark } from "./bench/foxbench.js";
+import { missingRequired, runBenchmarks } from "./bench/run.js";
+import type { Readiness, SubsetName } from "./bench/types.js";
 import { toMarkdown, writeScore } from "./score.js";
 import { startServer } from "./server.js";
 import { sites } from "./sites/index.js";
-import { SUITES, judge, taskById, tasks, tasksIn, type Suite } from "./tasks.js";
+import { judge, taskById, tasks } from "./tasks.js";
 
 const USAGE = `Usage:
-  foxbench run --agent noop [--suite core] [--tasks id,id] [--out artifacts] [--timeout <s>] [--min-success <0-1>] [--fixed-ports <base>]
+  foxbench run --agent noop [--suite core] [--subset quick|published|full|tag:<t>] [--require id,id] [--tasks id,id] [--out artifacts] [--timeout <s>] [--min-success <0-1>] [--fixed-ports <base>]
   foxbench run --agent mcp [--name <label>] [--tool run_task] [--arg key=json] [options] -- <command> [args...]
   foxbench serve [--port 4173] [--key <control key>]
   foxbench list [--suite <name>] [--json]   (no --suite: every benchmark and whether it is ready)
-Suites: core (the default), hard, security+, all. list also takes a benchmark id.`;
+  foxbench doctor [--require id,id]         (each benchmark's check, with the fix)
+Suites: core (the default), hard, security+, all, or benchmark ids, comma-separated.`;
 
 function fail(message: string): never {
   console.error(`${message}\n${USAGE}`);
@@ -30,7 +33,7 @@ try {
     allowPositionals: true,
     options: {
       agent: { type: "string" }, suite: { type: "string" }, tasks: { type: "string" }, out: { type: "string" }, timeout: { type: "string" },
-      "min-success": { type: "string" }, name: { type: "string" }, tool: { type: "string" }, arg: { type: "string", multiple: true }, port: { type: "string" }, "fixed-ports": { type: "string" }, key: { type: "string" }, json: { type: "boolean" }, help: { type: "boolean", short: "h" },
+      "min-success": { type: "string" }, name: { type: "string" }, tool: { type: "string" }, arg: { type: "string", multiple: true }, port: { type: "string" }, "fixed-ports": { type: "string" }, subset: { type: "string" }, require: { type: "string" }, key: { type: "string" }, json: { type: "boolean" }, help: { type: "boolean", short: "h" },
     },
   });
 } catch (error) {
@@ -64,6 +67,16 @@ function adapterFor(name: string | undefined): Adapter {
   return fail(name ? `Unknown agent "${name}".` : "Give an agent with --agent.");
 }
 
+const status = (r: Readiness) => (r.ready ? "ready" : `skipped: ${r.reason}${r.fix ? ` (fix: ${r.fix})` : ""}`);
+
+/** The --require ids; each must be a benchmark id. */
+function requireList(): string[] {
+  const ids = values.require?.split(",").map((s) => s.trim()).filter(Boolean) ?? [];
+  const unknown = ids.filter((id) => !benchmarks.some((b) => b.id === id));
+  if (unknown.length) fail(`--require names no benchmark: ${unknown.join(", ")}. The benchmarks are ${benchmarks.map((b) => b.id).join(", ")}.`);
+  return ids;
+}
+
 if (command === "list") {
   const ctx = benchContext();
   if (values.suite === undefined) {
@@ -71,7 +84,7 @@ if (command === "list") {
     const rows = await Promise.all(benchmarks.map(async (b) => ({ id: b.id, title: b.title, where: b.where, licence: b.licence, measures: b.measures, scoring: b.scoring,
       ...(await readiness(b, ctx)), cases: (await b.load(ctx, "full").catch(() => [])).length })));
     if (values.json) console.log(JSON.stringify(rows, null, 2));
-    else for (const r of rows) console.log(`${r.id.padEnd(20)} ${r.ready ? "ready" : `skipped: ${r.reason}${r.fix ? ` (fix: ${r.fix})` : ""}`}  ${r.cases} cases  ${r.title}`);
+    else for (const r of rows) console.log(`${r.id.padEnd(20)} ${status(r)}  ${r.cases} cases  ${r.title}`);
   } else {
     let picked;
     try {
@@ -96,11 +109,15 @@ if (command === "list") {
   console.log(`Control key: ${key} (for people and the demo extension; do not give it to the agent you test)`);
   for (const t of tasks) console.log(`  ${server.url}/__fbn/start/${t.id}?key=${key}`);
   console.log(`Open a start link to reset the state and begin that task. The verdict is at ${server.url}/__fbn/result?key=${key}. Press Ctrl+C to stop.`);
+} else if (command === "doctor") {
+  const required = requireList();
+  const rows = await Promise.all(benchmarks.map(async (b) => ({ id: b.id, ...(await readiness(b, benchContext())) })));
+  for (const r of rows) console.log(`${r.id.padEnd(20)} ${status(r)}`);
+  if (rows.some((r) => !r.ready && required.includes(r.id))) process.exitCode = 1;
 } else if (command === "run") {
-  const SUITE_NAMES = [...SUITES, "all"] as const;
-  const suiteName = values.suite ?? "core";
-  if (!(SUITE_NAMES as readonly string[]).includes(suiteName)) fail(`Unknown suite "${suiteName}". The suites are ${SUITE_NAMES.join(", ")}.`);
-  const suite = tasksIn(suiteName as Suite | "all");
+  const subset = values.subset ?? "full";
+  if (!/^(quick|published|full|tag:.+)$/.test(subset)) fail(`--subset must be quick, published, full or tag:<tag>, not ${subset}.`);
+  const required = requireList();
   const adapter = adapterFor(values.agent);
   const wanted = values.tasks?.split(",").map((s) => s.trim()).filter(Boolean);
   const unknown = wanted?.filter((id) => !tasks.some((t) => t.id === id)) ?? [];
@@ -111,17 +128,30 @@ if (command === "list") {
   if (fixedPorts !== undefined && !(Number.isInteger(fixedPorts) && fixedPorts >= 1024 && fixedPorts <= 65000)) fail(`--fixed-ports must be a port from 1024 to 65000, not ${values["fixed-ports"]}.`);
   const minSuccess = values["min-success"] === undefined ? null : Number(values["min-success"]);
   if (minSuccess !== null && !(minSuccess >= 0 && minSuccess <= 1)) fail("--min-success must be between 0 and 1.");
-  const board = await runSuite({
+  // --tasks with no --suite picks from every foxbench task, as before.
+  let runs;
+  try {
+    runs = resolveSuites(values.suite ?? (wanted ? "foxbench" : "core"), subset as SubsetName);
+  } catch (error) {
+    fail(error instanceof Error ? error.message : String(error));
+  }
+  if (fixedPorts !== undefined) runs = runs.map((r) => (r.benchmark.id === "foxbench" ? { ...r, benchmark: foxbenchBenchmark({ fixedPorts }) } : r));
+  const ran = await runBenchmarks({
     adapter,
-    tasks: wanted ? tasks.filter((t) => wanted.includes(t.id)) : suite,
+    runs,
+    ...(wanted ? { ids: wanted } : {}),
     timeoutMs: timeout * 1000,
-    ...(fixedPorts === undefined ? {} : { fixedPorts }),
     onResult: (r) => console.error(`${r.success ? "pass" : "fail"} ${r.id} (${(r.ms / 1000).toFixed(1)} s)${r.attack ? ` attack ${r.attack}` : ""}`),
   });
+  const board = fixedPorts === undefined ? ran : { ...ran, fixedPorts };
   const paths = writeScore(board, values.out ?? "artifacts");
   console.log(toMarkdown(board));
   console.log(`Wrote ${paths.json} and ${paths.md}`);
-  if (board.tasks > 0 && board.adapterErrors === board.tasks) {
+  const missing = missingRequired(board, required);
+  if (missing.length) {
+    console.error(`Required benchmarks were skipped: ${missing.join(", ")}.`);
+    process.exitCode = 1;
+  } else if (board.tasks > 0 && board.adapterErrors === board.tasks) {
     const first = board.results[0]?.log ?? "";
     console.error(`The agent did not run: every task ended in an adapter error. The first one: ${first}`);
     process.exitCode = 1;
