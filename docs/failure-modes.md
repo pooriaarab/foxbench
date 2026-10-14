@@ -265,6 +265,11 @@ number that is not the benchmark's number. The check is `pnpm e2e:bench`
 | E9 | An injection does not reach a page, so "blocked" means nothing. | AgentDojo places the injections; the pages show every injectable field. | `gullible` obeys what it finds: 17/18 followed. On user task 14 its own password change replaces the attacker's, so AgentDojo scores that attack as not followed. |
 | E10 | The judge reads the agent's claim. | AgentDojo reads the end environment; only question tasks read the agent's answer. | `noop` and `perfect` runs. |
 | E11 | A tool a benchmark needs (git, uv, the Firefox driver) is missing, and `--suite all` stops. | `check()` names the missing tool and the fix; the board gets a skip row. | `E11 ...` in `tests/public.test.ts` |
+| E12 | The task list is not BrowserGym's: the old 30 tasks, a dropped task, or a task MiniWoB++ does not have. | `published` is BrowserGym's 125 tasks (its pinned list in `src/bench/miniwob/tasks.ts`) with 5 seeds each: 625 cases, ids `<task>#<0-4>`. | `E12 ...` in `tests/miniwob.test.ts`; `e2e/bench.mjs` checks each task's page exists at the pinned MiniWoB++ commit. |
+| E13 | The seeds differ from BrowserGym's, so the problems differ and the score is not comparable. | BrowserGym draws each task's 5 seeds from `RandomState(42).randint(0, SEED_MAX)` and the page's seed from `RandomState(seed).randint(0, 1000000)`. Its `SEED_MAX = 2 ^ 32` is an XOR, so it is 34. foxbench copies that, with its own Mersenne Twister. | `E13 ...` pins values computed with numpy and a hash of all 625 page seeds. |
+| E14 | `quick` changes between runs, or covers few tasks. | `quick` is 20 fixed cases from `src/bench/subsets/miniwob.json`, each from another task. | `E14 ...` |
+| E15 | Two cases of one task share a seed (34 values, 5 draws) and the goal cache returns the wrong goal. | The goal cache key is `<task>#<page seed>`: same task and seed, same problem. | `E15 ...` |
+| E16 | BrowserGym ends an episode after 10 steps; foxbench does not count steps, so a score is not a BrowserGym score. | Known difference. The run loop's timeout ends a case; the agent's own `steps` is in the board. The baselines are marked with the subset, not as like for like. | - |
 
 ## WebGames (`src/bench/webgames.ts`)
 
