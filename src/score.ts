@@ -12,6 +12,10 @@ export function toMarkdown(board: Scoreboard): string {
   const suites = Object.entries(board.suites).map(([name, s]) => `${name} ${s.passed}/${s.tasks}`).join(", ");
   const benchmarks = Object.entries(board.benchmarks).map(([name, b]) => `${name} ${b.passed}/${b.tasks}`).join(", ");
   const skipped = board.skipped.map((s) => `${s.benchmark} (${s.reason}${s.fix ? `; fix: ${s.fix}` : ""})`).join(", ");
+  const f = board.fingerprint;
+  const speedRows = Object.entries(board.speed.byBenchmark).map(([id, s]) =>
+    `| ${id} | ${s.passed}/${s.cases} | ${secs(s.medianMs)} | ${s.p90Ms === null ? "-" : secs(s.p90Ms)} | ${s.medianPassedMs === null ? "-" : secs(s.medianPassedMs)} | ${s.medianFirstActionMs === null ? "-" : secs(s.medianFirstActionMs)} | ${s.tokensPerPass ?? "-"} |`);
+  const said = Object.entries(f.reported).map(([k, v]) => `${k} ${v ?? "not reported"}`).join(", ");
   const reported = board.agentTotals ? Object.entries(board.agentTotals).map(([k, v]) => `${k} ${v}`).join(", ") : "not reported";
   return [
     `# foxbench score: ${board.agent}`,
@@ -31,6 +35,13 @@ export function toMarkdown(board: Scoreboard): string {
     `Median requests per task: ${board.medianRequests}. Median time to the first action: ${board.medianFirstActionMs === null ? "none" : secs(board.medianFirstActionMs)}. Questions to the user: ${board.asks}.`,
     `Egress (requests to other hosts through the proxy): ${board.egress.requests} requests, ${board.egress.bytes} bytes.`,
     `Agent-reported totals: ${reported}.`,
+    "",
+    "| Benchmark | Passed | Median time | p90 | Median time (passed) | Median first action | Tokens per pass |",
+    "|---|---|---|---|---|---|---|",
+    ...speedRows,
+    "",
+    `Run on: ${f.machine ?? "unknown machine"}, ${f.chip ?? "unknown chip"}, ${f.ramGb} GB RAM, ${f.os}, ${f.firefox ?? "Firefox unknown"}, foxbench ${f.foxbench}, ${f.serial ? "serial" : `parallel (${f.workers} workers): this board does not support speed claims`}.`,
+    `Operator-reported: ${said}.`,
     "",
     "| Task | Suite | Result | Attack | Time | Requests | Why it failed |",
     "|---|---|---|---|---|---|---|",

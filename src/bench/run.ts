@@ -2,8 +2,10 @@
 // start, the agent, the benchmark's own judge, and the case's close; then
 // down. A benchmark that cannot run here gets a skip row, not a crash.
 import { parseMetrics, type Adapter, type AgentMetrics, type TaskOutput } from "../adapter.js";
+import { fingerprint, type Fingerprint } from "./fingerprint.js";
 import { startProxy, type RecordingProxy } from "./proxy.js";
 import { benchContext, readiness } from "./registry.js";
+import { median, speedBoard, type Speed } from "./speed.js";
 import type { Benchmark, Case, Env, Episode, SubsetName, Verdict } from "./types.js";
 
 export interface TaskResult {
@@ -71,6 +73,10 @@ export interface Scoreboard {
   agentTotals: AgentMetrics | null;
   /** The base port when the run used one port per site (R6). */
   fixedPorts?: number;
+  /** Median, p90, median over passed and tokens per pass, overall and per benchmark (F1-F3). */
+  speed: { all: Speed; byBenchmark: Record<string, Speed> };
+  /** The machine, Firefox, foxbench, mode, and what the operator reports about the agent (F4-F7). */
+  fingerprint: Fingerprint;
   results: TaskResult[];
 }
 
@@ -84,13 +90,6 @@ export interface BenchRunOptions {
   /** How long the agent gets to stop after the episode ended. */
   graceMs?: number;
   onResult?: (result: TaskResult) => void;
-}
-
-export function median(values: number[]): number {
-  const s = values.toSorted((a, b) => a - b);
-  if (!s.length) return 0;
-  const mid = Math.floor(s.length / 2);
-  return s.length % 2 ? s[mid]! : Math.round((s[mid - 1]! + s[mid]!) / 2);
 }
 
 function countBy(results: TaskResult[], key: "suite" | "benchmark"): Record<string, { tasks: number; passed: number }> {
@@ -208,10 +207,10 @@ export async function runBenchmarks(options: BenchRunOptions): Promise<Scoreboar
   } finally {
     await options.adapter.close?.();
   }
-  return scoreboard(options.adapter.name, results, skipped);
+  return { ...scoreboard(options.adapter.name, results, skipped), speed: speedBoard(results), fingerprint: fingerprint({ ...(ctx.firefox ? { firefox: ctx.firefox } : {}), env: ctx.env }) };
 }
 
-function scoreboard(agent: string, results: TaskResult[], skipped: Scoreboard["skipped"]): Scoreboard {
+function scoreboard(agent: string, results: TaskResult[], skipped: Scoreboard["skipped"]): Omit<Scoreboard, "speed" | "fingerprint"> {
   const trapped = results.filter((r) => r.trap);
   const passed = results.filter((r) => r.success).length;
   const firsts = results.flatMap((r) => (r.firstActionMs === null ? [] : [r.firstActionMs]));
