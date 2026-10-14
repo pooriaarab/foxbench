@@ -7,6 +7,7 @@ import { noopAdapter, type Adapter } from "./adapter.js";
 import { benchContext, benchmarks, readiness, resolveSuites } from "./bench/registry.js";
 import { mcpAdapter } from "./mcp.js";
 import { foxbenchBenchmark } from "./bench/foxbench.js";
+import { judgesFrom } from "./bench/judge.js";
 import { loadPresets } from "./bench/presets.js";
 import { missingRequired, runBenchmarks } from "./bench/run.js";
 import type { Readiness, SubsetName } from "./bench/types.js";
@@ -23,7 +24,9 @@ const USAGE = `Usage:
   foxbench list [--suite <name>] [--json]   (no --suite: every benchmark and whether it is ready)
   foxbench doctor [--require id,id]         (each benchmark's check, with the fix)
   foxbench env up|down|status <env>         (a GCP VM per environment; foxbench env --help)
-Suites: core (the default), hard, security+, all, or benchmark ids, comma-separated.`;
+Suites: core (the default), hard, security+, all, or benchmark ids, comma-separated.
+LLM-judged cases: --judge claude,local (default: every judge that is set up) [--judge-model claude-sonnet-5-5|claude-haiku-5-5]
+  [--local-judge-url <llama-server URL>] [--local-judge-model <name>]. claude reads ANTHROPIC_API_KEY from the environment.`;
 
 function fail(message: string): never {
   console.error(`${message}\n${USAGE}`);
@@ -43,7 +46,7 @@ try {
     allowPositionals: true,
     options: {
       agent: { type: "string" }, suite: { type: "string" }, tasks: { type: "string" }, out: { type: "string" }, timeout: { type: "string" },
-      "min-success": { type: "string" }, name: { type: "string" }, tool: { type: "string" }, arg: { type: "string", multiple: true }, port: { type: "string" }, "fixed-ports": { type: "string" }, subset: { type: "string" }, require: { type: "string" }, key: { type: "string" }, json: { type: "boolean" }, help: { type: "boolean", short: "h" },
+      "min-success": { type: "string" }, name: { type: "string" }, tool: { type: "string" }, arg: { type: "string", multiple: true }, port: { type: "string" }, "fixed-ports": { type: "string" }, subset: { type: "string" }, require: { type: "string" }, key: { type: "string" }, json: { type: "boolean" }, judge: { type: "string" }, "judge-model": { type: "string" }, "local-judge-url": { type: "string" }, "local-judge-model": { type: "string" }, help: { type: "boolean", short: "h" },
     },
   });
 } catch (error) {
@@ -140,6 +143,17 @@ if (command === "list") {
   const subset = values.subset ?? "full";
   if (!/^(quick|published|full|tag:.+)$/.test(subset)) fail(`--subset must be quick, published, full or tag:<tag>, not ${subset}.`);
   const required = requireList();
+  let judges;
+  try {
+    judges = judgesFrom(process.env, {
+      ...(values.judge ? { names: values.judge.split(",").map((s) => s.trim()).filter(Boolean) } : {}),
+      ...(values["judge-model"] ? { model: values["judge-model"] } : {}),
+      ...(values["local-judge-url"] ? { localUrl: values["local-judge-url"] } : {}),
+      ...(values["local-judge-model"] ? { localModel: values["local-judge-model"] } : {}),
+    });
+  } catch (error) {
+    fail(error instanceof Error ? error.message : String(error));
+  }
   const adapter = adapterFor(values.agent);
   const wanted = values.tasks?.split(",").map((s) => s.trim()).filter(Boolean);
   const unknown = wanted?.filter((id) => !tasks.some((t) => t.id === id)) ?? [];
@@ -160,6 +174,7 @@ if (command === "list") {
   if (fixedPorts !== undefined) runs = runs.map((r) => (r.benchmark.id === "foxbench" ? { ...r, benchmark: foxbenchBenchmark({ fixedPorts }) } : r));
   const ran = await runBenchmarks({
     adapter,
+    judges,
     runs,
     ...(wanted ? { ids: wanted } : {}),
     timeoutMs: timeout * 1000,
