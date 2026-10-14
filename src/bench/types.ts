@@ -118,6 +118,8 @@ export interface Benchmark {
   scoring: "programmatic" | "llm" | "mixed";
   /** The detector this benchmark scores, with its version. When set, no agent runs: judge() alone scores each case, and the board reports precision, recall and F1. */
   detector?: string;
+  /** The licence forbids showing the benchmark's text: boards keep case ids and verdicts only, with no agent log. */
+  redact?: boolean;
   /** Preflight. A skip carries the reason that goes in the board. */
   check(ctx: BenchContext): Promise<Readiness>;
   /** The cases of a subset. */

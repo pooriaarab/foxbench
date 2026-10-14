@@ -10,6 +10,7 @@ import { eiaBenchmark } from "./eia.js";
 import { browsesafeBenchmark } from "./browsesafe.js";
 import { slackBenchmark } from "./agentdojo/slack.js";
 import { foxbenchBenchmark } from "./foxbench.js";
+import { gaiaBenchmark } from "./gaia.js";
 import { miniwobBenchmark } from "./miniwob/index.js";
 import type { BenchContext, Benchmark, Readiness, SubsetName } from "./types.js";
 import { DEFAULT_USER_MODEL } from "./user.js";
@@ -35,6 +36,7 @@ export const benchmarks: Benchmark[] = [
   assistantbenchBenchmark(),
   tau2Benchmark("retail"),
   tau2Benchmark("airline"),
+  gaiaBenchmark(),
 ];
 
 export const benchmarkById = (id: string): Benchmark | undefined => benchmarks.find((b) => b.id === id);
