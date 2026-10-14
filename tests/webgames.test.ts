@@ -27,7 +27,9 @@ beforeAll(async () => {
 const scripted = (name: string, answer: (id: string) => string): Adapter => ({
   name,
   async runTask({ url, goal }) {
-    expect(goal).toContain(url);
+    // The goal must not name the site's own address, so the agent cannot go around the proxy (G11).
+    expect(goal).not.toMatch(/127\.0\.0\.1|https?:/);
+    expect(url).toMatch(/^http:\/\/127\.0\.0\.1:\d+\/[\w-]+$/);
     return { done: true, log: answer(new URL(url).pathname.slice(1)) };
   },
 });

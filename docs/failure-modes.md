@@ -284,7 +284,8 @@ and run against the real upstream build.
 | G8 | A case's server stays up, so a late agent step reaches the next case. | Each case gets its own server; `close()` stops it. | `G8 ...` |
 | G9 | `check()` says ready when `git` or `pnpm` is missing, and the run dies in `up`. | `check()` is not ready, with a fix. | `G9 ...` |
 | G10 | The quick list names a case that no longer exists, or a case that cannot run offline. | 20 ids from the 147 offline cases; `pickSubset` throws on an unknown id. | `G10 ...` |
-| G11 | The password is readable in the built JS, so an agent could read it without playing. | A known limit, the same as the hosted site. Only the answer is scored; the board marks no case as read. | - |
+| G11 | The goal names the site's own address, as upstream's prompt does, so the agent goes around the recording proxy (P1) and the trace misses its requests. | The goal says "the start page you were given"; the agent gets only the proxy's URL as `url`. | `G11 ...` |
+| G12 | The password is readable in the built JS, so an agent could read it without playing. | A known limit, the same as the hosted site. Only the answer is scored; the board marks no case as read. | - |
 
 ## AMO release build and listed submission (`scripts/amo-listing.mjs`)
 

@@ -6,7 +6,7 @@
 import { execFile, spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readdirSync, readFileSync } from "node:fs";
 import { createServer, type IncomingMessage } from "node:http";
-import { extname, join, normalize } from "node:path";
+import { extname, join, normalize, sep } from "node:path";
 import { promisify } from "node:util";
 import { pickSubset } from "./subsets.js";
 import type { BenchContext, Benchmark, Case, Episode, Readiness } from "./types.js";
@@ -34,8 +34,9 @@ const appDir = (ctx: BenchContext) => join(webgamesDir(ctx), "webgames");
 /** The reCAPTCHA tasks load Google's widget, so they cannot run offline. */
 const needsInternet = (id: string) => id.startsWith("robo-check");
 
-const TASK_PROMPT = (description: string, url: string) =>
-  `Your task is: ${description}. You must go to ${url} and obtain the password for the game. To prove you have completed the task you must obtain and report the password for the game. If you do not have the password, you have not managed to complete the task.`;
+// Upstream's prompt names the page's URL. Here the agent gets the start page as its url, and the proxy's address is not the site's (P1).
+const TASK_PROMPT = (description: string) =>
+  `Your task is: ${description}. You must go to the start page you were given and obtain the password for the game. To prove you have completed the task you must obtain and report the password for the game. If you do not have the password, you have not managed to complete the task.`;
 
 /** Reads the challenges from upstream's router and pages: `routes.ts` names each page's task id and password by constant. */
 export function parseCases(dir: string): WebgamesCase[] {
@@ -92,24 +93,20 @@ const TYPES: Record<string, string> = { ".html": "text/html; charset=utf-8", ".j
 
 /** Serves dist/ with the single-page fallback, and answers upstream's two analytics calls. */
 async function serve(dist: string) {
-  const log: { method: string; path: string; at: number }[] = [];
-  const started = Date.now();
   const server = createServer((req: IncomingMessage, res) => {
     const path = decodeURIComponent((req.url ?? "/").split("?")[0]!);
-    // Page loads and posts count as steps; the bundle and its assets do not (M4).
-    if (req.method !== "GET" || !extname(path)) log.push({ method: req.method ?? "GET", path, at: Date.now() - started });
     if (path.startsWith("/api/")) {
       req.resume();
       res.writeHead(200, { "content-type": "application/json" }).end('{"success":true}');
       return;
     }
     const file = join(dist, normalize(path));
-    const known = file.startsWith(dist) && extname(path) && existsSync(file);
+    const known = file.startsWith(dist + sep) && extname(path) && existsSync(file);
     res.writeHead(200, { "content-type": TYPES[extname(known ? file : "x.html")] ?? "application/octet-stream" }).end(readFileSync(known ? file : join(dist, "index.html")));
   });
   await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
   const { port } = server.address() as { port: number };
-  return { origin: `http://127.0.0.1:${port}`, log: () => log, close: () => new Promise<void>((r) => { server.closeAllConnections(); server.close(() => r()); }) };
+  return { origin: `http://127.0.0.1:${port}`, close: () => new Promise<void>((r) => { server.closeAllConnections(); server.close(() => r()); }) };
 }
 
 /** Each episode's password, for its judge. */
@@ -137,7 +134,7 @@ export const webgamesBenchmark = (): Benchmark => {
     async load(ctx, subset) {
       cases = parseCases(await fetchSource(ctx)).filter((c) => !c.hidden);
       const all: Case[] = cases.map((c) => ({
-        id: c.id, tags: [...c.tags, ...(needsInternet(c.id) ? ["recaptcha"] : [])], ...(c.difficulty ? { tier: c.difficulty } : {}), goal: TASK_PROMPT(c.description, "<url>"),
+        id: c.id, tags: [...c.tags, ...(needsInternet(c.id) ? ["recaptcha"] : [])], ...(c.difficulty ? { tier: c.difficulty } : {}), goal: TASK_PROMPT(c.description),
       }));
       return pickSubset("webgames", all, subset);
     },
@@ -151,8 +148,7 @@ export const webgamesBenchmark = (): Benchmark => {
       if (!found) throw new Error(`webgames has no case ${item.id}`);
       if (needsInternet(found.id)) throw new Error("skipped: needs the internet (reCAPTCHA)");
       const site = await serve(env.dist as string);
-      const url = `${site.origin}/${found.id}`;
-      const episode: Episode = { url, goal: TASK_PROMPT(found.description, url), startPath: `/${found.id}`, log: site.log, close: site.close };
+      const episode: Episode = { url: `${site.origin}/${found.id}`, goal: TASK_PROMPT(found.description), startPath: `/${found.id}`, close: site.close };
       passwords.set(episode, { password: found.password, all: cases.map((c) => c.password) });
       return episode;
     },
