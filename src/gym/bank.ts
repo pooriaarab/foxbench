@@ -1,4 +1,4 @@
-// LarchBank: a bank site of the train suite (G1). Accounts, a transfer with a
+// LarchBank: a bank site of the train suite (TS1). Accounts, a transfer with a
 // review page and a confirm step, payees with an add form, and a card payment.
 // Transfers, new payees and card payments are gym records.
 import { esc, page, type Ctx, type Reply, type Site } from "../server.js";
