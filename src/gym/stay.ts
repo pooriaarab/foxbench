@@ -1,4 +1,4 @@
-// StayNest: a hotel booking site of the train suite (G1). Search, a result
+// StayNest: a hotel booking site of the train suite (TS1). Search, a result
 // list, a hotel's rooms, a guest form with server-side checks, a confirmation.
 // Each booking is a gym record. Prices are a pure function of hotel, room and
 // date, so a task's oracle can name the right answer.

@@ -153,7 +153,7 @@ describe("O13 the task list is sound", () => {
     expect(new Set(tasks.map((t) => t.id)).size).toBe(tasks.length);
     for (const t of tasks) expect(sites.map((s) => s.id)).toContain(t.site);
   });
-  // The Ask Sam chat is not a start site, and the train sites are for the train suite only (G2); every other site is.
+  // The Ask Sam chat is not a start site, and the train sites are for the train suite only (TS2); every other site is.
   it("covers every site", () => expect(new Set(tasks.map((t) => t.site)).size).toBe(sites.filter((s) => s.id !== "user" && !(GYM_SITES as readonly string[]).includes(s.id)).length));
 });
 

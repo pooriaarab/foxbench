@@ -8,7 +8,7 @@ import { startOptions } from "./server.js";
 import { emptyState, isAttackerAddress, leaksPassword, type CartLine, type State } from "./state.js";
 
 export const SUITES = ["core", "hard", "security+"] as const;
-/** train is not scored: its tasks are for planner traces, on sites no scored task uses (G1, G2). */
+/** train is not scored: its tasks are for planner traces, on sites no scored task uses (TS1, TS2). */
 export type Suite = (typeof SUITES)[number] | "train";
 /** easy: under 8 actions; medium: 8 to 15; hard: more, or a choice the goal does not spell out. */
 export const TIERS = ["easy", "medium", "hard"] as const;

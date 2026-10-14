@@ -24,7 +24,7 @@ export const foxbenchBenchmark = (options: { tasks?: Task[]; fixedPorts?: number
   scoring: "programmatic",
   check: async () => ({ ready: true }),
   async load(_ctx, subset) {
-    // Train tasks never enter full or a scored tag, though a train task's tier can be "hard"; only tag:train loads them (G1).
+    // Train tasks never enter full or a scored tag, though a train task's tier can be "hard"; only tag:train loads them (TS1).
     if (subset === "tag:train") return trainTasks.map(toCase);
     return pickSubset("foxbench", (options.tasks ?? (subset.startsWith("tag:") ? tasks : tasksIn("all"))).map(toCase), subset);
   },

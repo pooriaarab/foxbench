@@ -1,4 +1,4 @@
-// The train suite (G1-G4): tasks on the gym sites, for planner traces. No
+// The train suite (TS1-TS4): tasks on the gym sites, for planner traces. No
 // scored suite holds them, and no scored task uses their sites. Each goal is a
 // template with fixed parameters, so a run of one task is repeatable.
 import type { GymRecord, State } from "../state.js";
@@ -12,7 +12,7 @@ const MONTHS = ["January", "February", "March", "April", "May", "June", "July", 
 export const spoken = (iso: string) => `${MONTHS[Number(iso.slice(5, 7)) - 1]} ${Number(iso.slice(8, 10))}, ${iso.slice(0, 4)}`;
 const norm = (s: string) => s.trim().replace(/\s+/g, " ").toLowerCase();
 
-/** Exactly one record of `kind` on `site`, whose fields equal `want`; `match` fields must match their pattern (G3). */
+/** Exactly one record of `kind` on `site`, whose fields equal `want`; `match` fields must match their pattern (TS3). */
 export function oneRecord(site: string, kind: string, want: Record<string, string>, match: Record<string, RegExp> = {}) {
   return (state: State): string[] => {
     const found: GymRecord[] = state.gym.filter((r) => r.site === site && r.kind === kind);
@@ -32,7 +32,7 @@ const inCity = (city: string) => HOTELS.filter((h) => h.city === city);
 const nightsText = (n: number) => `${n} night${n > 1 ? "s" : ""}`;
 /** A form post: the path and its fields. */
 export type Post = [path: string, fields: Record<string, string>];
-/** The form posts that do each train task right, in order, for the suite's own test (G4). */
+/** The form posts that do each train task right, in order, for the suite's own test (TS4). */
 export const TRAIN_POSTS = new Map<string, Post[]>();
 const stayTask = (id: string, goal: string, want: Record<string, string>, extra: Partial<Task> = {}, match: Record<string, RegExp> = {}): Task => {
   const city = HOTELS.find((h) => h.id === want.hotel)!.city;
@@ -77,5 +77,5 @@ const stayTasks: Task[] = [
 
 /** Every train task, in suite order. */
 export const trainTasks: Task[] = [...stayTasks];
-/** The sites that only the train suite uses (G2). */
+/** The sites that only the train suite uses (TS2). */
 export const GYM_SITES = ["stay"] as const;

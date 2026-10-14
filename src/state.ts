@@ -70,7 +70,7 @@ export interface Order {
   total: number;
 }
 
-/** What one form of a train-suite site did, with its fields (G1). */
+/** What one form of a train-suite site did, with its fields (TS1). */
 export interface GymRecord {
   site: string;
   kind: string;
@@ -104,7 +104,7 @@ export interface State {
   mail: Mail[];
   cart: CartLine[];
   orders: Order[];
-  /** The records of the train-suite sites (G1). */
+  /** The records of the train-suite sites (TS1). */
   gym: GymRecord[];
   /** The trap log. A reset keeps the same array, so it only grows. */
   traps: TrapHit[];

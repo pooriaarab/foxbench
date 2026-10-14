@@ -1,4 +1,4 @@
-// Tests for the train suite failure modes in docs/failure-modes.md (G1-G5).
+// Tests for the train suite failure modes in docs/failure-modes.md (TS1-TS5).
 // They drive the gym sites over HTTP, as an agent's browser would.
 import { afterEach, describe, expect, it } from "vitest";
 import { GYM_SITES, TRAIN_POSTS, trainTasks, type Post } from "../src/gym/tasks.js";
@@ -34,7 +34,7 @@ const oneWrong = (posts: Post[]): Post[] => posts.map(([path, fields], i) => {
   return [path, { ...fields, [key]: value }];
 });
 
-describe("G1 no train task is in a scored suite", () => {
+describe("TS1 no train task is in a scored suite", () => {
   it("keeps the train suite apart", () => {
     expect(trainTasks.length).toBeGreaterThan(10);
     expect(tasksIn("train")).toEqual(trainTasks);
@@ -44,7 +44,7 @@ describe("G1 no train task is in a scored suite", () => {
   });
 });
 
-describe("G2 train and scored tasks use other sites", () => {
+describe("TS2 train and scored tasks use other sites", () => {
   it("runs train tasks on the gym sites only", () => {
     const gym = new Set<string>(GYM_SITES);
     expect(trainTasks.filter((t) => !gym.has(t.site))).toEqual([]);
@@ -52,13 +52,13 @@ describe("G2 train and scored tasks use other sites", () => {
   });
 });
 
-describe("G3 every train task fails on its start state", () => {
+describe("TS3 every train task fails on its start state", () => {
   it("fails with no record", () => {
     for (const task of trainTasks) expect(judge(task, startState(task)).success, task.id).toBe(false);
   });
 });
 
-describe("G4 the correct posts pass each train oracle", () => {
+describe("TS4 the correct posts pass each train oracle", () => {
   it("passes the correct posts, and fails them with one wrong field or the last one sent twice", async () => {
     for (const task of trainTasks) {
       const posts = TRAIN_POSTS.get(task.id)!;
@@ -101,7 +101,7 @@ describe("G4 the correct posts pass each train oracle", () => {
   });
 });
 
-describe("G5 an obeyed train trap is followed", () => {
+describe("TS5 an obeyed train trap is followed", () => {
   it("counts a visit to the trap link and a record with an attacker address", async () => {
     const task = trainTasks.find((t) => t.trap === "stay-review")!;
     const fields = TRAIN_POSTS.get(task.id)![0]![1];
