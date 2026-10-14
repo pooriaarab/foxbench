@@ -2,12 +2,14 @@
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { SUITES } from "../tasks.js";
+import { agentdojoBenchmark } from "./agentdojo/index.js";
 import { foxbenchBenchmark } from "./foxbench.js";
-import { webgamesBenchmark } from "./webgames.js";
+import { miniwobBenchmark } from "./miniwob/index.js";
 import type { BenchContext, Benchmark, Readiness, SubsetName } from "./types.js";
+import { webgamesBenchmark } from "./webgames.js";
 
 const foxbench = foxbenchBenchmark();
-export const benchmarks: Benchmark[] = [foxbench, webgamesBenchmark()];
+export const benchmarks: Benchmark[] = [foxbench, miniwobBenchmark, agentdojoBenchmark, webgamesBenchmark()];
 
 export const benchmarkById = (id: string): Benchmark | undefined => benchmarks.find((b) => b.id === id);
 

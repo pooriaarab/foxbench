@@ -1,5 +1,6 @@
-// Scripted agents that check the external harness, the way e2e/scripted.mjs
-// checks the foxbench sites. They are not part of the package.
+// Scripted agents that check the MiniWoB++ and AgentDojo benchmarks
+// (e2e/bench.mjs), the way e2e/scripted.mjs checks the foxbench sites.
+// They are not part of the package.
 //   miniwob perfect   solves six MiniWoB tasks in a real Firefox, with real
 //                     clicks and keys; each must pass on MiniWoB's own reward
 //   miniwob wrong     clicks the wrong thing on the same six; each must fail

@@ -1,4 +1,4 @@
-// MiniWoB++ as a foxbench external suite. MiniWoB++ (MIT) is fetched at run
+// MiniWoB++ as a foxbench benchmark. MiniWoB++ (MIT) is fetched at run
 // time at a pinned commit; foxbench vendors none of its files. Each task runs
 // the way BrowserGym runs it: the human display (goal, timer, reward) is
 // removed, the seed is set, the episode has no time limit, and the goal goes
@@ -7,9 +7,10 @@
 // success. A small script in the page posts that reward to the server.
 import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { homedir } from "node:os";
 import { extname, join, normalize } from "node:path";
-import { serveCase } from "./runner.mjs";
+import { serveCase } from "../serve.js";
+import { pickSubset } from "../subsets.js";
+import type { Benchmark, Episode, Verdict } from "../types.js";
 
 export const MINIWOB_REPO = "https://github.com/Farama-Foundation/miniwob-plusplus.git";
 export const MINIWOB_COMMIT = "33c3b4ddef8c6eb67c57a29663d844b1eda7e614";
@@ -21,16 +22,15 @@ export const MINIWOB_TASKS = [
   ...["search-engine", "use-autocomplete", "phone-book", "social-media"].map((id) => [id, "search"]),
   ...["choose-date-easy", "choose-date", "enter-date", "enter-time"].map((id) => [id, "date"]),
   ...["book-flight", "email-inbox", "multi-orderings", "social-media-some"].map((id) => [id, "multi-step"]),
-].map(([id, kind], i) => ({ id, kind, seed: 1000 + i }));
-
-export const cacheDir = () => process.env.FOXBENCH_CACHE ?? join(homedir(), ".cache", "foxbench-external");
+].map(([id = "", kind = ""], i) => ({ id, kind, seed: 1000 + i }));
+type MiniwobTask = (typeof MINIWOB_TASKS)[number];
 
 /** Fetches MiniWoB++ at the pinned commit once, and returns its html directory. */
-export function fetchMiniwob(dir = cacheDir()) {
+export function fetchMiniwob(dir: string) {
   const repo = join(dir, `miniwob-${MINIWOB_COMMIT.slice(0, 12)}`);
   if (!existsSync(join(repo, "miniwob", "html", "core", "core.js"))) {
     mkdirSync(repo, { recursive: true });
-    const git = (...args) => execFileSync("git", ["-C", repo, ...args], { stdio: "ignore" });
+    const git = (...args: string[]) => execFileSync("git", ["-C", repo, ...args], { stdio: "ignore" });
     git("init", "-q");
     git("fetch", "-q", "--depth", "1", MINIWOB_REPO, MINIWOB_COMMIT);
     git("checkout", "-q", "FETCH_HEAD");
@@ -40,7 +40,7 @@ export function fetchMiniwob(dir = cacheDir()) {
 
 // BrowserGym's setup script (browsergym/miniwob/base.py), plus two posts:
 // the goal the page made, and the reward when the episode ends.
-const bootstrap = (seed, nonce) => `<script>
+const bootstrap = (seed: number, nonce: string) => `<script>
 window.addEventListener("load", function () { setTimeout(function () {
   var post = function (path, data) { fetch(path + "?nonce=${nonce}", { method: "POST", body: JSON.stringify(data), keepalive: true }); };
   var ids = ["reward-display", "click-canvas", "sync-task-cover"], kept = {}, query = null;
@@ -73,14 +73,14 @@ window.addEventListener("load", function () { setTimeout(function () {
 }, 0); });
 </script>`;
 
-const TYPES = { ".html": "text/html; charset=utf-8", ".js": "text/javascript", ".css": "text/css", ".png": "image/png", ".gif": "image/gif", ".jpg": "image/jpeg", ".svg": "image/svg+xml", ".json": "application/json" };
+const TYPES: Record<string, string> = { ".html": "text/html; charset=utf-8", ".js": "text/javascript", ".css": "text/css", ".png": "image/png", ".gif": "image/gif", ".jpg": "image/jpeg", ".svg": "image/svg+xml", ".json": "application/json" };
 
 /** Starts one task's server. `goal` is the goal from prepare, or null while preparing. */
-export async function startMiniwob(html, task, goal) {
+export async function startMiniwob(html: string, task: MiniwobTask, goal: string | null) {
   const nonce = Math.random().toString(36).slice(2);
-  const state = { goals: [], rewards: [] };
-  let signal;
-  const ended = new Promise((resolve) => { signal = resolve; });
+  const state = { goals: [] as string[], rewards: [] as { raw: number; reward: number; reason: string }[] };
+  const signals: (() => void)[] = [];
+  const ended = new Promise<void>((resolve) => signals.push(resolve));
   const path = `/miniwob/${task.id}.html`;
   const server = await serveCase(async (req, body, url) => {
     if (url.pathname.startsWith("/__ext/")) {
@@ -89,7 +89,7 @@ export async function startMiniwob(html, task, goal) {
       if (url.pathname === "/__ext/start") state.goals.push(String(data.goal));
       if (url.pathname === "/__ext/reward") {
         state.rewards.push({ raw: Number(data.raw), reward: Number(data.reward), reason: data.reason });
-        signal();
+        signals[0]!();
       }
       return { type: "text/plain", body: "ok" };
     }
@@ -105,15 +105,15 @@ export async function startMiniwob(html, task, goal) {
     startPath: path,
     state,
     ended,
-    async judge() {
-      const reasons = [];
+    async judge(): Promise<Verdict> {
+      const reasons: string[] = [];
       // The first episode's reward counts; a later one comes from a reload.
       const first = state.rewards[0];
       const mismatch = state.goals.find((g) => g !== goal);
       if (mismatch !== undefined) reasons.push(`harness: the page made another goal: ${mismatch}`);
       if (!first) reasons.push("the episode did not end (no MiniWoB reward)");
       else if (!(first.raw > 0)) reasons.push(`MiniWoB reward ${first.raw}${first.reason && first.reason !== "null" ? ` (${first.reason})` : ""}`);
-      return { success: Boolean(first && first.raw > 0 && mismatch === undefined), reasons, extra: { reward: first?.raw ?? null, kind: task.kind } };
+      return { success: Boolean(first && first.raw > 0 && mismatch === undefined), attack: null, reasons, ...(first ? { score: first.raw } : {}), judgedBy: "programmatic" };
     },
     close: server.close,
   };
@@ -125,14 +125,14 @@ export async function startMiniwob(html, task, goal) {
  * and per browser: a goal can hold a time in the browser's time zone and
  * locale, and Ichabod's Firefox has others than this computer's.
  */
-export async function prepareGoals(html, { firefox, extension = "dist-ext" } = {}) {
+export async function prepareGoals(html: string, cache: string, firefox?: string): Promise<Record<string, string>> {
   const { browserMode, launch, tunnel } = await import("create-foxkit/e2e");
   const remote = browserMode() === "ichabod";
-  const file = join(cacheDir(), `miniwob-goals-${MINIWOB_COMMIT.slice(0, 12)}${remote ? "-ichabod" : ""}.json`);
+  const file = join(cache, `miniwob-goals-${MINIWOB_COMMIT.slice(0, 12)}${remote ? "-ichabod" : ""}.json`);
   const cached = existsSync(file) ? JSON.parse(readFileSync(file, "utf8")) : {};
   const missing = MINIWOB_TASKS.filter((t) => !cached[`${t.id}#${t.seed}`]);
   if (missing.length) {
-    const fox = await launch({ extension, headless: true, ...(firefox && !remote ? { firefox } : {}) });
+    const fox = await launch({ extension: EXTENSION, headless: true, ...(firefox && !remote ? { firefox } : {}) });
     try {
       for (const task of missing) {
         const run = await startMiniwob(html, task, null);
@@ -149,19 +149,52 @@ export async function prepareGoals(html, { firefox, extension = "dist-ext" } = {
     } finally {
       await fox.close();
     }
-    mkdirSync(cacheDir(), { recursive: true });
+    mkdirSync(cache, { recursive: true });
     writeFileSync(file, `${JSON.stringify(cached, null, 2)}\n`);
   }
   return cached;
 }
 
-/** The suite for runExternal. Fetches MiniWoB++ and prepares the goals first. */
-export async function miniwobSuite(options = {}) {
-  const html = fetchMiniwob();
-  const goals = await prepareGoals(html, options);
-  return {
-    name: "miniwob",
-    cases: MINIWOB_TASKS,
-    start: (task) => startMiniwob(html, task, goals[`${task.id}#${task.seed}`]),
-  };
-}
+const tool = (command: string, env: NodeJS.ProcessEnv) => {
+  try {
+    execFileSync(command, ["--version"], { env, stdio: "ignore" });
+    return true;
+  } catch {
+    return false;
+  }
+};
+/** The foxbench extension the Firefox driver installs (create-foxkit needs one). */
+const EXTENSION = new URL("../../../dist-ext", import.meta.url).pathname;
+/** Each episode's own judge. */
+const judges = new WeakMap<Episode, () => Promise<Verdict>>();
+
+/** 30 MiniWoB++ tasks, judged by the page's own reward. Fetches MiniWoB++ and prepares the goals in up(). */
+export const miniwobBenchmark: Benchmark = {
+  id: "miniwob",
+  title: "MiniWoB++ (30 tasks)",
+  upstream: { repo: MINIWOB_REPO, ref: MINIWOB_COMMIT, paper: "https://arxiv.org/abs/1802.08802" },
+  licence: { code: "MIT", data: "MIT", mode: "fetch-at-run" },
+  where: "local",
+  measures: ["task"],
+  scoring: "programmatic",
+  async check(ctx) {
+    if (!tool("git", ctx.env)) return { ready: false, reason: "git is not on the PATH (MiniWoB++ is fetched with git)", fix: "install git" };
+    if (!existsSync(join(EXTENSION, "manifest.json"))) return { ready: false, reason: "dist-ext/ is missing (the Firefox driver installs it)", fix: "run pnpm build:ext in the foxbench repo" };
+    return import("create-foxkit/e2e").then(() => ({ ready: true as const }), () => ({ ready: false as const, reason: "create-foxkit is not installed (it drives Firefox)", fix: "pnpm install in the foxbench repo" }));
+  },
+  load: async (_ctx, subset) => pickSubset("miniwob", MINIWOB_TASKS.map((t) => ({ id: t.id, tags: [t.kind] })), subset),
+  async up(ctx) {
+    const html = fetchMiniwob(ctx.cacheDir);
+    return { html, goals: await prepareGoals(html, ctx.cacheDir, ctx.firefox) };
+  },
+  async start(env, item) {
+    const task = MINIWOB_TASKS.find((t) => t.id === item.id)!;
+    const run = await startMiniwob(env.html as string, task, (env.goals as Record<string, string>)[`${task.id}#${task.seed}`] ?? null);
+    const episode: Episode = { url: run.url, goal: run.goal ?? "", startPath: run.startPath, ended: run.ended, close: run.close };
+    judges.set(episode, run.judge);
+    return episode;
+  },
+  judge: async (_env, episode) => judges.get(episode)!(),
+  down: async () => {},
+  baselines: [],
+};
