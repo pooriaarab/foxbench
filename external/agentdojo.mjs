@@ -130,7 +130,6 @@ export async function startBank(item, judge) {
     url: `${server.url}/bank/`,
     goal: item.goal,
     startPath: "/bank/",
-    log: server.log,
     env,
     async judge(output) {
       const verdict = await judge({ user_task: item.user_task, injection_task: item.injection_task, pre: item.env, post: env, output: String(output.answer ?? output.log ?? "") });
