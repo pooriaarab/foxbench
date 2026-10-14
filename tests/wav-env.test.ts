@@ -1,4 +1,4 @@
-// Tests for the wav-core failure modes in docs/failure-modes.md (W1-W8). The
+// Tests for the wav-core failure modes in docs/failure-modes.md (WV1-WV8). The
 // env is read from the registry; check() runs against fake env-ctrl servers
 // and fake sites on the tunnel ports, moved by an offset so a local Docker
 // run of the real containers does not clash.
@@ -39,7 +39,7 @@ async function fake(host: string, modes: Partial<Record<string, Mode>> = {}) {
 }
 const ctx = (vars: Record<string, string> = {}) => benchContext({ env: { ...vars } });
 
-describe("W1 pinned images", () => {
+describe("WV1 pinned images", () => {
   it("runs each site's 0.1.0 image and never latest", () => {
     for (const site of ["shopping", "shopping_admin", "reddit", "gitlab"]) expect(env.startup).toContain(`am1n3e/webarena-verified-${site}:0.1.0`);
     expect(env.startup).not.toMatch(/latest/);
@@ -47,14 +47,14 @@ describe("W1 pinned images", () => {
   });
 });
 
-describe("W2 the base URL is the proxy's", () => {
+describe("WV2 the base URL is the proxy's", () => {
   it("starts each container with http://127.0.0.1:<site port> and tunnels another local port", () => {
     for (const site of wavSites) expect(env.startup).toContain(`WA_ENV_CTRL_EXTERNAL_SITE_URL=http://127.0.0.1:${site.port}`);
     for (const p of env.ports) expect(wavSites.map((s) => s.port)).not.toContain(p.local);
   });
 });
 
-describe("W3 one site table", () => {
+describe("WV3 one site table", () => {
   it("tunnels each site and env-ctrl port, and maps it in the startup script", () => {
     expect(wavSites.map((s) => s.id)).toEqual(["shopping", "shopping_admin", "reddit", "gitlab"]);
     const want = wavSites.flatMap((s) => [{ remote: s.port, local: s.port + 10000 }, { remote: s.ctrlPort, local: s.ctrlPort + 10000 }]);
@@ -68,7 +68,7 @@ describe("W3 one site table", () => {
   });
 });
 
-describe("W4 a site that does not answer", () => {
+describe("WV4 a site that does not answer", () => {
   it("is not ready, with the site, the URL and the fix", async () => {
     await fake("127.0.0.1", { gitlab: "down" });
     const r = await webarenaVerified({ offset: OFFSET }).check(ctx());
@@ -85,7 +85,7 @@ describe("W4 a site that does not answer", () => {
   });
 });
 
-describe("W5 env-ctrl reports a service down", () => {
+describe("WV5 env-ctrl reports a service down", () => {
   it("makes that site not ready", async () => {
     await fake("127.0.0.1", { reddit: "unhealthy" });
     const r = await webarenaVerified({ offset: OFFSET }).check(ctx());
@@ -94,7 +94,7 @@ describe("W5 env-ctrl reports a service down", () => {
   });
 });
 
-describe("W6 a probe that hangs", () => {
+describe("WV6 a probe that hangs", () => {
   it("times out and names the site", async () => {
     await fake("127.0.0.1", { shopping_admin: "hang" });
     const started = Date.now();
@@ -104,7 +104,7 @@ describe("W6 a probe that hangs", () => {
   }, 20_000);
 });
 
-describe("W7 FOXBENCH_WAV_HOST", () => {
+describe("WV7 FOXBENCH_WAV_HOST", () => {
   it("probes the containers on that host", async () => {
     await fake("127.0.0.2");
     expect((await webarenaVerified({ offset: OFFSET }).check(ctx())).ready).toBe(false);
@@ -112,7 +112,7 @@ describe("W7 FOXBENCH_WAV_HOST", () => {
   });
 });
 
-describe("W8 the VM size", () => {
+describe("WV8 the VM size", () => {
   it("is n2-standard-8 with a 200 GB disk", () => {
     expect(env.machineType).toBe("n2-standard-8");
     expect(env.diskGb).toBe(200);
