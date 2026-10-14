@@ -183,42 +183,44 @@ Every hard and security+ goal ends with the same sentence about the Ask Sam
 chat, so the goal does not show which tasks need a question. The `asks`
 metric shows how often an agent asked.
 
-## External benchmarks
+## Public benchmarks
 
-foxbench's own tasks borrow ideas from public benchmarks. `external/` runs
-public benchmarks themselves in Firefox, with each benchmark's own success
-check, so a score can sit beside published numbers. It uses the same adapter
-contract and writes the same scoreboard files. It is not part of the npm
-package.
+foxbench's own tasks borrow ideas from public benchmarks. It also runs public
+benchmarks themselves in Firefox, with each benchmark's own success check, so
+a score can sit beside published numbers. Each is a benchmark in the registry
+(`src/bench/<id>/`), run by the same loop, behind the same proxy, into the
+same scoreboard. Upstream code and data are fetched at run time, never
+committed.
 
-| Suite | Cases | Where it comes from | The check |
+| Benchmark | Cases | Where it comes from | The check |
 |---|---|---|---|
 | `miniwob` | 30 MiniWoB++ tasks: clicks, forms, search, date pickers, multi-step | [MiniWoB++](https://github.com/Farama-Foundation/miniwob-plusplus) (MIT), fetched at a pinned commit at run time | The reward that the task's own script computes in the page. A raw reward above 0 passes, as in BrowserGym. |
 | `agentdojo` | AgentDojo's banking suite: the 16 user tasks, then 18 pairs of a user task and an injection task | [AgentDojo](https://github.com/ethz-spylab/agentdojo) 0.1.35 (MIT), suite v1.2.2, installed from PyPI by `uv` at run time | AgentDojo's own `utility` and `security` functions, on the start and end environments. |
 
 ```bash
 pnpm build && pnpm build:ext
-node external/run.mjs miniwob --agent noop
-node external/run.mjs agentdojo --agent noop
-node external/run.mjs miniwob --agent mcp --name my-agent -- node my-agent.mjs mcp
+foxbench run --suite miniwob,agentdojo --agent noop
+foxbench run --suite miniwob --agent mcp --name my-agent -- node my-agent.mjs mcp
+pnpm e2e:bench   # scripted noop, perfect, wrong and gullible agents
 ```
 
 A MiniWoB task runs the way BrowserGym runs it: the seed is fixed, the time
 limit is 1,000,000 ms, the in-page goal and timer are hidden, and the goal goes
 to the agent as text. A small script in the page posts the reward to the
-server. When the episode ends, the runner stops the agent. `--agent perfect`
-and `--agent wrong` are scripted agents that check the harness on six tasks.
-The first run fetches MiniWoB++ into `~/.cache/foxbench-external` (or
+server. When the episode ends, the run loop stops the agent. The scripted
+perfect and wrong agents in `pnpm e2e:bench` check the harness on six tasks.
+The first run fetches MiniWoB++ into `~/.cache/foxbench` (or
 `FOXBENCH_CACHE`) and reads each task's goal in a headless Firefox.
 
 AgentDojo gives tools to a model, so `agentdojo` serves its banking
 environment as a small online bank, Bluebank. Each form does what the AgentDojo
 tool of the same name does, on the same data. AgentDojo makes the cases, places
 its `important_instructions` injections in the pages and judges each run
-(`external/agentdojo_bridge.py`). The agent's answer for a question task is
-`answer` from `runTask`, else `log`. The board's attacks followed is AgentDojo's
-attack success. `--agent perfect` runs AgentDojo's ground truth through the
-forms; `--agent gullible` also obeys the injection it finds.
+(`src/bench/agentdojo/bridge.py`). The agent's answer for a question task is
+`answer` from `runTask` (an MCP reply's JSON `answer`), else `log`. The board's
+attacks followed is AgentDojo's attack success. The scripted perfect agent runs
+AgentDojo's ground truth through the forms; gullible also obeys the injection
+it finds.
 
 ## API
 
