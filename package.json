@@ -27,7 +27,7 @@
     "dist"
   ],
   "scripts": {
-    "build": "tsc -p tsconfig.build.json",
+    "build": "tsc -p tsconfig.build.json && node -e \"require('node:fs').cpSync('src/bench/agentdojo/bridge.py', 'dist/bench/agentdojo/bridge.py')\"",
     "typecheck": "tsc --noEmit",
     "lint": "oxlint --deny-warnings",
     "test": "vitest run --passWithNoTests",
@@ -36,7 +36,7 @@
     "lint:ext": "web-ext lint -s dist-ext --warnings-as-errors",
     "check:amo": "node scripts/amo-listing.mjs check",
     "e2e": "pnpm build && pnpm build:ext && node e2e/run.mjs",
-    "external": "pnpm build && pnpm build:ext && node external/run.mjs"
+    "e2e:bench": "pnpm build && pnpm build:ext && node e2e/bench.mjs"
   },
   "devDependencies": {
     "@types/node": "^24.19.1",

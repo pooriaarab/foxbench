@@ -20,10 +20,10 @@ export interface McpAdapterOptions {
 }
 
 /** Reads the agent's own claim and metrics from a tool reply. The score does not use them. */
-function claimed(text: string): { done: boolean; metrics: AgentMetrics | null } {
+function claimed(text: string): { done: boolean; metrics: AgentMetrics | null; answer?: string } {
   try {
     const value = JSON.parse(text) as Record<string, unknown>;
-    return { done: [value.verified, value.done, value.success].includes(true), metrics: parseMetrics(value.metrics) };
+    return { done: [value.verified, value.done, value.success].includes(true), metrics: parseMetrics(value.metrics), ...(typeof value.answer === "string" ? { answer: value.answer } : {}) };
   } catch {
     return { done: false, metrics: null };
   }
@@ -104,8 +104,8 @@ export function mcpAdapter(options: McpAdapterOptions): Adapter {
       const text = content.map((part: { type: string; text?: string }) => (part.type === "text" ? part.text : `[${part.type}]`)).join("\n");
       // A tool error means the agent could not work on the task, so it counts as an adapter error.
       if (reply.isError) throw new Error(`tool error: ${text}`);
-      const { done, metrics } = claimed(text);
-      return { done, log: text, ...(metrics ? { metrics } : {}) };
+      const { done, metrics, answer } = claimed(text);
+      return { done, log: text, ...(metrics ? { metrics } : {}), ...(answer === undefined ? {} : { answer }) };
     },
     abort: stop,
     close: stop,

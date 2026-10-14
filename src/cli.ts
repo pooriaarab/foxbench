@@ -89,8 +89,11 @@ if (command === "list") {
   const ctx = benchContext();
   if (values.suite === undefined) {
     // Every benchmark, whether it can run here, and why not.
-    const rows = await Promise.all(benchmarks.map(async (b) => ({ id: b.id, title: b.title, where: b.where, licence: b.licence, measures: b.measures, scoring: b.scoring,
-      ...(await readiness(b, ctx)), cases: (await b.load(ctx, "full").catch(() => [])).length })));
+    const rows = await Promise.all(benchmarks.map(async (b) => {
+      const ready = await readiness(b, ctx);
+      const cases = ready.ready ? (await b.load(ctx, "full").catch(() => [])).length : 0;
+      return { id: b.id, title: b.title, where: b.where, licence: b.licence, measures: b.measures, scoring: b.scoring, ...ready, cases };
+    }));
     if (values.json) console.log(JSON.stringify(rows, null, 2));
     else for (const r of rows) console.log(`${r.id.padEnd(20)} ${status(r)}  ${r.cases} cases  ${r.title}`);
   } else {

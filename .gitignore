@@ -7,4 +7,4 @@ web-ext-artifacts/
 source.zip
 artifacts/score-*.json
 artifacts/*.png
-artifacts/external/
+artifacts/bench/

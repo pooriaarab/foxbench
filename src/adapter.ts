@@ -34,6 +34,8 @@ export interface TaskOutput {
   done: boolean;
   /** Free text for the record: steps, answers, errors. */
   log: string;
+  /** The answer to a question task, which some benchmarks' judges read (AgentDojo). */
+  answer?: string;
   /** Optional numbers about the run, kept apart from what the server measures. */
   metrics?: AgentMetrics;
 }
