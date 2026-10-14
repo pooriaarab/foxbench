@@ -3,14 +3,10 @@ import { spawnSync } from "node:child_process";
 import { mkdtempSync, readFileSync, readdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { beforeAll, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 
 const root = join(import.meta.dirname, "..");
 const FIXTURE = join(root, "tests/fixtures/mcp-server.mjs");
-beforeAll(() => {
-  const built = spawnSync(join(root, "node_modules/.bin/tsc"), ["-p", "tsconfig.build.json"], { cwd: root, encoding: "utf8" });
-  if (built.status !== 0) throw new Error(built.stdout + built.stderr);
-}, 60_000);
 
 function run(...args: string[]) {
   const out = mkdtempSync(join(tmpdir(), "fbn-cli-"));

@@ -6,7 +6,7 @@ import { mkdtempSync } from "node:fs";
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { beforeAll, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import { noopAdapter, type Adapter } from "../src/adapter.js";
 import { benchContext, benchmarkById } from "../src/bench/registry.js";
 import { missingRequired, runBenchmarks } from "../src/bench/run.js";
@@ -129,10 +129,6 @@ describe("L5 quick is a committed list", () => {
 });
 
 describe("L7 the CLI: doctor, --subset and --require", () => {
-  beforeAll(() => {
-    const built = spawnSync(join(root, "node_modules/.bin/tsc"), ["-p", "tsconfig.build.json"], { cwd: root, encoding: "utf8" });
-    if (built.status !== 0) throw new Error(built.stdout + built.stderr);
-  }, 60_000);
   it("doctor prints each benchmark, and run takes a quick subset with --require", () => {
     expect(cli("doctor", "--require", "foxbench")).toMatchObject({ status: 0, stdout: expect.stringMatching(/foxbench\s+ready/) });
     const r = cli("run", "--agent", "noop", "--suite", "all", "--subset", "quick", "--require", "foxbench", "--out", mkdtempSync(join(tmpdir(), "fbn-l7-")));

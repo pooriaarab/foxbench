@@ -3,7 +3,7 @@
 // judge, then close.
 import { spawnSync } from "node:child_process";
 import { join } from "node:path";
-import { beforeAll, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import { noopAdapter, type Adapter } from "../src/adapter.js";
 import { benchContext, benchmarkById, benchmarks, readiness, resolveSuites } from "../src/bench/registry.js";
 import type { Benchmark, SubsetName, Verdict } from "../src/bench/types.js";
@@ -144,10 +144,6 @@ describe("B7 case ids are unique and equal the task ids", () => {
 });
 
 describe("foxbench list reads the registry", () => {
-  beforeAll(() => {
-    const built = spawnSync(join(root, "node_modules/.bin/tsc"), ["-p", "tsconfig.build.json"], { cwd: root, encoding: "utf8" });
-    if (built.status !== 0) throw new Error(built.stdout + built.stderr);
-  }, 60_000);
   it("prints each benchmark with its readiness", () => {
     const rows = JSON.parse(cli("--json").stdout) as { id: string; ready: boolean; cases: number }[];
     expect(rows.map((r) => r.id)).toEqual(benchmarks.map((b) => b.id));
