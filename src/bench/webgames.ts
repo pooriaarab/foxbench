@@ -66,7 +66,7 @@ export function parseCases(dir: string): WebgamesCase[] {
 }
 
 /** One writer at a time per cache dir, across processes: parallel runs and test files share the cache (G13). */
-async function locked<T>(dir: string, work: () => Promise<T>): Promise<T> {
+export async function locked<T>(dir: string, work: () => Promise<T>): Promise<T> {
   const lock = `${dir}.lock`;
   mkdirSync(join(dir, ".."), { recursive: true });
   for (;;) {
