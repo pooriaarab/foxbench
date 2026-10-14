@@ -7,6 +7,7 @@ import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync } from "node
 import { join, resolve, sep } from "node:path";
 import { promisify } from "node:util";
 import quick from "../subsets/webarena-infinity.json" with { type: "json" };
+import { pythonEnv, pythonReadiness } from "../python.js";
 import { pickSubset } from "../subsets.js";
 import type { BenchContext, Benchmark, Case, Env, Episode, Readiness } from "../types.js";
 import { fetchUpstream, WAI_REF, WAI_REPO } from "./fetch.js";
@@ -19,7 +20,7 @@ const KINDS = ["real", "function"] as const;
 type Kind = (typeof KINDS)[number];
 
 interface TaskDef { id: string; difficulty?: "easy" | "medium" | "hard"; instruction: string; verify: string }
-type WaiEnv = { upstream: string; helper: string; stage: string; env: NodeJS.ProcessEnv; servers: Map<string, Promise<AppServer>> };
+type WaiEnv = { python: string; upstream: string; helper: string; stage: string; env: NodeJS.ProcessEnv; servers: Map<string, Promise<AppServer>> };
 const running = new WeakMap<Episode, { app: string; verify: string; port: number }>();
 
 const apps = (upstream: string) => readdirSync(join(upstream, "apps")).filter((a) => KINDS.every((k) => existsSync(join(upstream, "apps", a, `${k}-tasks.json`)))).toSorted();
@@ -42,8 +43,8 @@ export const waiBenchmark = (options: { startTimeoutMs?: number } = {}): Benchma
   measures: ["task"],
   scoring: "programmatic",
   async check(ctx): Promise<Readiness> {
-    if ((await tool(ctx.env, "python3", "--version")) === null) return { ready: false, reason: "python3 is not installed", fix: "install python3 (3.10 or later)" };
-    if ((await tool(ctx.env, "python3", "-I", "-c", "import requests")) === null) return { ready: false, reason: "python3 cannot import requests, which the task verifiers use", fix: "install requests for the system python3, for example `apt install python3-requests`" };
+    const python = await pythonReadiness(ctx.env);
+    if (!python.ready) return python;
     if ((await tool(ctx.env, "git", "--version")) === null) return { ready: false, reason: "git is not installed, so the pinned upstream cannot be fetched", fix: "install git" };
     return { ready: true };
   },
@@ -54,7 +55,7 @@ export const waiBenchmark = (options: { startTimeoutMs?: number } = {}): Benchma
   },
   async up(ctx): Promise<Env> {
     const upstream = await fetchUpstream(ctx.cacheDir);
-    return { upstream, helper: writeHelper(ctx.cacheDir), stage: mkdtempSync(join(ctx.cacheDir, "wai-run-")), env: ctx.env, servers: new Map() } satisfies WaiEnv;
+    return { python: await pythonEnv(ctx), upstream, helper: writeHelper(ctx.cacheDir), stage: mkdtempSync(join(ctx.cacheDir, "wai-run-")), env: ctx.env, servers: new Map() } satisfies WaiEnv;
   },
   async start(raw, item) {
     const env = raw as WaiEnv;
@@ -64,7 +65,7 @@ export const waiBenchmark = (options: { startTimeoutMs?: number } = {}): Benchma
     // The verifier must be a file inside its own app (WI7).
     const appDir = resolve(env.upstream, "apps", app);
     if (!resolve(appDir, task.verify).startsWith(appDir + sep)) throw new Error(`the verifier of ${item.id} is outside its app: ${task.verify}`);
-    if (!env.servers.has(app)) env.servers.set(app, startApp(env.upstream, env.stage, app, env.env, options.startTimeoutMs ?? 10_000));
+    if (!env.servers.has(app)) env.servers.set(app, startApp(env.python, env.upstream, env.stage, app, env.env, options.startTimeoutMs ?? 10_000));
     const server = await env.servers.get(app)!.catch((error) => { env.servers.delete(app); throw error; });
     await resetApp(server);
     // The run loop puts a proxy on a new port in front of each case, so the agent's browser gets a new origin and a page's
@@ -78,7 +79,7 @@ export const waiBenchmark = (options: { startTimeoutMs?: number } = {}): Benchma
     const env = raw as WaiEnv;
     const started = running.get(episode);
     if (!started) throw new Error("webarena-infinity did not start this episode");
-    const { passed, message } = await runVerifier(env.helper, join(env.upstream, "apps", started.app), started.verify, `http://127.0.0.1:${started.port}`, env.env);
+    const { passed, message } = await runVerifier(env.python, env.helper, join(env.upstream, "apps", started.app), started.verify, `http://127.0.0.1:${started.port}`, env.env);
     return { success: passed, attack: null, reasons: passed ? [] : [message], judgedBy: "programmatic" };
   },
   async down(raw) {

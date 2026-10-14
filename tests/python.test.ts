@@ -70,7 +70,7 @@ describe("the Python environment", () => {
     symlinkSync(execFileSync("which", ["python3"], { encoding: "utf8" }).trim(), join(bin, "python3"));
     script(bin, "uv", `echo "$@" >> ${log}\nif [ "$1" = venv ]; then mkdir -p "$2/bin"; : > "$2/bin/python"; chmod +x "$2/bin/python"; fi`);
     const python = await pythonEnv({ cacheDir, env: { PATH: `${bin}:/usr/bin:/bin` } });
-    const [venv, install] = readFileSync(log, "utf8").trim().split("\n");
+    const [venv, install] = readFileSync(log, "utf8").trim().split("\n").filter((l) => l !== "--version");
     expect(venv).toMatch(/^venv .*\.build-/);
     expect(install).toMatch(new RegExp(`^pip install --python .*\\.build-.*/bin/python ${REQUIREMENTS.join(" ")}$`));
     expect(python).toBe(join(pythonDir(cacheDir), "bin", "python"));
