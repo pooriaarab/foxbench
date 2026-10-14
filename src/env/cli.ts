@@ -53,7 +53,9 @@ async function openTunnel(gcp: Gcp, vm: string, port: { remote: number; local: n
   while (Date.now() < deadline) {
     const pid = startTunnel(gcp, vm, port, log);
     while (alive(pid) && Date.now() < deadline) {
-      if (readFileSync(log, "utf8").includes("Listening on port")) return pid;
+      // gcloud binds the local port only once its tunnel test passes. Its "Listening on port"
+      // line can stay in its stdout buffer when stdout is a file, so the log is not read.
+      if (!(await portFree(port.local))) return pid;
       await sleep(200);
     }
     if (alive(pid)) process.kill(-pid);

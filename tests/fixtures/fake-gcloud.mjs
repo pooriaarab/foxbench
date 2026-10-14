@@ -2,9 +2,10 @@
 // A fake gcloud for tests/env.test.ts. It appends its argv (and the startup
 // script it was given) to FAKE_GCLOUD_LOG as one JSON line, then acts:
 // FAKE_GCLOUD_FAIL=<word> fails any call that has that word, `list` prints
-// FAKE_GCLOUD_LIST (a JSON file) and a tunnel prints the line gcloud prints
-// and stays up until it is killed.
+// FAKE_GCLOUD_LIST (a JSON file) and a tunnel binds its local port, as gcloud
+// does once its test passes, and stays up until it is killed.
 import { appendFileSync, readFileSync } from "node:fs";
+import { createServer } from "node:net";
 
 const argv = process.argv.slice(2);
 const script = argv.find((a) => a.startsWith("--metadata-from-file=startup-script="));
@@ -17,6 +18,6 @@ if (fail && argv.includes(fail)) {
 if (argv.includes("list")) console.log(process.env.FAKE_GCLOUD_LIST ? readFileSync(process.env.FAKE_GCLOUD_LIST, "utf8") : "[]");
 else if (argv.includes("start-iap-tunnel")) {
   const port = argv.find((a) => a.startsWith("--local-host-port="))?.split(":")[1];
-  process.stderr.write(`Testing if tunnel connection works.\nListening on port [${port}].\n`);
-  setInterval(() => {}, 1000);
+  process.stderr.write("Testing if tunnel connection works.\n");
+  createServer().listen(Number(port), "127.0.0.1");
 } else console.log("[]");
