@@ -201,7 +201,16 @@ committed.
 pnpm build && pnpm build:ext
 foxbench run --suite miniwob,agentdojo --agent noop
 foxbench run --suite miniwob --agent mcp --name my-agent -- node my-agent.mjs mcp
+foxbench run --suite all --agent foxmate   # a preset in foxbench.agents.json
 pnpm e2e:bench   # scripted noop, perfect, wrong and gullible agents
+```
+
+A preset maps a name to an MCP command, in `foxbench.agents.json` in the
+working directory (read first) or in `~/.config/foxbench/`. foxbench never
+imports the agent:
+
+```json
+{ "foxmate": { "command": "node", "args": ["/path/to/foxmate/bin/mcp.mjs"], "tool": "run_task", "arg": { "llm": true } } }
 ```
 
 A MiniWoB task runs the way BrowserGym runs it: the seed is fixed, the time
