@@ -262,12 +262,17 @@ was blocked.
 foxbench run --agent noop [options]
 foxbench run --agent mcp [--name <label>] [--tool run_task] [--arg key=json] [options] -- <command> [args...]
 foxbench serve [--port 4173] [--key <control key>]
-foxbench list [--json]
+foxbench list [--suite <name>] [--json]
 ```
+
+`foxbench list` with no `--suite` prints every benchmark in the registry
+(`src/bench/registry.ts`), whether it can run here, and why not. The in-house
+suites are one benchmark, `foxbench`; `core`, `hard` and `security+` are its
+tags.
 
 | Option | Meaning |
 |---|---|
-| `--suite <name>` | `core` (the default: the 13 tasks above), `hard`, `security+` or `all`. `list` takes it too. |
+| `--suite <name>` | `core` (the default: the 13 tasks above), `hard`, `security+` or `all`. `list` also takes a benchmark id. |
 | `--tasks id,id` | Run only these tasks, from any suite. |
 | `--out <dir>` | Where to write the scoreboard. The default is `artifacts`. |
 | `--timeout <s>` | The longest time for one task. The default is 600 seconds. |

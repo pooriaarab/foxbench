@@ -12,6 +12,7 @@ import { referenceAdapter } from "./reference.js";
 
 const root = join(import.meta.dirname, "..");
 const foxbench = benchmarkById("foxbench")!;
+const cli = (...args: string[]) => spawnSync(process.execPath, [join(root, "dist/cli.js"), "list", ...args], { encoding: "utf8", timeout: 60_000 });
 
 /** Runs every case of a subset through the interface, one after another. */
 async function play(bench: Benchmark, subset: SubsetName, adapter: Adapter): Promise<{ id: string; verdict: Verdict }[]> {
@@ -37,9 +38,11 @@ function wrongAdapter(): Adapter {
   const reference = referenceAdapter("careful");
   return {
     name: "wrong",
-    runTask: ({ url, goal }) => {
+    runTask: async ({ url, goal }) => {
       const at = HARD.findIndex((t) => t.goal === goal);
-      return reference.runTask({ url, goal: HARD[(at + 1) % HARD.length]!.goal });
+      // The other task's steps may not fit this site; the agent still claims done.
+      await reference.runTask({ url, goal: HARD[(at + 1) % HARD.length]!.goal }).catch(() => {});
+      return { done: true, log: "did the next task" };
     },
   };
 }
@@ -145,7 +148,6 @@ describe("foxbench list reads the registry", () => {
     const built = spawnSync(join(root, "node_modules/.bin/tsc"), ["-p", "tsconfig.build.json"], { cwd: root, encoding: "utf8" });
     if (built.status !== 0) throw new Error(built.stdout + built.stderr);
   }, 60_000);
-  const cli = (...args: string[]) => spawnSync(process.execPath, [join(root, "dist/cli.js"), "list", ...args], { encoding: "utf8", timeout: 60_000 });
   it("prints each benchmark with its readiness", () => {
     const rows = JSON.parse(cli("--json").stdout) as { id: string; ready: boolean; cases: number }[];
     expect(rows.map((r) => r.id)).toEqual(benchmarks.map((b) => b.id));

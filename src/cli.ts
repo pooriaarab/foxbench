@@ -4,6 +4,7 @@
 import { randomBytes } from "node:crypto";
 import { parseArgs } from "node:util";
 import { noopAdapter, type Adapter } from "./adapter.js";
+import { benchContext, benchmarks, readiness, resolveSuites } from "./bench/registry.js";
 import { mcpAdapter } from "./mcp.js";
 import { runSuite } from "./runner.js";
 import { toMarkdown, writeScore } from "./score.js";
@@ -15,8 +16,8 @@ const USAGE = `Usage:
   foxbench run --agent noop [--suite core] [--tasks id,id] [--out artifacts] [--timeout <s>] [--min-success <0-1>] [--fixed-ports <base>]
   foxbench run --agent mcp [--name <label>] [--tool run_task] [--arg key=json] [options] -- <command> [args...]
   foxbench serve [--port 4173] [--key <control key>]
-  foxbench list [--suite core] [--json]
-Suites: core (the default), hard, security+, all.`;
+  foxbench list [--suite <name>] [--json]   (no --suite: every benchmark and whether it is ready)
+Suites: core (the default), hard, security+, all. list also takes a benchmark id.`;
 
 function fail(message: string): never {
   console.error(`${message}\n${USAGE}`);
@@ -63,14 +64,25 @@ function adapterFor(name: string | undefined): Adapter {
   return fail(name ? `Unknown agent "${name}".` : "Give an agent with --agent.");
 }
 
-const SUITE_NAMES = [...SUITES, "all"] as const;
-const suiteName = values.suite ?? "core";
-if (!(SUITE_NAMES as readonly string[]).includes(suiteName)) fail(`Unknown suite "${suiteName}". The suites are ${SUITE_NAMES.join(", ")}.`);
-const suite = tasksIn(suiteName as Suite | "all");
-
 if (command === "list") {
-  if (values.json) console.log(JSON.stringify(suite.map(({ id, suite: s, tier, site, path, goal, trap }) => ({ id, suite: s, tier, site, path, goal, trap: trap ?? null })), null, 2));
-  else for (const t of suite) console.log(`${t.id.padEnd(24)} ${t.suite.padEnd(10)} ${t.tier.padEnd(7)}${t.trap ? "trap " : "     "}${t.goal}`);
+  const ctx = benchContext();
+  if (values.suite === undefined) {
+    // Every benchmark, whether it can run here, and why not.
+    const rows = await Promise.all(benchmarks.map(async (b) => ({ id: b.id, title: b.title, where: b.where, licence: b.licence, measures: b.measures, scoring: b.scoring,
+      ...(await readiness(b, ctx)), cases: (await b.load(ctx, "full").catch(() => [])).length })));
+    if (values.json) console.log(JSON.stringify(rows, null, 2));
+    else for (const r of rows) console.log(`${r.id.padEnd(20)} ${r.ready ? "ready" : `skipped: ${r.reason}${r.fix ? ` (fix: ${r.fix})` : ""}`}  ${r.cases} cases  ${r.title}`);
+  } else {
+    let picked;
+    try {
+      picked = resolveSuites(values.suite);
+    } catch (error) {
+      fail(error instanceof Error ? error.message : String(error));
+    }
+    const cases = (await Promise.all(picked.map(async ({ benchmark, subset }) => (await benchmark.load(ctx, subset)).map((c) => ({ benchmark: benchmark.id, ...c }))))).flat();
+    if (values.json) console.log(JSON.stringify(cases, null, 2));
+    else for (const c of cases) console.log(`${c.id.padEnd(24)} ${c.benchmark.padEnd(10)} ${c.tags.join(",").padEnd(28)} ${c.goal ?? ""}`);
+  }
 } else if (command === "serve") {
   const port = Number(values.port ?? 4173);
   if (!Number.isInteger(port) || port < 0 || port > 65535) fail(`--port must be a port number, not ${values.port}.`);
@@ -85,6 +97,10 @@ if (command === "list") {
   for (const t of tasks) console.log(`  ${server.url}/__fbn/start/${t.id}?key=${key}`);
   console.log(`Open a start link to reset the state and begin that task. The verdict is at ${server.url}/__fbn/result?key=${key}. Press Ctrl+C to stop.`);
 } else if (command === "run") {
+  const SUITE_NAMES = [...SUITES, "all"] as const;
+  const suiteName = values.suite ?? "core";
+  if (!(SUITE_NAMES as readonly string[]).includes(suiteName)) fail(`Unknown suite "${suiteName}". The suites are ${SUITE_NAMES.join(", ")}.`);
+  const suite = tasksIn(suiteName as Suite | "all");
   const adapter = adapterFor(values.agent);
   const wanted = values.tasks?.split(",").map((s) => s.trim()).filter(Boolean);
   const unknown = wanted?.filter((id) => !tasks.some((t) => t.id === id)) ?? [];
