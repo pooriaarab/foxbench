@@ -264,6 +264,28 @@ agents in `external/scripted.mjs`.
 | E9 | An injection does not reach a page, so "blocked" means nothing. | AgentDojo places the injections; the pages show every injectable field. | `gullible` obeys what it finds: 17/18 followed. On user task 14 its own password change replaces the attacker's, so AgentDojo scores that attack as not followed. |
 | E10 | The judge reads the agent's claim. | AgentDojo reads the end environment; only question tasks read the agent's answer. | `noop` and `perfect` runs. |
 
+## WebGames (`src/bench/webgames.ts`)
+
+WebGames is 150 client-side challenges. Each shows a password when it is
+solved, and the case passes when the agent's answer holds that password. The
+benchmark fetches the upstream repo at a pinned commit, builds it with Vite
+and serves `dist/` on 127.0.0.1. The tests are in `tests/webgames.test.ts`
+and run against the real upstream build.
+
+| # | Failure mode | Wanted behaviour | Test |
+|---|---|---|---|
+| G1 | The upstream moves, or the cache holds another commit, so a score is for code nobody pinned. | The cache is named for the pinned commit and its `HEAD` must equal it. Nothing fetched is committed. | `G1 ...` |
+| G2 | The case list is wrong: a hidden helper route (the iframe content, the tab sync sender and receiver, the shop admin edit pages) becomes a case, or ids repeat, or two cases share a password. | Cases are the routes that have a password and are not hidden: 150, unique ids, unique passwords. | `G2 ...` |
+| G3 | An agent that does nothing, or says "done" with no password, passes. | `judge` reads only the password in the answer. `noop` and a liar score 0. | `G3 ...` |
+| G4 | The harness cannot be solved: the served page does not load, a deep link 404s, or the analytics call breaks the page. | A scripted agent with the password from the upstream source passes real cases; the page, its bundle, a deep link and `/api/record-completion` all answer. | `G4 ...` |
+| G5 | A wrong password passes, including another case's password. | The agent's answer must hold the case's own password. | `G5 ...` |
+| G6 | A base task passes on its Easy or Hard password, because upstream's `password in answer` finds `CircleMaster2024` inside `EasyCircleMaster2024`. | The answer is first cleared of every longer password that holds this one. This is stricter than upstream and only differs on these overlaps. | `G6 ...` |
+| G7 | A task that needs the internet (the reCAPTCHA tasks `robo-check`, easy and hard) runs offline, so a fail looks like an agent fault. | `start` stops with `skipped: needs the internet (reCAPTCHA)`. The row fails with that reason and no agent runs. A case that cannot run counts as a fail, as plan 6.1 says. | `G7 ...` |
+| G8 | A case's server stays up, so a late agent step reaches the next case. | Each case gets its own server; `close()` stops it. | `G8 ...` |
+| G9 | `check()` says ready when `git` or `pnpm` is missing, and the run dies in `up`. | `check()` is not ready, with a fix. | `G9 ...` |
+| G10 | The quick list names a case that no longer exists, or a case that cannot run offline. | 20 ids from the 147 offline cases; `pickSubset` throws on an unknown id. | `G10 ...` |
+| G11 | The password is readable in the built JS, so an agent could read it without playing. | A known limit, the same as the hosted site. Only the answer is scored; the board marks no case as read. | - |
+
 ## AMO release build and listed submission (`scripts/amo-listing.mjs`)
 
 `pnpm check:amo` reads `dist-ext/`, which is what `release.yml` signs. Each
