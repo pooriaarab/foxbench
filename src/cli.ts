@@ -20,11 +20,19 @@ const USAGE = `Usage:
   foxbench serve [--port 4173] [--key <control key>]
   foxbench list [--suite <name>] [--json]   (no --suite: every benchmark and whether it is ready)
   foxbench doctor [--require id,id]         (each benchmark's check, with the fix)
+  foxbench env up|down|status <env>         (a GCP VM per environment; foxbench env --help)
 Suites: core (the default), hard, security+, all, or benchmark ids, comma-separated.`;
 
 function fail(message: string): never {
   console.error(`${message}\n${USAGE}`);
   process.exit(2);
+}
+
+if (process.argv[2] === "env") {
+  // foxbench env has its own options; see src/env/cli.ts.
+  const { envCli } = await import("./env/cli.js");
+  await envCli(process.argv.slice(3));
+  process.exit();
 }
 
 let parsed;
