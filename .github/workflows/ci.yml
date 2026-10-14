@@ -25,6 +25,8 @@ jobs:
           cache: pnpm
       - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
       - run: pnpm install --frozen-lockfile
+      # The WebArena-Verified tests load the task list through uv.
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
       - run: pnpm ci:local
   e2e:
     runs-on: ubuntu-latest

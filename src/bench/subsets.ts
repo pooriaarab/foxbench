@@ -4,6 +4,7 @@
 import browsesafe from "./subsets/browsesafe.json" with { type: "json" };
 import foxbench from "./subsets/foxbench.json" with { type: "json" };
 import miniwob from "./subsets/miniwob.json" with { type: "json" };
+import webarenaVerified from "./subsets/webarena-verified.json" with { type: "json" };
 import webgames from "./subsets/webgames.json" with { type: "json" };
 import type { Case, SubsetName } from "./types.js";
 
@@ -13,6 +14,7 @@ const LISTS: SubsetLists = {
   miniwob,
   webgames,
   browsesafe,
+  "webarena-verified": webarenaVerified,
 };
 
 /** The cases of a subset, from a benchmark's full list. Throws when a list names a case the benchmark lacks (L5). */
