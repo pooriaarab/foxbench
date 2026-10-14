@@ -47,13 +47,14 @@ function shop(user: () => UserChannel): Benchmark {
 }
 
 const teal = () => scriptedUser({ opening: "Hi, I need a shirt.", answer: (q) => (/colou?r/i.test(q) ? "Teal, please." : "I don't know.") });
+const bye = () => scriptedUser({ answer: () => "Thanks, that is all. ###STOP###" });
 const page = async (origin: string) => (await fetch(`${origin}/user/`)).text();
 const say = (origin: string, q: string) => fetch(`${origin}/user/`, { method: "POST", body: new URLSearchParams({ q }), redirect: "manual" });
 const answers = (html: string) => [...html.matchAll(/<p class="user">([^<]*)<\/p>/g)].map((m) => m[1]!);
 
 /** Asks (or not), then orders what the user said, or a guess. */
 function shopper(mode: "ask" | "guess" | "ask-only" | "wait", seen: { pages: string[]; statuses: number[] } = { pages: [], statuses: [] }): Adapter {
-  let stop = () => {};
+  let stop: (() => void) | undefined;
   return {
     name: mode,
     async runTask({ url }) {
@@ -70,20 +71,20 @@ function shopper(mode: "ask" | "guess" | "ask-only" | "wait", seen: { pages: str
       if (mode !== "ask-only") await fetch(`${origin}/order`, { method: "POST", body: new URLSearchParams({ colour }) });
       return { done: true, log: mode };
     },
-    abort: async () => stop(),
+    abort: async () => stop?.(),
   };
 }
 
 const run = (bench: Benchmark, adapter: Adapter, extra = {}) => runBenchmarks({ adapter, runs: [{ benchmark: bench, subset: "full" }], graceMs: 200, ...extra });
 
 /** A fake Anthropic API: records each request and answers with `say(i)`, or with an error status. */
-function fakeApi(say: (i: number) => string | { status: number } | { refusal: true }, delay: (i: number) => number = () => 0) {
+function fakeApi(script: (i: number) => string | { status: number } | { refusal: true }, delay: (i: number) => number = () => 0) {
   const calls: { url: string; headers: Headers; body: { model: string; system: string; messages: { role: string; content: string }[] } }[] = [];
   const fakeFetch = (async (input: string | URL | Request, init?: RequestInit) => {
     const i = calls.length;
     calls.push({ url: String(input instanceof Request ? input.url : input), headers: new Headers(init?.headers), body: JSON.parse(String(init?.body)) });
     await new Promise((r) => setTimeout(r, delay(i)));
-    const out = say(i);
+    const out = script(i);
     if (typeof out === "object" && "status" in out) return new Response(JSON.stringify({ type: "error", error: { type: "invalid_request_error", message: "bad" } }), { status: out.status, headers: { "content-type": "application/json" } });
     const refusal = typeof out === "object";
     return new Response(JSON.stringify({ id: `msg_${i}`, type: "message", role: "assistant", model: "m", content: refusal ? [] : [{ type: "text", text: out }],
@@ -145,7 +146,6 @@ describe("Q3 an empty message is refused and not counted", () => {
 describe("Q5 the user's stop ends the episode", () => {
   it("aborts the agent, records endedEarly, and hides the token", async () => {
     const seen = { pages: [] as string[], statuses: [] as number[] };
-    const bye = () => scriptedUser({ answer: () => "Thanks, that is all. ###STOP###" });
     const started = Date.now();
     const board = await run(shop(bye), shopper("wait", seen));
     expect(board.results[0]).toMatchObject({ endedEarly: true, asks: 1 });

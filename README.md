@@ -290,6 +290,11 @@ about the agent goes in through `FOXBENCH_AGENT_VERSION`, `FOXBENCH_MODEL`,
 `FOXBENCH_QUANT`, `FOXBENCH_LLAMA_FLAGS` and `FOXBENCH_NETWORK` (home or
 cloud), and the board marks it as reported.
 
+A benchmark with a user sets `Episode.userChannel` (`src/bench/user.ts`). The
+agent finds a chat at `/user/` on the URL it got; a scripted user or a Claude
+user answers. The board counts the agent's messages as asks and names who
+played the user in each result.
+
 `done` is kept in the record but does not change the score. A task whose
 `runTask` throws or times out counts as an adapter error in the scoreboard.
 
@@ -317,6 +322,7 @@ tags.
 | `--out <dir>` | Where to write the scoreboard. The default is `artifacts`. |
 | `--timeout <s>` | The longest time for one task. The default is 600 seconds. |
 | `--min-success <0-1>` | Exit 1 when the success rate is lower. |
+| `--user-model <id>` | The Claude model that plays the user in benchmarks that have one (tau2). The default is `claude-sonnet-5-5`; `claude-haiku-5-5` is the cheap one. It needs `ANTHROPIC_API_KEY` (and `ANTHROPIC_WORKSPACE_ID` when the key needs one). The board's fingerprint names the model. |
 | `--arg key=json` | An extra argument for each MCP tool call, for example `--arg llm=true`. Repeat it for more. |
 
 `foxbench run` exits 1 when every task ended in an adapter error, for example

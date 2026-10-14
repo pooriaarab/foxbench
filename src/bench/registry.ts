@@ -8,6 +8,7 @@ import { browsesafeBenchmark } from "./browsesafe.js";
 import { foxbenchBenchmark } from "./foxbench.js";
 import { miniwobBenchmark } from "./miniwob/index.js";
 import type { BenchContext, Benchmark, Readiness, SubsetName } from "./types.js";
+import { DEFAULT_USER_MODEL } from "./user.js";
 import { waiBenchmark } from "./wai/index.js";
 import { webgamesBenchmark } from "./webgames.js";
 
@@ -18,7 +19,7 @@ export const benchmarkById = (id: string): Benchmark | undefined => benchmarks.f
 
 export function benchContext(over: Partial<BenchContext> = {}): BenchContext {
   const env = over.env ?? process.env;
-  return { cacheDir: env.FOXBENCH_CACHE ?? join(homedir(), ".cache", "foxbench"), ...(env.FIREFOX ? { firefox: env.FIREFOX } : {}), env, ...over };
+  return { cacheDir: env.FOXBENCH_CACHE ?? join(homedir(), ".cache", "foxbench"), userModel: DEFAULT_USER_MODEL, ...(env.FIREFOX ? { firefox: env.FIREFOX } : {}), env, ...over };
 }
 
 /** The names --suite takes: the in-house suites, all, and each benchmark id. */

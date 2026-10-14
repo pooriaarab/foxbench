@@ -20,6 +20,8 @@ export interface Fingerprint {
   workers: number;
   /** The LLM judges of the run: an LLM-judged score depends on the judge model (J6). */
   judges: { name: string; model: string; where: Judge["where"] }[];
+  /** The simulated users of the run, such as "llm:claude-sonnet-5-5" (plan 5.4). */
+  users: string[];
   reported: { agentVersion: string | null; model: string | null; quant: string | null; llamaFlags: string | null; network: string | null };
 }
 
@@ -32,7 +34,7 @@ const read = (run: () => string): string | null => {
 };
 const versions = new Map<string, string | null>();
 
-export function fingerprint(options: { firefox?: string; env: NodeJS.ProcessEnv; workers?: number; judges?: Judge[] }): Fingerprint {
+export function fingerprint(options: { firefox?: string; env: NodeJS.ProcessEnv; workers?: number; judges?: Judge[]; users?: string[] }): Fingerprint {
   const firefox = options.firefox ?? "firefox";
   if (!versions.has(firefox)) versions.set(firefox, read(() => execFileSync(firefox, ["--version"], { encoding: "utf8", timeout: 15_000, stdio: ["ignore", "pipe", "ignore"] })));
   const workers = options.workers ?? 1;
@@ -47,6 +49,7 @@ export function fingerprint(options: { firefox?: string; env: NodeJS.ProcessEnv;
     serial: workers === 1,
     workers,
     judges: (options.judges ?? []).map((j) => ({ name: j.name, model: j.model, where: j.where })),
+    users: options.users ?? [],
     reported: { agentVersion: env("FOXBENCH_AGENT_VERSION"), model: env("FOXBENCH_MODEL"), quant: env("FOXBENCH_QUANT"), llamaFlags: env("FOXBENCH_LLAMA_FLAGS"), network: env("FOXBENCH_NETWORK") },
   };
 }
