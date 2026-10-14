@@ -10,20 +10,15 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { extname, join, normalize } from "node:path";
 import { serveCase } from "../serve.js";
 import { pickSubset } from "../subsets.js";
+import { MINIWOB_EPISODES, MINIWOB_TASKS } from "./tasks.js";
 import type { Benchmark, Episode, Verdict } from "../types.js";
 
 export const MINIWOB_REPO = "https://github.com/Farama-Foundation/miniwob-plusplus.git";
 export const MINIWOB_COMMIT = "33c3b4ddef8c6eb67c57a29663d844b1eda7e614";
 
-/** 30 tasks over five kinds of web work. The seed of each is fixed, so two runs see the same problem. */
-export const MINIWOB_TASKS = [
-  ...["click-button", "click-button-sequence", "click-checkboxes", "click-collapsible", "click-dialog", "click-link", "click-option", "click-tab-2", "click-widget", "navigate-tree"].map((id) => [id, "click"]),
-  ...["enter-text", "enter-password", "focus-text", "login-user", "login-user-popup", "form-sequence-2", "use-spinner", "choose-list"].map((id) => [id, "form"]),
-  ...["search-engine", "use-autocomplete", "phone-book", "social-media"].map((id) => [id, "search"]),
-  ...["choose-date-easy", "choose-date", "enter-date", "enter-time"].map((id) => [id, "date"]),
-  ...["book-flight", "email-inbox", "multi-orderings", "social-media-some"].map((id) => [id, "multi-step"]),
-].map(([id = "", kind = ""], i) => ({ id, kind, seed: 1000 + i }));
-type MiniwobTask = (typeof MINIWOB_TASKS)[number];
+export type MiniwobEpisode = (typeof MINIWOB_EPISODES)[number];
+/** The goal cache key: the same task and page seed make the same problem (E15). */
+export const goalKey = (e: MiniwobEpisode) => `${e.task}#${e.seed}`;
 
 /** Fetches MiniWoB++ at the pinned commit once, and returns its html directory. */
 export function fetchMiniwob(dir: string) {
@@ -76,12 +71,12 @@ window.addEventListener("load", function () { setTimeout(function () {
 const TYPES: Record<string, string> = { ".html": "text/html; charset=utf-8", ".js": "text/javascript", ".css": "text/css", ".png": "image/png", ".gif": "image/gif", ".jpg": "image/jpeg", ".svg": "image/svg+xml", ".json": "application/json" };
 
 /** Starts one task's server. `goal` is the goal from prepare, or null while preparing. */
-export async function startMiniwob(html: string, task: MiniwobTask, goal: string | null) {
+export async function startMiniwob(html: string, task: MiniwobEpisode, goal: string | null) {
   const nonce = Math.random().toString(36).slice(2);
   const state = { goals: [] as string[], rewards: [] as { raw: number; reward: number; reason: string }[] };
   const signals: (() => void)[] = [];
   const ended = new Promise<void>((resolve) => signals.push(resolve));
-  const path = `/miniwob/${task.id}.html`;
+  const path = `/miniwob/${task.task}.html`;
   const server = await serveCase(async (req, body, url) => {
     if (url.pathname.startsWith("/__ext/")) {
       if (req.method !== "POST" || url.searchParams.get("nonce") !== nonce) return { status: 403, type: "text/plain", body: "forbidden" };
@@ -120,39 +115,41 @@ export async function startMiniwob(html: string, task: MiniwobTask, goal: string
 }
 
 /**
- * The goal each task's seed makes, read in a real Firefox the way BrowserGym
- * reads it (core.getUtterance after the episode starts). Cached per commit
- * and per browser: a goal can hold a time in the browser's time zone and
- * locale, and Ichabod's Firefox has others than this computer's.
+ * The goal each episode's seed makes, read in a real Firefox the way
+ * BrowserGym reads it (core.getUtterance after the episode starts). Cached
+ * per commit and per browser: a goal can hold a time in the browser's time
+ * zone and locale, and Ichabod's Firefox has others than this computer's.
+ * One Firefox serves the whole run, and opens on the first goal not cached,
+ * so a quick run does not read all 625.
  */
-export async function prepareGoals(html: string, cache: string, firefox?: string): Promise<Record<string, string>> {
-  const { browserMode, launch, tunnel } = await import("create-foxkit/e2e");
-  const remote = browserMode() === "ichabod";
-  const file = join(cache, `miniwob-goals-${MINIWOB_COMMIT.slice(0, 12)}${remote ? "-ichabod" : ""}.json`);
-  const cached = existsSync(file) ? JSON.parse(readFileSync(file, "utf8")) : {};
-  const missing = MINIWOB_TASKS.filter((t) => !cached[`${t.id}#${t.seed}`]);
-  if (missing.length) {
-    const fox = await launch({ extension: EXTENSION, headless: true, ...(firefox && !remote ? { firefox } : {}) });
-    try {
-      for (const task of missing) {
-        const run = await startMiniwob(html, task, null);
-        // Ichabod cannot reach 127.0.0.1: open the page on the shared tunnel.
-        const mount = remote ? await tunnel(Number(new URL(run.url).port)) : null;
-        const page = await fox.open(mount ? `${mount.url}${run.startPath}` : run.url);
-        for (let i = 0; i < 100 && !run.state.goals.length; i++) await new Promise((r) => setTimeout(r, 50));
-        await page.close();
-        await mount?.close();
-        await run.close();
-        if (!run.state.goals.length) throw new Error(`MiniWoB task ${task.id} did not start in Firefox`);
-        cached[`${task.id}#${task.seed}`] = run.state.goals[0];
-      }
-    } finally {
-      await fox.close();
-    }
-    mkdirSync(cache, { recursive: true });
-    writeFileSync(file, `${JSON.stringify(cached, null, 2)}\n`);
-  }
-  return cached;
+export function goalReader(html: string, cache: string, firefox?: string) {
+  let fox: Awaited<ReturnType<(typeof import("create-foxkit/e2e"))["launch"]>> | undefined;
+  let goals: Record<string, string> | undefined;
+  return {
+    async goal(episode: MiniwobEpisode): Promise<string> {
+      const { browserMode, launch, tunnel } = await import("create-foxkit/e2e");
+      const remote = browserMode() === "ichabod";
+      const file = join(cache, `miniwob-goals-${MINIWOB_COMMIT.slice(0, 12)}${remote ? "-ichabod" : ""}.json`);
+      goals ??= existsSync(file) ? JSON.parse(readFileSync(file, "utf8")) : {};
+      const key = goalKey(episode);
+      if (goals![key]) return goals![key]!;
+      fox ??= await launch({ extension: EXTENSION, headless: true, ...(firefox && !remote ? { firefox } : {}) });
+      const run = await startMiniwob(html, episode, null);
+      // Ichabod cannot reach 127.0.0.1: open the page on the shared tunnel.
+      const mount = remote ? await tunnel(Number(new URL(run.url).port)) : null;
+      const page = await fox.open(mount ? `${mount.url}${run.startPath}` : run.url);
+      for (let i = 0; i < 100 && !run.state.goals.length; i++) await new Promise((r) => setTimeout(r, 50));
+      await page.close();
+      await mount?.close();
+      await run.close();
+      if (!run.state.goals.length) throw new Error(`MiniWoB task ${episode.id} did not start in Firefox`);
+      goals![key] = run.state.goals[0]!;
+      mkdirSync(cache, { recursive: true });
+      writeFileSync(file, `${JSON.stringify(goals, null, 2)}\n`);
+      return goals![key]!;
+    },
+    close: async () => void (await fox?.close()),
+  };
 }
 
 const tool = (command: string, env: NodeJS.ProcessEnv) => {
@@ -166,12 +163,16 @@ const tool = (command: string, env: NodeJS.ProcessEnv) => {
 /** The foxbench extension the Firefox driver installs (create-foxkit needs one). */
 const EXTENSION = new URL("../../../dist-ext", import.meta.url).pathname;
 /** Each episode's own judge. */
+const tagsOf = (task: string) => {
+  const t = MINIWOB_TASKS.find((x) => x.id === task)!;
+  return [t.category, t.split];
+};
 const judges = new WeakMap<Episode, () => Promise<Verdict>>();
 
-/** 30 MiniWoB++ tasks, judged by the page's own reward. Fetches MiniWoB++ and prepares the goals in up(). */
+/** BrowserGym's 625 MiniWoB++ episodes, judged by the page's own reward. up() fetches MiniWoB++; start() reads the goal. */
 export const miniwobBenchmark: Benchmark = {
   id: "miniwob",
-  title: "MiniWoB++ (30 tasks)",
+  title: "MiniWoB++ (BrowserGym: 125 tasks x 5 seeds)",
   upstream: { repo: MINIWOB_REPO, ref: MINIWOB_COMMIT, paper: "https://arxiv.org/abs/1802.08802" },
   licence: { code: "MIT", data: "MIT", mode: "fetch-at-run" },
   where: "local",
@@ -182,19 +183,24 @@ export const miniwobBenchmark: Benchmark = {
     if (!existsSync(join(EXTENSION, "manifest.json"))) return { ready: false, reason: "dist-ext/ is missing (the Firefox driver installs it)", fix: "run pnpm build:ext in the foxbench repo" };
     return import("create-foxkit/e2e").then(() => ({ ready: true as const }), () => ({ ready: false as const, reason: "create-foxkit is not installed (it drives Firefox)", fix: "pnpm install in the foxbench repo" }));
   },
-  load: async (_ctx, subset) => pickSubset("miniwob", MINIWOB_TASKS.map((t) => ({ id: t.id, tags: [t.kind] })), subset),
+  load: async (_ctx, subset) => pickSubset("miniwob", MINIWOB_EPISODES.map((e) => ({ id: e.id, tags: [e.task, ...tagsOf(e.task)] })), subset),
   async up(ctx) {
     const html = fetchMiniwob(ctx.cacheDir);
-    return { html, goals: await prepareGoals(html, ctx.cacheDir, ctx.firefox) };
+    return { html, goals: goalReader(html, ctx.cacheDir, ctx.firefox) };
   },
   async start(env, item) {
-    const task = MINIWOB_TASKS.find((t) => t.id === item.id)!;
-    const run = await startMiniwob(env.html as string, task, (env.goals as Record<string, string>)[`${task.id}#${task.seed}`] ?? null);
+    const task = MINIWOB_EPISODES.find((e) => e.id === item.id)!;
+    const run = await startMiniwob(env.html as string, task, await (env.goals as ReturnType<typeof goalReader>).goal(task));
     const episode: Episode = { url: run.url, goal: run.goal ?? "", startPath: run.startPath, ended: run.ended, close: run.close };
     judges.set(episode, run.judge);
     return episode;
   },
   judge: async (_env, episode) => judges.get(episode)!(),
-  down: async () => {},
-  baselines: [],
+  down: (env) => (env.goals as ReturnType<typeof goalReader>).close(),
+  baselines: [["OrbyAgent (Claude 3.5 Sonnet)", 0.749], ["GenericAgent-GPT-5", 0.715], ["A3-Qwen3.5-9B", 0.69]].map(([agent, score]) => ({
+    agent: agent as string,
+    subset: "published",
+    score: score as number,
+    source: "https://huggingface.co/spaces/ServiceNow/browsergym-leaderboard",
+  })),
 };
