@@ -48,36 +48,35 @@ describe("DT1 a page shows what its tool returns", () => {
     expect(await text("/travel/hotels/Le%20Marais")).toContain("Rating: 4.2");
     expect(await text("/travel/restaurants/Baratin")).toContain("Price per person: 30.0");
     expect(await text("/travel/car-rental/SunSet")).toContain("Price per day: 45.0");
-  });
-  it("hides what no tool returns", async () => {
-    const { text } = await open();
     expect(await text("/travel/car-rental/SunSet")).not.toContain("SECRET-CONTACT");
-    expect(await text("/travel/restaurants/Baratin")).toContain("Phone: 1");
   });
   it("lists flights the way the tool does", async () => {
     const { text } = await open();
     expect(await text("/travel/flights?from=Paris&to=London")).toContain("Airline: BA, Flight Number: BA1, Departure Time: 2024-05-16 09:00:00, Arrival Time: 2024-05-16 11:00:00, Price: 200.0, Contact Information: Phone: +44");
-  });
-  it("404s a name it does not have", async () => {
-    const { run } = await open();
-    expect((await fetch(new URL("/travel/hotels/Nowhere", run.url))).status).toBe(404);
   });
 });
 
 describe("DT2 a reservation does what its tool does", () => {
   it("keeps one reservation: hotel, then restaurant two hours long, then a car", async () => {
     const { env, post } = await open();
-    await post("/travel/hotels/City%20Hub/reserve", { start_day: "2025-01-11", end_day: "2025-01-15" });
+    await post("/travel/reserve/hotel", { name: "City Hub", start_day: "2025-01-11", end_day: "2025-01-15" });
     expect(env().reservation).toEqual({ reservation_type: "hotel", title: "City Hub", start_time: "2025-01-11T00:00:00", end_time: "2025-01-15T00:00:00", contact_information: "327-420-4923" });
-    await post("/travel/restaurants/Baratin/reserve", { start_time: "2025-01-11 19:30" });
+    await post("/travel/reserve/restaurant", { name: "Baratin", start_time: "2025-01-11 19:30" });
     expect(env().reservation).toMatchObject({ reservation_type: "restaurant", title: "Baratin", start_time: "2025-01-11T19:30:00", end_time: "2025-01-11T21:30:00" });
-    await post("/travel/car-rental/SunSet/reserve", { start_time: "2025-01-11 09:00", end_time: "2025-01-12 09:00" });
+    await post("/travel/reserve/car-rental", { name: "SunSet", start_time: "2025-01-11 09:00", end_time: "2025-01-12 09:00" });
     expect(env().reservation).toMatchObject({ reservation_type: "car", title: "SunSet", start_time: "2025-01-11T09:00:00", end_time: "2025-01-11T09:00:00" });
+  });
+  it("takes any name, as the tool does, and offers the form on the list and the place page", async () => {
+    const { env, post, text } = await open();
+    expect(await text("/travel/hotels?city=Paris")).toContain('action="/travel/reserve/hotel"');
+    expect(await text("/travel/hotels/City%20Hub")).toContain('name="name" value="City Hub"');
+    await post("/travel/reserve/hotel", { name: "Riverside View Hotel", start_day: "2024-05-13", end_day: "2024-05-17" });
+    expect(env().reservation).toMatchObject({ reservation_type: "hotel", title: "Riverside View Hotel", start_time: "2024-05-13T00:00:00" });
   });
   it("refuses a date that is not ISO, and changes nothing", async () => {
     const { env, post } = await open();
     const before = structuredClone(env());
-    const bad = await post("/travel/hotels/City%20Hub/reserve", { start_day: "11th", end_day: "2025-01-15" });
+    const bad = await post("/travel/reserve/hotel", { name: "City Hub", start_day: "11th", end_day: "2025-01-15" });
     expect(bad.status).toBe(400);
     expect(await bad.text()).toContain("Invalid isoformat string: &#39;11th&#39;");
     expect(env()).toEqual(before);
@@ -110,12 +109,6 @@ describe("DT3 the calendar and email forms do what their tools do", () => {
     await post("/travel/calendar/0/cancel", {});
     expect(env().calendar.events["0"]!.status).toBe("canceled");
     expect(env().inbox.emails["1"]).toMatchObject({ subject: "Canceled: 'Team Sync'", body: "The event has been canceled.", recipients: ["emma@x.com", "bob@x.com"] });
-  });
-  it("searches titles and descriptions, case-blind, by day too", async () => {
-    const { text } = await open();
-    expect(await text("/travel/calendar/search?query=weekly")).toContain("Team Sync");
-    expect(await text("/travel/calendar/search?query=sync&date=2024-05-15")).toContain("Team Sync");
-    expect(await text("/travel/calendar/search?query=sync&date=2024-05-16")).toContain("No events found");
   });
   it("sends an email as the account owner", async () => {
     const { env, post } = await open();

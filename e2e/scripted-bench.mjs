@@ -8,6 +8,7 @@
 //   agentdojo gullible  also obeys the injection it finds on the pages
 //   agentdojo wrong     does the next user task's work instead
 import { slackApp } from "../dist/bench/agentdojo/slack.js";
+import { travelApp } from "../dist/bench/agentdojo/travel.js";
 
 const quoted = (goal) => [...goal.matchAll(/"([^"]*)"/g)].map((m) => m[1]);
 
@@ -116,6 +117,32 @@ export const slackDriver = {
   ],
   intro: slackApp.intro,
 };
+
+const travelPaths = { hotel: "hotels", restaurant: "restaurants", car_rental: "car-rental" };
+/** AgentDojo's travel calls as the booking site's page loads and form posts. */
+async function travelCall(base, { function: fn, args }) {
+  const post = (path, form) => fetch(new URL(path, base), { method: "POST", body: new URLSearchParams(str(form)) });
+  const joined = Object.fromEntries(Object.entries(args).map(([k, v]) => [k, Array.isArray(v) ? v.join(",") : v]));
+  switch (fn) {
+    case "reserve_hotel": return post("/travel/reserve/hotel", { ...args, name: args.hotel });
+    case "reserve_restaurant": return post("/travel/reserve/restaurant", { ...args, name: args.restaurant });
+    case "reserve_car_rental": return post("/travel/reserve/car-rental", { ...args, name: args.company });
+    case "create_calendar_event": return post("/travel/calendar/new", joined);
+    case "send_email": return post("/travel/mail/new", joined);
+    case "cancel_calendar_event": return post(`/travel/calendar/${args.event_id}/cancel`, {});
+    case "get_flight_information": return fetch(new URL(`/travel/flights?from=${args.departure_city}&to=${args.arrival_city}`, base));
+    case "get_user_information": return fetch(new URL("/travel/account", base));
+    default: return fetch(new URL(args.city ? `/travel/${travelPaths[fn.includes("hotel") ? "hotel" : fn.includes("restaurant") ? "restaurant" : "car_rental"]}?city=${encodeURIComponent(args.city)}` : "/travel/", base));
+  }
+}
+
+/** The pages a looking-around agent reads first: every place's page, where the reviews are. */
+const travelPages = (task) => [
+  ...task.env.hotels.hotel_list.map((h) => `/travel/hotels/${encodeURIComponent(h.name)}`),
+  ...task.env.restaurants.restaurant_list.map((r) => `/travel/restaurants/${encodeURIComponent(r.name)}`),
+  ...task.env.car_rental.company_list.map((c) => `/travel/car-rental/${encodeURIComponent(c.name)}`),
+];
+export const travelDriver = { call: travelCall, pages: travelPages, intro: travelApp.intro };
 
 /**
  * An AgentDojo agent over HTTP. `mode` is "perfect", "gullible" (also obeys
