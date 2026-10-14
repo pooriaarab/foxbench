@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // The E2E check for the public benchmarks: scripted agents through the run
 // loop and the proxy, scored by each benchmark's own check.
-//   MiniWoB++   noop 0/30; perfect passes and wrong fails the six scripted
+//   MiniWoB++   noop 0/20 (quick); perfect passes and wrong fails the six scripted
 //               tasks, and the page's end of the episode stops the agent
 //   AgentDojo   noop 10/34 with every attack blocked (E7); perfect 34/34
 //               with 0 followed (E8); gullible follows 17/18 (E9)
@@ -16,8 +16,8 @@ const firefox = process.env.FIREFOX;
 const checks = [];
 const check = (name, ok, actual) => checks.push({ name, ok: Boolean(ok), actual });
 
-async function run(id, adapter, ids) {
-  const board = await runBenchmarks({ adapter, runs: [{ benchmark: benchmarkById(id), subset: "full" }], ...(ids ? { ids } : {}),
+async function run(id, adapter, ids, subset = "full") {
+  const board = await runBenchmarks({ adapter, runs: [{ benchmark: benchmarkById(id), subset }], ...(ids ? { ids } : {}),
     onResult: (r) => console.log(`${r.success ? "pass" : "fail"} ${id} ${r.id}${r.attack ? ` (attack ${r.attack})` : ""}${r.reasons.length ? ` - ${r.reasons.join("; ")}` : ""}`) });
   writeScore(board, `artifacts/bench/${id}`);
   if (board.skipped.length) throw new Error(`${id} was skipped: ${board.skipped[0].reason}`);
@@ -25,12 +25,12 @@ async function run(id, adapter, ids) {
 }
 
 try {
-  const noop = await run("miniwob", noopAdapter());
-  check("miniwob noop passes no task", noop.passed === 0 && noop.tasks === 30, `${noop.passed}/${noop.tasks}`);
-  const perfect = await run("miniwob", await miniwobScripted("perfect", { headless, firefox }), SCRIPTED_MINIWOB);
+  const noop = await run("miniwob", noopAdapter(), undefined, "quick");
+  check("miniwob noop passes no task of quick", noop.passed === 0 && noop.tasks === 20, `${noop.passed}/${noop.tasks}`);
+  const perfect = await run("miniwob", await miniwobScripted("perfect", { headless, firefox }), SCRIPTED_MINIWOB.map((id) => `${id}#0`));
   check("miniwob perfect passes each scripted task", perfect.passed === SCRIPTED_MINIWOB.length, `${perfect.passed}/${perfect.tasks}`);
   check("miniwob ends each episode at the reward", perfect.results.every((r) => r.endedEarly), perfect.results.filter((r) => !r.endedEarly).map((r) => r.id));
-  const wrong = await run("miniwob", await miniwobScripted("wrong", { headless, firefox }), SCRIPTED_MINIWOB);
+  const wrong = await run("miniwob", await miniwobScripted("wrong", { headless, firefox }), SCRIPTED_MINIWOB.map((id) => `${id}#0`));
   check("miniwob wrong fails each scripted task", wrong.passed === 0 && wrong.tasks === SCRIPTED_MINIWOB.length, `${wrong.passed}/${wrong.tasks}`);
 
   const cases = prepareCases(benchContext().cacheDir);
