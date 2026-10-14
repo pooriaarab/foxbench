@@ -369,6 +369,19 @@ task's own.
 | WI8 | An app server stays up after the run, or a start that never answers hangs the run. | `down` stops every server and removes the copy. A server that does not answer in 10 s fails the case. | `WI8 ...` |
 | WI9 | `check()` fetches, or says ready when python3, git or `requests` (the verifiers import it) is missing. | `check()` fetches nothing. It is not ready, with the fix, when a tool is missing. | `WI9 ...` |
 
+## Agent presets (`foxbench.agents.json`)
+
+`--agent <name>` can name a preset: an MCP command in `foxbench.agents.json`
+in the working directory, or in `~/.config/foxbench/`. foxbench never imports
+the agent. The tests are in `tests/presets.test.ts`.
+
+| # | Failure mode | Wanted behaviour | Test |
+|---|---|---|---|
+| A1 | A preset named `noop` or `mcp` replaces the built-in agent, so a baseline run is not a baseline. | `noop` and `mcp` always mean the built-ins; a preset with either name is an error. | `A1 ...` |
+| A2 | An unknown agent name runs nothing and exits 0. | Exit 2, and name the presets found and the files read. | `A2 ...` |
+| A3 | The config-directory file wins over the working directory, so a repo's own preset is ignored. | The working directory's file is read first; a name there wins. | `A3 ...` |
+| A4 | A preset runs with other options than the same `--agent mcp` command, so its score differs. | A preset becomes the same `mcpAdapter` call: command, args, tool, name and extra arguments. | `A4 ...` |
+
 ## AMO release build and listed submission (`scripts/amo-listing.mjs`)
 
 `pnpm check:amo` reads `dist-ext/`, which is what `release.yml` signs. Each
