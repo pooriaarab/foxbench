@@ -7,8 +7,12 @@ export { tasks, taskById, tasksIn, judge, startState, SUITES, TIERS } from "./ta
 export type { Task, Judgement, Suite, Tier } from "./tasks.js";
 export { noopAdapter, parseMetrics } from "./adapter.js";
 export type { Adapter, AgentMetrics, TaskInput, TaskOutput } from "./adapter.js";
-export { runSuite, median } from "./runner.js";
-export type { RunOptions, Scoreboard, TaskResult } from "./runner.js";
+export { runSuite } from "./runner.js";
+export type { RunOptions } from "./runner.js";
+export { median, missingRequired, runBenchmarks } from "./bench/run.js";
+export type { BenchRunOptions, Scoreboard, TaskResult } from "./bench/run.js";
+export { foxbenchBenchmark } from "./bench/foxbench.js";
+export { pickSubset } from "./bench/subsets.js";
 export { toMarkdown, writeScore } from "./score.js";
 export { mcpAdapter } from "./mcp.js";
 export type { McpAdapterOptions } from "./mcp.js";

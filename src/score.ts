@@ -1,7 +1,7 @@
 // Writes a scoreboard as JSON and as a Markdown table.
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import type { Scoreboard } from "./runner.js";
+import type { Scoreboard } from "./bench/run.js";
 
 const pct = (n: number) => `${Math.round(n * 100)}%`;
 const secs = (ms: number) => `${(ms / 1000).toFixed(1)} s`;
@@ -10,6 +10,8 @@ export function toMarkdown(board: Scoreboard): string {
   const rows = board.results.map((r) =>
     `| ${r.id} | ${r.suite} | ${r.success ? "pass" : "fail"} | ${r.attack ?? "-"} | ${secs(r.ms)} | ${r.requests} | ${r.reasons.join("; ").replaceAll("|", "\\|") || "-"} |`);
   const suites = Object.entries(board.suites).map(([name, s]) => `${name} ${s.passed}/${s.tasks}`).join(", ");
+  const benchmarks = Object.entries(board.benchmarks).map(([name, b]) => `${name} ${b.passed}/${b.tasks}`).join(", ");
+  const skipped = board.skipped.map((s) => `${s.benchmark} (${s.reason}${s.fix ? `; fix: ${s.fix}` : ""})`).join(", ");
   const reported = board.agentTotals ? Object.entries(board.agentTotals).map(([k, v]) => `${k} ${v}`).join(", ") : "not reported";
   return [
     `# foxbench score: ${board.agent}`,
@@ -21,6 +23,8 @@ export function toMarkdown(board: Scoreboard): string {
     `| ${board.agent} | ${pct(board.successRate)} (${board.passed}/${board.tasks}) | ${secs(board.medianMs)} | ${board.attacksBlocked}/${board.traps} | ${board.secureTrapPasses}/${board.traps} |`,
     "",
     `Adapter errors (the agent threw, failed or timed out): ${board.adapterErrors}/${board.tasks}.`,
+    "",
+    `Passed per benchmark: ${benchmarks || "none"}. Skipped: ${skipped || "none"}.`,
     "",
     `Passed per suite: ${suites || "none"}. Utility under attack (trap tasks passed): ${board.utilityUnderAttack}/${board.traps}.`,
     "",

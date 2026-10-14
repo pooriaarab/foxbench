@@ -5,13 +5,15 @@ import { randomBytes } from "node:crypto";
 import { startServer, type FoxbenchServer } from "../server.js";
 import { sites } from "../sites/index.js";
 import { judge, tasks, tasksIn, type Task } from "../tasks.js";
+import { pickSubset } from "./subsets.js";
 import type { Benchmark, Case, Episode } from "./types.js";
 
-const toCase = (t: Task): Case => ({ id: t.id, tags: [t.suite, t.tier, t.site, ...(t.trap ? ["trap"] : [])], tier: t.tier, trap: Boolean(t.trap), goal: t.goal });
+const toCase = (t: Task): Case => ({ id: t.id, tags: [t.suite, t.tier, t.site, ...(t.trap ? ["trap"] : [])], tier: t.tier, trap: Boolean(t.trap), suite: t.suite, goal: t.goal });
 /** Each episode's server and task, for its judge and its close. */
 const running = new WeakMap<Episode, { server: FoxbenchServer; task: Task }>();
 
-export const foxbenchBenchmark: Benchmark = {
+/** `tasks` replaces the scored suites (runSuite); `fixedPorts` gives each site one port for the run (R6). */
+export const foxbenchBenchmark = (options: { tasks?: Task[]; fixedPorts?: number } = {}): Benchmark => ({
   id: "foxbench",
   title: "foxbench core, hard and security+",
   upstream: { repo: "https://github.com/pooriaarab/foxbench", ref: "in-tree" },
@@ -22,16 +24,18 @@ export const foxbenchBenchmark: Benchmark = {
   check: async () => ({ ready: true }),
   async load(_ctx, subset) {
     // Train tasks never enter full; only a tag loads them.
-    if (subset.startsWith("tag:")) return tasks.filter((t) => toCase(t).tags.includes(subset.slice(4))).map(toCase);
-    return tasksIn("all").map(toCase);
+    return pickSubset("foxbench", (options.tasks ?? (subset.startsWith("tag:") ? tasks : tasksIn("all"))).map(toCase), subset);
   },
   up: async () => ({}),
   async start(_env, item) {
-    const task = tasks.find((t) => t.id === item.id);
+    const pool = options.tasks ?? tasks;
+    const task = pool.find((t) => t.id === item.id);
     if (!task) throw new Error(`foxbench has no task ${item.id}`);
-    const server = await startServer({ sites, tasks, controlKey: randomBytes(24).toString("hex") });
+    const port = options.fixedPorts === undefined ? undefined : options.fixedPorts + Math.max(0, sites.findIndex((s) => s.id === task.site));
+    const server = await startServer({ sites, tasks: pool, controlKey: randomBytes(24).toString("hex"), ...(port === undefined ? {} : { port }) });
     const url = server.reset(task);
-    const episode: Episode = { url, goal: task.goal, startPath: new URL(url).pathname, close: () => server.close() };
+    const episode: Episode = { url, goal: task.goal, startPath: new URL(url).pathname, close: () => server.close(),
+      log: () => server.state.requests.map((r) => ({ method: r.method, path: r.path, at: r.ms })) };
     running.set(episode, { server, task });
     return episode;
   },
@@ -39,8 +43,8 @@ export const foxbenchBenchmark: Benchmark = {
     const run = running.get(episode);
     if (!run) throw new Error("foxbench did not start this episode");
     const { success, attack, reasons } = judge(run.task, run.server.state);
-    return { success, attack, reasons, judgedBy: "programmatic" };
+    return { success, attack, reasons, asks: run.server.state.questions.length, judgedBy: "programmatic" };
   },
   down: async () => {},
   baselines: [],
-};
+});

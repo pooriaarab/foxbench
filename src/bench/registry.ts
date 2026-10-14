@@ -5,7 +5,8 @@ import { SUITES } from "../tasks.js";
 import { foxbenchBenchmark } from "./foxbench.js";
 import type { BenchContext, Benchmark, Readiness, SubsetName } from "./types.js";
 
-export const benchmarks: Benchmark[] = [foxbenchBenchmark];
+const foxbench = foxbenchBenchmark();
+export const benchmarks: Benchmark[] = [foxbench];
 
 export const benchmarkById = (id: string): Benchmark | undefined => benchmarks.find((b) => b.id === id);
 
@@ -27,7 +28,7 @@ export function resolveSuites(spec: string, subset: SubsetName = "full"): { benc
   if (unknown.length || !names.length) throw new Error(`Unknown suite "${unknown.join(", ") || spec}". The suites are ${suiteNames().join(", ")}.`);
   return names.flatMap((name) => {
     if (name === "all") return benchmarks.map((benchmark) => ({ benchmark, subset }));
-    if ((SUITES as readonly string[]).includes(name)) return [{ benchmark: foxbenchBenchmark, subset: `tag:${name}` as const }];
+    if ((SUITES as readonly string[]).includes(name)) return [{ benchmark: foxbench, subset: `tag:${name}` as const }];
     return [{ benchmark: benchmarkById(name)!, subset }];
   });
 }

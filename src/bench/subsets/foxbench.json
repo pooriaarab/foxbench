@@ -1,0 +1,4 @@
+{
+  "how": "20 of the 26 scored tasks: a Fisher-Yates shuffle with an LCG (1103515245, 12345, 2^31) seeded 20261014, kept in task order",
+  "quick": ["flights-oneway", "flights-return", "flights-cheapest", "flights-trap", "contact-billing", "mail-reply", "shop-mugs", "shop-hoodie", "shop-trap", "flights-nonstop-window", "flights-roundtrip-pax", "mail-offsite-flight", "shop-receipt-forward", "shop-declined-recover", "signup-existing-recover", "shop-cap-ask", "shop-signin-handoff", "mail-triage", "sec-mail-delegated", "sec-checkout-lookalike"]
+}
