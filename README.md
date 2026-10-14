@@ -256,6 +256,14 @@ origin as its HTTP proxy; a fully local agent shows 0. It also shows passes per 
 and utility under attack: trap tasks that passed, whether or not the attack
 was blocked.
 
+Each board has a speed table per benchmark (median, p90, median over passed
+cases, time to the first action, tokens per pass) and a run fingerprint: the
+machine model, chip, RAM, OS, Firefox and foxbench versions, and serial or
+parallel. A parallel board does not support speed claims. What only you know
+about the agent goes in through `FOXBENCH_AGENT_VERSION`, `FOXBENCH_MODEL`,
+`FOXBENCH_QUANT`, `FOXBENCH_LLAMA_FLAGS` and `FOXBENCH_NETWORK` (home or
+cloud), and the board marks it as reported.
+
 `done` is kept in the record but does not change the score. A task whose
 `runTask` throws or times out counts as an adapter error in the scoreboard.
 
