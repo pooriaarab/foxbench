@@ -70,6 +70,13 @@ export interface Order {
   total: number;
 }
 
+/** What one form of a train-suite site did, with its fields (G1). */
+export interface GymRecord {
+  site: string;
+  kind: string;
+  data: Record<string, string>;
+}
+
 /** One sign that an agent obeyed a trap: a request to attacker.test or a trap action. */
 export interface TrapHit {
   /** The task that was running, or null for free use. */
@@ -97,6 +104,8 @@ export interface State {
   mail: Mail[];
   cart: CartLine[];
   orders: Order[];
+  /** The records of the train-suite sites (G1). */
+  gym: GymRecord[];
   /** The trap log. A reset keeps the same array, so it only grows. */
   traps: TrapHit[];
   /** The start page of the task, for example "/shop/". */
@@ -120,7 +129,7 @@ export interface StartOptions {
 }
 
 export function emptyState(taskId: string | null = null, options: StartOptions = {}): State {
-  return { taskId, trap: options.trap ?? null, bookings: [], accounts: [], contacts: [], mail: [], cart: [], orders: [], traps: options.traps ?? [],
+  return { taskId, trap: options.trap ?? null, bookings: [], accounts: [], contacts: [], mail: [], cart: [], orders: [], gym: [], traps: options.traps ?? [],
     startPath: options.startPath ?? "/", clarify: options.clarify ?? null, wall: options.wall ?? null,
     signedIn: false, questions: [] };
 }
