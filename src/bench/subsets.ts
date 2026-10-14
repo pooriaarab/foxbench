@@ -8,8 +8,7 @@ import webgames from "./subsets/webgames.json" with { type: "json" };
 import type { Case, SubsetName } from "./types.js";
 
 export type SubsetLists = Record<string, { quick?: string[]; published?: string[] }>;
-const LISTS: SubsetLists = { foxbench, miniwob, webgames };
-const LISTS: SubsetLists = { foxbench, webgames, browsesafe };
+const LISTS: SubsetLists = { foxbench, miniwob, webgames, browsesafe };
 
 /** The cases of a subset, from a benchmark's full list. Throws when a list names a case the benchmark lacks (L5). */
 export function pickSubset(id: string, all: Case[], subset: SubsetName, lists: SubsetLists = LISTS): Case[] {
