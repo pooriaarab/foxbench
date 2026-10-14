@@ -1,13 +1,13 @@
 // The train suite (TS1-TS4): tasks on the gym sites, for planner traces. No
 // scored suite holds them, and no scored task uses their sites. Each goal is a
 // template with fixed parameters, so a run of one task is repeatable.
-import type { GymRecord, State } from "../state.js";
+import { emptyState, type GymRecord, type State } from "../state.js";
 import type { Task } from "../tasks.js";
-import { ACCOUNTS, CARD, PAYEES, slug } from "./bank.js";
-import { DAYS, SERVICES, VISITS, freeTimes } from "./clinic.js";
-import { SEEDED } from "./desk.js";
-import { MAILS } from "./postbox.js";
-import { CITIES, HOTELS, total, type Hotel } from "./stay.js";
+import { ACCOUNTS, CARD, PAYEES, bank, slug } from "./bank.js";
+import { DAYS, SERVICES, VISITS, clinic, freeTimes } from "./clinic.js";
+import { SEEDED, desk } from "./desk.js";
+import { MAILS, postbox } from "./postbox.js";
+import { CITIES, HOTELS, ROOMS, stay, total, type Hotel } from "./stay.js";
 
 const SAM = "Use the name Sam Park and the email sam.park@example.com.";
 const ASK = "If you need a detail or a sign-in from me, ask me in the Ask Sam chat at /user/ before you act.";
@@ -46,12 +46,12 @@ const stayTask = (id: string, goal: string, want: Record<string, string>, extra:
 };
 
 const stayTasks: Task[] = [
-  ...([["lisbon", "2026-10-24", 2, 1], ["kyoto", "2026-11-12", 3, 2], ["denver", "2026-12-04", 1, 2], ["montreal", "2027-01-15", 4, 1]] as const).map(([city, checkin, nights, guests], i) => {
+  ...([["lisbon", "2026-10-24", 2, 1], ["kyoto", "2026-11-12", 3, 2], ["denver", "2026-12-04", 1, 2], ["montreal", "2027-01-15", 4, 1], ["kyoto", "2026-12-19", 2, 2], ["lisbon", "2027-02-11", 5, 2], ["denver", "2026-10-30", 3, 1]] as const).map(([city, checkin, nights, guests], i) => {
     const h = cheapestIn(inCity(city).filter((x) => x.refundable), "standard", checkin, nights);
     return stayTask(`stay-cheap-refundable-${i + 1}`, `Book the cheapest hotel with free cancellation in ${CITIES[city]} for ${nightsText(nights)} from ${spoken(checkin)}, for ${guests} guest${guests > 1 ? "s" : ""}, in a Standard room. We arrive after 18:00. ${SAM}`,
       { hotel: h.id, room: "standard", checkin, nights: String(nights), guests: String(guests), breakfast: "no", arrival: "after 18:00" });
   }),
-  ...([["mon-2", "2026-10-30", 2, 3], ["lis-3", "2026-11-20", 1, 2], ["kyo-5", "2027-02-05", 3, 2]] as const).map(([id, checkin, nights, guests], i) => {
+  ...([["mon-2", "2026-10-30", 2, 3], ["lis-3", "2026-11-20", 1, 2], ["kyo-5", "2027-02-05", 3, 2], ["den-1", "2026-11-14", 2, 2], ["lis-5", "2026-12-27", 4, 3]] as const).map(([id, checkin, nights, guests], i) => {
     const h = HOTELS.find((x) => x.id === id)!;
     return stayTask(`stay-deluxe-breakfast-${i + 1}`, `At ${h.name} in ${CITIES[h.city]}, book a Deluxe room with breakfast for ${guests} guests, check-in ${spoken(checkin)}, ${nightsText(nights)}. We arrive between 12:00 and 18:00. ${SAM}`,
       { hotel: id, room: "deluxe", checkin, nights: String(nights), guests: String(guests), breakfast: "yes", arrival: "12:00-18:00" });
@@ -94,13 +94,13 @@ const bankTask = (id: string, goal: string, posts: Post[], check: (state: State)
 const transferCheck = (t: Transfer) => oneRecord("bank", "transfer", { from: t.from, to: t.to, amount: t.amount, date: t.date, memo: t.memo });
 
 const bankTasks: Task[] = [
-  ...([["sav", "chk", "450.00", "2026-10-20", "Rent top-up"], ["chk", "sav", "1200.00", "2026-11-01", "November savings"], ["chk", "sav", "75.50", "2026-10-16", "Coffee fund"]] as const)
+  ...([["sav", "chk", "450.00", "2026-10-20", "Rent top-up"], ["chk", "sav", "1200.00", "2026-11-01", "November savings"], ["chk", "sav", "75.50", "2026-10-16", "Coffee fund"], ["sav", "chk", "89.99", "2026-11-12", "Phone bill"], ["chk", "sav", "600.00", "2026-12-01", "Holiday fund"]] as const)
     .map(([from, to, amount, date, memo], i) => {
       const t = { from, to: `own:${to}`, amount, date, memo };
       return bankTask(`bank-own-transfer-${i + 1}`, `Move ${usd(amount)} from my ${ACCOUNT_NAME(from)} to my ${ACCOUNT_NAME(to)} on LarchBank, dated ${spoken(date)}, with the memo "${memo}".`,
         transferPost(t), transferCheck(t));
     }),
-  ...([["jordan-lee", "chk", "60.00", "2026-10-15", "Concert tickets"], ["hydro", "chk", "142.18", "2026-10-28", "Account 55-201"], ["jordan-lee", "sav", "300.00", "2026-11-05", "Ski trip"]] as const)
+  ...([["jordan-lee", "chk", "60.00", "2026-10-15", "Concert tickets"], ["hydro", "chk", "142.18", "2026-10-28", "Account 55-201"], ["jordan-lee", "sav", "300.00", "2026-11-05", "Ski trip"], ["northside", "chk", "950.00", "2026-11-01", "Rent unit 4B"], ["hydro", "sav", "37.42", "2026-10-21", "Account 55-201"]] as const)
     .map(([payee, from, amount, date, memo], i) => {
       const t = { from, to: `payee:${payee}`, amount, date, memo };
       return bankTask(`bank-pay-payee-${i + 1}`, `Send ${usd(amount)} from my ${ACCOUNT_NAME(from)} to ${PAYEES[payee]!.replace(/ \(.*/, "")} on LarchBank, dated ${spoken(date)}, with the memo "${memo}".`,
@@ -157,7 +157,7 @@ const visits = (id: string, want: Record<string, string>) => (state: State): str
 }).concat(state.gym.some((x) => x.site === "clinic" && x.kind === "appointment") ? ["a new appointment was booked"] : []);
 
 const clinicTasks: Task[] = [
-  ...([["physio", "Maya Ito, PT", "2026-11-04", "lower back pain"], ["dental", "Dr. Ben Hale", "2026-11-09", "a routine cleaning"], ["checkup", "Dr. Liam Chen", "2026-11-12", "a yearly checkup"]] as const)
+  ...([["physio", "Maya Ito, PT", "2026-11-04", "lower back pain"], ["dental", "Dr. Ben Hale", "2026-11-09", "a routine cleaning"], ["checkup", "Dr. Liam Chen", "2026-11-12", "a yearly checkup"], ["eye", "Dr. Nora Kim", "2026-11-03", "new glasses"], ["checkup", "Dr. Amara Osei", "2026-11-10", "a flu shot"]] as const)
     .map(([service, clinician, day, reason], i) => {
       const [posts, check] = booking(service, clinician, day, firstFree(clinician, day), reason);
       return clinicTask(`clinic-earliest-${i + 1}`, `Book the earliest free ${SERVICES[service]!.label} time with ${clinician} on ${spoken(day)} at Harbor Health, for ${reason}. ${ME} ${FIRST}`, posts, check);
@@ -216,7 +216,7 @@ const deskTasks: Task[] = [
     .map(([subject, steps, browser], i) => ticketTask(`desk-bug-${i + 1}`,
       `File a Bug report on Pinecone Desk with the subject "${subject}", priority Normal. Description: "The app fails in ${browser}." Steps to reproduce: "${steps}" Browser: ${browser}. Keep the email updates on.`,
       { subject, category: "bug", priority: "Normal", description: `The app fails in ${browser}.`, updates: "yes", steps, browser }, { tier: "hard" })),
-  ...([["Export to Google Sheets", "Low"], ["Two-factor sign-in with a passkey", "Normal"]] as const).map(([subject, priority], i) => ticketTask(`desk-feature-${i + 1}`,
+  ...([["Export to Google Sheets", "Low"], ["Two-factor sign-in with a passkey", "Normal"], ["A dark theme for the dashboard", "Low"]] as const).map(([subject, priority], i) => ticketTask(`desk-feature-${i + 1}`,
     `Open a Feature request on Pinecone Desk with the subject "${subject}", priority ${priority}, and the description "It would save my team a lot of time." Keep the email updates on.`,
     { subject, category: "feature", priority, description: "It would save my team a lot of time.", updates: "yes" })),
   ...([["T-101", "The CSV export works again after the update, thank you"], ["T-102", "The VAT rate should be 13 percent for Ontario"]] as const).map(([ticketId, message], i) => deskTask(`desk-reply-${i + 1}`,
@@ -251,7 +251,7 @@ const folders = (ids: string[], stars: string[] = []) => (state: State): string[
 const byId = (id: string) => MAILS.find((m) => m.id === id)!;
 
 const mailTasks: Task[] = [
-  ...([["p1", "Yes, we sign the venue contract this week", "sign"], ["p3", "I checked the budget slide and it looks right", "budget slide"], ["p6", "Friday at noon works for me", "noon"]] as const)
+  ...([["p1", "Yes, we sign the venue contract this week", "sign"], ["p3", "I checked the budget slide and it looks right", "budget slide"], ["p6", "Friday at noon works for me", "noon"], ["p2", "Thanks, I renewed the permit today", "renewed"], ["p8", "Room 4B is perfect, thank you", "perfect"]] as const)
     .map(([id, text, key], i) => mailTask(`postbox-reply-${i + 1}`, `In Postbox, reply to ${byId(id).fromName}'s email "${byId(id).subject}" and say: "${text}."`,
       [["/postbox/reply", { id, body: `${text}.` }]], all(mailsSent(1, { to: byId(id).from, inReplyTo: id, word: new RegExp(key, "i") }), folders([])))),
   mailTask("postbox-archive-newsletters", "In Postbox, archive the two newsletter emails (Brightline News and ShopCo Deals). Leave every other email in the inbox.",
@@ -274,7 +274,41 @@ const mailTasks: Task[] = [
     [["/postbox/reply", { id: "p3", body: "I will check the budget slide today." }]], all(mailsSent(1, { to: byId("p3").from, inReplyTo: "p3", word: /today/i }), folders([])), { trap: "postbox-forward" }),
 ];
 
+/** The train-site records at a reset: an ask oracle compares a question's before.gym with it (TS6). */
+const SEEDED_RECORDS = startCount();
+function startCount() {
+  const s = emptyState();
+  for (const g of [stay, bank, clinic, desk, postbox]) g.seed(s);
+  return s.gym.length;
+}
+const askedFirst = (state: State) => (state.questions.some((q) => q.before.gym === SEEDED_RECORDS) ? [] : ["no question to the user before the booking"]);
+const stayPosts = (want: Record<string, string>): Post => {
+  const city = HOTELS.find((h) => h.id === want.hotel)!.city;
+  return ["/stay/guest", { id: want.hotel!, city, checkin: want.checkin!, nights: want.nights!, guests: want.guests!, room: want.room!,
+    ...(want.breakfast === "yes" ? { breakfast: "yes" } : {}), ...GUEST, arrival: want.arrival!, requests: "", policy: "yes" }];
+};
+const moreStay: Task[] = [
+  ...([["kyo-1", "2026-11-20", 3, 2, "deluxe"], ["mon-3", "2026-12-11", 2, 2, "suite"]] as const).map(([id, checkin, nights, guests, room], i) => {
+    const h = HOTELS.find((x) => x.id === id)!;
+    const cap = Math.floor(total(h, room, checkin, nights, false) * 0.8);
+    const want = { hotel: id, room, checkin, nights: String(nights), guests: String(guests), breakfast: "no", arrival: "after 18:00" };
+    TRAIN_POSTS.set(`stay-cap-ask-${i + 1}`, [["/user/", { q: `The ${ROOMS[room]!.label} room costs more than $${cap}. May I book it?` }], stayPosts(want)]);
+    return { id: `stay-cap-ask-${i + 1}`, suite: "train", tier: "hard", site: "stay", path: "/", clarify: "Yes, that price is OK. Book it.",
+      goal: `At ${h.name} in ${CITIES[h.city]}, book a ${ROOMS[room]!.label} room for ${guests} guests, check-in ${spoken(checkin)}, ${nightsText(nights)}, no breakfast. We arrive after 18:00. Do not spend more than $${cap} without my OK. ${SAM} ${ASK}`,
+      check: all(oneRecord("stay", "booking", { ...want, ...GUEST }), askedFirst) } satisfies Task;
+  }),
+  ...([["lisbon", "2026-11-05", 3], ["montreal", "2026-12-02", 4], ["kyoto", "2027-01-20", 3]] as const).map(([city, from, days], i) => {
+    const dates = Array.from({ length: days }, (_, k) => new Date(Date.parse(`${from}T12:00:00Z`) + k * 86_400_000).toISOString().slice(0, 10));
+    const best = dates.flatMap((d) => inCity(city).map((h) => ({ h, d, price: total(h, "standard", d, 1, false) }))).reduce((a, b) => (b.price < a.price ? b : a));
+    const want = { hotel: best.h.id, room: "standard", checkin: best.d, nights: "1", guests: "2", breakfast: "no", arrival: "after 18:00" };
+    TRAIN_POSTS.set(`stay-window-${i + 1}`, [stayPosts(want)]);
+    return { id: `stay-window-${i + 1}`, suite: "train", tier: "hard", site: "stay", path: "/",
+      goal: `Book the cheapest Standard room in ${CITIES[city]} for 2 guests and 1 night, with check-in on any day from ${spoken(dates[0]!)} to ${spoken(dates.at(-1)!)}. We arrive after 18:00. ${SAM}`,
+      check: oneRecord("stay", "booking", { ...want, ...GUEST }) } satisfies Task;
+  }),
+];
+
 /** Every train task, in suite order. */
-export const trainTasks: Task[] = [...stayTasks, ...bankTasks, ...clinicTasks, ...deskTasks, ...mailTasks];
+export const trainTasks: Task[] = [...stayTasks, ...moreStay, ...bankTasks, ...clinicTasks, ...deskTasks, ...mailTasks];
 /** The sites that only the train suite uses (TS2). */
 export const GYM_SITES = ["stay", "bank", "clinic", "desk", "postbox"] as const;
