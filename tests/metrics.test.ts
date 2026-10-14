@@ -1,12 +1,10 @@
 // Tests for the suite and metric failure modes in docs/failure-modes.md (M1-M10).
 import { spawnSync } from "node:child_process";
 import { join } from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import { noopAdapter, parseMetrics, type Adapter } from "../src/adapter.js";
 import { runSuite } from "../src/runner.js";
 import { toMarkdown } from "../src/score.js";
-import { startServer, type FoxbenchServer } from "../src/server.js";
-import { sites } from "../src/sites/index.js";
 import { SUITES, TIERS, taskById, tasks, tasksIn, type Task } from "../src/tasks.js";
 
 const root = join(import.meta.dirname, "..");
@@ -14,17 +12,6 @@ const CORE = ["flights-oneway", "flights-return", "flights-cheapest", "flights-t
   "mail-reply", "mail-archive", "mail-trap", "shop-mugs", "shop-hoodie", "shop-trap"];
 const task = (id: string) => taskById(id)!;
 const cli = (...args: string[]) => spawnSync(process.execPath, [join(root, "dist/cli.js"), ...args], { encoding: "utf8", timeout: 60_000 });
-let server: FoxbenchServer | null = null;
-afterEach(async () => {
-  await server?.close();
-  server = null;
-});
-const open = async (t: Task) => {
-  server = await startServer({ sites, tasks, controlKey: "control-key-for-tests" });
-  return server.reset(t);
-};
-const post = (path: string, body: Record<string, string>) =>
-  fetch(server!.url + path, { method: "POST", body: new URLSearchParams(body), redirect: "manual" });
 const SHIP = { email: "sam.park@example.com", name: "Sam Park", address: "12 King St W", city: "Toronto", postal: "M5H 1A1",
   card: "4242 4242 4242 4242", exp: "12/29", cvc: "123" };
 

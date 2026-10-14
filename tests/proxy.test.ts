@@ -20,15 +20,15 @@ let other = "";
 const seen: IncomingHttpHeaders[] = [];
 const sites: Server[] = [];
 beforeAll(async () => {
-  const toy = createServer((req, res) => {
+  const home = createServer((req, res) => {
     seen.push(req.headers);
     if (req.url === "/away") return res.writeHead(302, { location: `${site}/home` }).end();
     if (req.url === "/app.js") return res.writeHead(200, { "content-type": "text/javascript" }).end("1");
     res.writeHead(200, { "content-type": "text/html" }).end(`<p>${req.method} ${req.url}</p>`);
   });
   const elsewhere = createServer((_req, res) => res.end("model reply"));
-  sites.push(toy, elsewhere);
-  site = await listen(toy);
+  sites.push(home, elsewhere);
+  site = await listen(home);
   other = await listen(elsewhere);
 });
 afterAll(() => { for (const s of sites) s.close(); });

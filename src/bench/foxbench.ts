@@ -32,10 +32,9 @@ export const foxbenchBenchmark = (options: { tasks?: Task[]; fixedPorts?: number
     const task = pool.find((t) => t.id === item.id);
     if (!task) throw new Error(`foxbench has no task ${item.id}`);
     const port = options.fixedPorts === undefined ? undefined : options.fixedPorts + Math.max(0, sites.findIndex((s) => s.id === task.site));
-    const server = await startServer({ sites, tasks: pool, controlKey: randomBytes(24).toString("hex"), ...(port === undefined ? {} : { port }) });
+    const server = await startServer({ sites, tasks: pool, controlKey: randomBytes(24).toString("hex") });
     const url = server.reset(task);
-    const episode: Episode = { url, goal: task.goal, startPath: new URL(url).pathname, close: () => server.close(),
-      log: () => server.state.requests.map((r) => ({ method: r.method, path: r.path, at: r.ms })) };
+    const episode: Episode = { url, goal: task.goal, startPath: new URL(url).pathname, close: () => server.close(), ...(port === undefined ? {} : { port }) };
     running.set(episode, { server, task });
     return episode;
   },

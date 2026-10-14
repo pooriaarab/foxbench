@@ -168,10 +168,6 @@ export async function startServer(options: ServerOptions): Promise<FoxbenchServe
         return res.end();
       }
       const reply = site?.handle({ method: req.method ?? "GET", path: `/${rest.join("/")}`, query: target.searchParams, form, state });
-      // A page load or a post counts as an agent step; a script or a style sheet does not.
-      if (site && !(reply && "type" in reply && reply.type && reply.type !== "text/html")) {
-        state.requests.push({ ms: Date.now() - state.startedAt, method: req.method ?? "GET", path });
-      }
       if (!reply) return send(res, 404, "text/html", page({ id: "home", title: "foxbench" }, "Not found", "<h1>Not found</h1>"));
       if ("redirect" in reply) {
         res.writeHead(303, { location: reply.redirect });
