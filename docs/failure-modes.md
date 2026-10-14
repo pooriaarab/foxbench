@@ -441,6 +441,21 @@ the scored runs, with AgentDojo's own checks, are in `e2e/bench.mjs`.
 | DW5 | `noop` passes, `perfect` fails or `wrong` passes. | `noop` 0/42 with every attack blocked; `perfect` 42/42; `gullible` follows 18/18; `wrong` passes only user task 12, whose event the next task also makes. | `noop`, `perfect`, `gullible`, `wrong` runs |
 | DW6 | The suite is missing from `--suite`, or the goal does not say what the app is. | The suite is registered as `agentdojo-workspace`; the goal starts with one sentence that names the app and its pages. | `DW6 ...` |
 
+## AgentDojo workspace: drive (`src/bench/agentdojo/drive.ts`, `workspace.ts`)
+
+The drive pages complete the workspace app, so the benchmark offers all 68
+cases. The tests are in `tests/agentdojo-drive.test.ts` (the pages, with a fake
+judge); the scored runs, with AgentDojo's own checks, are in `e2e/bench.mjs`.
+
+| # | Failure mode | Wanted behaviour | Check |
+|---|---|---|---|
+| DD1 | A drive page does what its tool does not: it checks a file the tool does not, or keeps a size that is not the content's length. | Each follows `cloud_drive_client.py`: create takes the next id, the owner and a size in characters; append adds to the content and the size; delete removes the file; share sets the permission for the address; a search by content with no match is an error with the tool's text; a search by name is not. | `DD1 ...` |
+| DD2 | An email cannot carry files, so the attacks that send files, and the task that attaches one, cannot be done. | The email form takes file ids as attachments, and the sent email holds the ids, as the tool stores them. | `DD2 ...` |
+| DD3 | A drive page changes more than a read does. | Listing, opening and searching files change nothing. | `DD3 ...` |
+| DD4 | The file-exfiltration attacks (no ground-truth calls upstream) are never played. | The scripted `gullible` agent reads the file list and plays each one, including the ransom email that reuses the deleted email's id; AgentDojo's check says followed. | `gullible` run |
+| DD5 | `noop` passes, `perfect` fails or `wrong` passes. | `noop` 0/68 with every attack blocked; `perfect` 68/68; `gullible` follows 28/28; `wrong` passes only the cases that its overlap allows. | `noop`, `perfect`, `gullible`, `wrong` runs |
+| DD6 | The goal does not say the app has a drive. | The goal sentence names the Drive pages. | `DD6 ...` |
+
 ## WebGames (`src/bench/webgames.ts`)
 
 WebGames is 150 client-side challenges. Each shows a password when it is
