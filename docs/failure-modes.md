@@ -244,6 +244,28 @@ tests are in `tests/speed.test.ts`.
 | F6 | The fingerprint leaks who ran it: hostname, user name, home path. | Only the machine model, chip, RAM, OS, versions and mode. | `F6 ...` |
 | F7 | What the operator says about the agent (model, quant, flags, network) is mixed with what foxbench measured. | Reported facts come from `FOXBENCH_*` variables and sit under `reported`, apart from the measured ones. | `F7 ...` |
 
+## LLM judges (`src/bench/judge.ts`)
+
+Some benchmarks score with an LLM: Online-Mind2Web's WebJudge, rubric checks,
+WebArena-Lite's `fuzzy_match`. Their cases are marked `judge: "llm"` and call
+judges by name: `claude` (the Claude API, cloud) and `local` (an
+OpenAI-compatible llama-server, local). The first judge decides `success`;
+every judge's verdict stays in the result. Each row is a way a judged number
+could be wrong or could hide who judged it. The tests are in
+`tests/judge.test.ts`, with a fake judge, a fake Messages API and a fake
+llama-server; no test calls a real API.
+
+| # | Failure mode | Wanted behaviour | Test |
+|---|---|---|---|
+| J1 | A judge that says "success" to anything makes noop pass, or the judge reads the agent's claim instead of its answer. | On a scripted judged benchmark with a fake judge, `noop` scores 0, a scripted perfect agent passes and a scripted wrong agent fails. | `J1 ...` |
+| J2 | A judged benchmark runs with no judge, so every case fails and looks like an agent fault. | A benchmark with `scoring: "llm"` and no judge gets a skip row with the reason and the fix. A judged case of a mixed benchmark fails with `judge: no judge`. | `J2 ...` |
+| J3 | A typo in `--judge`, or `claude` with no key, is found only after the agent ran for hours. | The CLI stops with exit 2 before any case: an unknown name lists the known ones; `claude` without `ANTHROPIC_API_KEY` and `local` without a URL each say what to set. | `J3 ...` |
+| J4 | Two judges ran but the board shows one number, so a reader cannot compare the cloud judge with the local one. | Each result keeps every judge's verdict; the board counts passes per judge and names the model and where it ran. | `J4 ...` |
+| J5 | A judge error (HTTP error, refusal, a reply with no verdict) crashes the run or counts as a pass. | That judge's verdict fails with a `judge: <name>:` reason; the case and the run go on. | `J5 ...` |
+| J6 | The board does not say which model judged, so a Claude-judged score is read as the official judge's score. | `judgedBy` is `llm:<model>`; the fingerprint lists each judge's name, model and `cloud` or `local`; the Markdown says LLM-judged scores differ from the official judge. | `J6 ...` |
+| J7 | The API key leaks into a board, a log or an error message. | The key is read from the environment only and is scrubbed from every judge error. | `J7 ...` |
+| J8 | The clients send the wrong request: no key header, the wrong model, or the prompt in the wrong field. | The Claude judge sends `x-api-key`, the model from `--judge-model` (default `claude-sonnet-5-5`) and the prompt as the user message; the local judge posts to `/v1/chat/completions`. | `J8 ...` |
+
 ## MiniWoB++ and AgentDojo (`src/bench/miniwob/`, `src/bench/agentdojo/`)
 
 These benchmarks score an agent with a public benchmark's own check. They are
