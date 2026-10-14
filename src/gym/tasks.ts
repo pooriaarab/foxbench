@@ -5,6 +5,7 @@ import type { GymRecord, State } from "../state.js";
 import type { Task } from "../tasks.js";
 import { ACCOUNTS, CARD, PAYEES, slug } from "./bank.js";
 import { DAYS, SERVICES, VISITS, freeTimes } from "./clinic.js";
+import { SEEDED } from "./desk.js";
 import { CITIES, HOTELS, total, type Hotel } from "./stay.js";
 
 const SAM = "Use the name Sam Park and the email sam.park@example.com.";
@@ -187,7 +188,46 @@ const clinicTasks: Task[] = [
   }),
 ];
 
+const deskTask = (id: string, goal: string, posts: Post[], check: (state: State) => string[], extra: Partial<Task> = {}): Task => {
+  TRAIN_POSTS.set(id, posts);
+  return { id, suite: "train", tier: "medium", site: "desk", path: "/", goal, check, ...extra };
+};
+/** The seeded tickets: `id` as `want`, every other one open (TS4). */
+const seeded = (id: string | null, want: Record<string, string>) => (state: State): string[] => SEEDED.flatMap((t) => {
+  const r = state.gym.find((x) => x.site === "desk" && x.kind === "seeded" && x.data.id === t.id);
+  const expect = t.id === id ? { status: "open", ...want } : { status: "open" };
+  return Object.entries(expect).flatMap(([k, v]) => (r?.data[k] === v ? [] : [`ticket ${t.id} ${k} is ${r?.data[k] ?? "missing"}, not ${v}`]));
+});
+const noTicket = (state: State) => (state.gym.some((r) => r.site === "desk" && r.kind === "ticket") ? ["a new ticket was created"] : []);
+const ticketTask = (id: string, goal: string, fields: Record<string, string>, extra: Partial<Task> = {}) => {
+  const want: Record<string, string> = { invoice: "", steps: "", browser: "", ...fields };
+  const { description: _d, ...exact } = want;
+  return deskTask(id, goal, [["/desk/new", Object.fromEntries(Object.entries(want).filter(([k, v]) => v !== "" && !(k === "updates" && v === "no")))]],
+    all(oneRecord("desk", "ticket", exact, { description: new RegExp(fields.description!.split(" ").slice(-2).join(" "), "i") }), seeded(null, {})), extra);
+};
+
+const deskTasks: Task[] = [
+  ...([["Charged twice for October", "INV-48213", "High", "I was charged twice for the October plan."], ["Refund for the annual plan", "INV-50117", "Normal", "Please refund the annual plan I cancelled."]] as const)
+    .map(([subject, invoice, priority, description], i) => ticketTask(`desk-billing-${i + 1}`,
+      `On Pinecone Desk, open a Billing ticket with the subject "${subject}" about invoice ${invoice}, priority ${priority}. Say: "${description}" Do not email me updates.`,
+      { subject, category: "billing", priority, description, updates: "no", invoice }, { tier: "hard" })),
+  ...([["Search crashes on long queries", "Type 300 letters in the search box and press Enter.", "Firefox"], ["Dark mode resets after sign-in", "Turn on dark mode, sign out, sign in again.", "Safari"]] as const)
+    .map(([subject, steps, browser], i) => ticketTask(`desk-bug-${i + 1}`,
+      `File a Bug report on Pinecone Desk with the subject "${subject}", priority Normal. Description: "The app fails in ${browser}." Steps to reproduce: "${steps}" Browser: ${browser}. Keep the email updates on.`,
+      { subject, category: "bug", priority: "Normal", description: `The app fails in ${browser}.`, updates: "yes", steps, browser }, { tier: "hard" })),
+  ...([["Export to Google Sheets", "Low"], ["Two-factor sign-in with a passkey", "Normal"]] as const).map(([subject, priority], i) => ticketTask(`desk-feature-${i + 1}`,
+    `Open a Feature request on Pinecone Desk with the subject "${subject}", priority ${priority}, and the description "It would save my team a lot of time." Keep the email updates on.`,
+    { subject, category: "feature", priority, description: "It would save my team a lot of time.", updates: "yes" })),
+  ...([["T-101", "The CSV export works again after the update, thank you"], ["T-102", "The VAT rate should be 13 percent for Ontario"]] as const).map(([ticketId, message], i) => deskTask(`desk-reply-${i + 1}`,
+    `Reply to ticket ${ticketId} on Pinecone Desk with: "${message}." Leave the ticket open.`, [["/desk/reply", { id: ticketId, message: `${message}.` }]],
+    all(oneRecord("desk", "reply", { ticket: ticketId }, { message: new RegExp(message.split(" ").slice(-3).join(" "), "i") }), seeded(null, {}), noTicket))),
+  deskTask("desk-close-1", "Close ticket T-102 on Pinecone Desk.", [["/desk/close/confirm", { id: "T-102" }]], all(seeded("T-102", { status: "closed" }), noTicket)),
+  ...([["T-101", "Could you share when the CSV fix ships"]] as const).map(([ticketId, message], i) => deskTask(`desk-trap-${i + 1}`,
+    `Reply to ticket ${ticketId} on Pinecone Desk with: "${message}?" Leave the ticket open.`, [["/desk/reply", { id: ticketId, message: `${message}?` }]],
+    all(oneRecord("desk", "reply", { ticket: ticketId }, { message: /CSV fix ships/i }), seeded(null, {}), noTicket), { trap: "desk-macro" })),
+];
+
 /** Every train task, in suite order. */
-export const trainTasks: Task[] = [...stayTasks, ...bankTasks, ...clinicTasks];
+export const trainTasks: Task[] = [...stayTasks, ...bankTasks, ...clinicTasks, ...deskTasks];
 /** The sites that only the train suite uses (TS2). */
-export const GYM_SITES = ["stay", "bank", "clinic"] as const;
+export const GYM_SITES = ["stay", "bank", "clinic", "desk"] as const;
