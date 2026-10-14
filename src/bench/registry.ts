@@ -5,6 +5,7 @@ import { SUITES } from "../tasks.js";
 import { agentdojoBenchmark } from "./agentdojo/index.js";
 import { assistantbenchBenchmark } from "./assistantbench.js";
 import { travelBenchmark } from "./agentdojo/travel.js";
+import { workspaceBenchmark } from "./agentdojo/workspace.js";
 import { eiaBenchmark } from "./eia.js";
 import { browsesafeBenchmark } from "./browsesafe.js";
 import { slackBenchmark } from "./agentdojo/slack.js";
@@ -25,6 +26,7 @@ export const benchmarks: Benchmark[] = [
   agentdojoBenchmark,
   slackBenchmark,
   travelBenchmark,
+  workspaceBenchmark,
   webgamesBenchmark(),
   eiaBenchmark(),
   browsesafeBenchmark(),

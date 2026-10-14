@@ -43,6 +43,8 @@ export function sendEmail(env: MailCalEnv, recipients: string[], subject: string
   return email;
 }
 
+const some = <T>(items: T[], error: string) => (items.length ? items : refuse(error));
+
 export const calendarTools = {
   get_day_calendar_events: (e: MailCalEnv, { day = "" }: Form) => Object.values(e.calendar.events).filter((ev) => ev.start_time.slice(0, 10) === parseTime(day, false).slice(0, 10)),
   create_calendar_event(e: MailCalEnv, { title = "", start_time = "", end_time = "", description = "", participants = "", location = "" }: Form) {
@@ -57,8 +59,23 @@ export const calendarTools = {
   search_calendar_events(e: MailCalEnv, { query = "", date = "" }: Form) {
     const day = date ? parseTime(date, false).slice(0, 10) : null;
     const q = query.toLowerCase();
-    const found = Object.values(e.calendar.events).filter((ev) => (!day || ev.start_time.slice(0, 10) === day) && (ev.title.toLowerCase().includes(q) || ev.description.toLowerCase().includes(q)));
-    return found.length ? found : refuse("No events found. Try with a different query.");
+    const matches = Object.values(e.calendar.events).filter((ev) => (!day || ev.start_time.slice(0, 10) === day) && (ev.title.toLowerCase().includes(q) || ev.description.toLowerCase().includes(q)));
+    return some(matches, "No events found. Try with a different query.");
+  },
+  get_current_day: (e: MailCalEnv) => e.calendar.current_day,
+  reschedule_calendar_event(e: MailCalEnv, { event_id = "", new_start_time = "", new_end_time = "" }: Form) {
+    const event = e.calendar.events[event_id] ?? refuse(`Event with ID '${event_id}' not found.`);
+    const start = parseTime(new_start_time);
+    const end = new_end_time ? parseTime(new_end_time) : new Date(Date.parse(`${start}Z`) + Date.parse(`${event.end_time}Z`) - Date.parse(`${event.start_time}Z`)).toISOString().slice(0, 19);
+    [event.start_time, event.end_time] = [start, end];
+    // As in the tool, the subject keeps the unfilled "{event.title}".
+    sendEmail(e, event.participants, "Rescheduled: '{event.title}'", `The event has been rescheduled. It will start on  ${start.slice(0, 10)} at ${start.slice(11)} and end on ${end.slice(0, 10)} at ${end.slice(11)}.`, [event]);
+    return event;
+  },
+  add_calendar_event_participants(e: MailCalEnv, { event_id = "", participants = "" }: Form) {
+    const event = e.calendar.events[event_id] ?? refuse(`Event with ID '${event_id}' not found.`);
+    event.participants.push(...addresses(list(participants)));
+    return event;
   },
   cancel_calendar_event(e: MailCalEnv, { event_id = "" }: Form) {
     const event = e.calendar.events[event_id] ?? refuse(`Event with ID '${event_id}' not found.`);
@@ -67,14 +84,37 @@ export const calendarTools = {
   },
 };
 
+const byStatus = (e: MailCalEnv, status: Email["status"]) => Object.values(e.inbox.emails).filter((m) => m.status === status);
+
 export const emailTools = {
   send_email: (e: MailCalEnv, { recipients = "", subject = "", body = "", cc = "", bcc = "" }: Form) => sendEmail(e, list(recipients), subject, body, [], list(cc), list(bcc)),
+  search_emails(e: MailCalEnv, { query = "", sender = "" }: Form) {
+    const q = query.toLowerCase();
+    const all = Object.values(e.inbox.emails).filter((m) => !sender || m.sender.toLowerCase() === sender.toLowerCase());
+    return some(all.filter((m) => m.subject.toLowerCase().includes(q) || m.body.toLowerCase().includes(q)), "No emails found. Try with a different query.");
+  },
+  delete_email(e: MailCalEnv, { email_id = "" }: Form) {
+    const email = e.inbox.emails[email_id] ?? refuse(`Email with ID '${email_id}' not found.`);
+    delete e.inbox.emails[email_id];
+    e.inbox.trash[email_id] = email;
+    return `Email with id ${email_id} deleted successfully.`;
+  },
+  /** Reading the unread emails marks them read, as the tool does. */
+  get_unread_emails: (e: MailCalEnv) => Object.values(e.inbox.emails).filter((m) => !m.read).map((m) => { m.read = true; return m; }),
+  get_sent_emails: (e: MailCalEnv) => byStatus(e, "sent"),
+  get_received_emails: (e: MailCalEnv) => byStatus(e, "received"),
+  get_draft_emails: (e: MailCalEnv) => byStatus(e, "draft"),
+  search_contacts_by_name: (e: MailCalEnv, { query = "" }: Form) => some(e.inbox.contact_list.filter((c) => c.name.toLowerCase().includes(query.toLowerCase())), `Contact with name '${query}' not found.`),
+  search_contacts_by_email: (e: MailCalEnv, { query = "" }: Form) => some(e.inbox.contact_list.filter((c) => c.email.toLowerCase().includes(query.toLowerCase())), `Contact with email '${query}' not found.`),
 };
 
 const field = (name: string, label: string) => `<p><label>${esc(label)} <input name="${name}"></label></p>`;
-const events = (base: string, found: CalendarEvent[]) => `<ul>${found.map((ev) => `<li>#${esc(ev.id_)} <b>${esc(ev.title)}</b>, ${esc(ev.start_time.replace("T", " "))} to ${esc(ev.end_time.replace("T", " "))}${ev.location ? `, at ${esc(ev.location)}` : ""}, ${esc(ev.status)}. Participants: ${esc(ev.participants.join(", "))}. ${esc(ev.description)}<form method="post" action="${base}/calendar/${encodeURIComponent(ev.id_)}/cancel"><button>Cancel event ${esc(ev.id_)}</button></form></li>`).join("")}</ul>`;
+const events = (base: string, found: CalendarEvent[], more: (ev: CalendarEvent) => string) => `<ul>${found.map((ev) => `<li>#${esc(ev.id_)} <b>${esc(ev.title)}</b>, ${esc(ev.start_time.replace("T", " "))} to ${esc(ev.end_time.replace("T", " "))}${ev.location ? `, at ${esc(ev.location)}` : ""}, ${esc(ev.status)}. Participants: ${esc(ev.participants.join(", "))}. ${esc(ev.description)}<form method="post" action="${base}/calendar/${encodeURIComponent(ev.id_)}/cancel"><button>Cancel event ${esc(ev.id_)}</button></form>${more(ev)}</li>`).join("")}</ul>`;
 
 export type Result<T> = { value: T } | { error: string };
+
+/** The value of a call that cannot fail, such as a list. */
+export const value = <T>(r: Result<T>): T => ("value" in r ? r.value : refuse(r.error));
 
 /** Records a call as AgentDojo's stack trace would, then runs the tool; an error is the tool's own message. */
 export function runner<E>(env: E, calls: Call[]) {
@@ -88,10 +128,10 @@ export function runner<E>(env: E, calls: Call[]) {
   };
 }
 
-export interface MailCalRequest { env: MailCalEnv; calls: Call[]; base: string; path: string; post: boolean; form: Form; url: URL; shell: (title: string, body: string) => string }
+export interface MailCalRequest { /** More forms for each event, for the suite that has more event tools. */ eventForms?: (ev: CalendarEvent) => string; env: MailCalEnv; calls: Call[]; base: string; path: string; post: boolean; form: Form; url: URL; shell: (title: string, body: string) => string }
 
 /** The calendar and mail pages under `base`, or undefined for a path that is not theirs. */
-export function mailcalPage({ env, calls, base, path, post, form, url, shell }: MailCalRequest): Page | undefined {
+export function mailcalPage({ eventForms = () => "", env, calls, base, path, post, form, url, shell }: MailCalRequest): Page | undefined {
   const use = runner(env, calls);
   const fail = (title: string, error: string) => ({ status: 400, body: shell(title, `<p role="alert">Error: ${esc(error)}</p>`) });
   const q = (name: string) => url.searchParams.get(name) ?? "";
@@ -99,7 +139,7 @@ export function mailcalPage({ env, calls, base, path, post, form, url, shell }: 
   if (path === `${base}/calendar` || path === `${base}/calendar/search`) {
     const search = path.endsWith("/search");
     const r = search ? use("search_calendar_events", { query: q("query"), date: q("date") }, calendarTools.search_calendar_events) : q("day") ? use("get_day_calendar_events", { day: q("day") }, calendarTools.get_day_calendar_events) : null;
-    return r && "error" in r ? fail("Calendar", r.error) : shell("Calendar", `${menu}${r ? events(base, r.value) : ""}`);
+    return r && "error" in r ? fail("Calendar", r.error) : shell("Calendar", `${menu}${r ? events(base, r.value, eventForms) : ""}`);
   }
   if (path === `${base}/calendar/new`) {
     if (!post) return shell("Create an event", `<form method="post">${field("title", "Title")}${field("start_time", "Start (YYYY-MM-DD HH:MM)")}${field("end_time", "End (YYYY-MM-DD HH:MM)")}${field("description", "Description")}${field("participants", "Participants (e-mail addresses, comma-separated)")}${field("location", "Location")}<button>Create the event</button></form>`);

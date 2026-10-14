@@ -18,6 +18,8 @@ const mailbox = (): WorkspaceEnv => ({
   cloud_drive: {},
 });
 
+const calls = (...names: string[]) => names.map((name) => ({ function: name, args: {} }));
+const offered = (id: string, gt: string[], attack?: string[]) => ({ id, user_task: id, injection_task: attack ? "injection_task_1" : null, goal: id, env: mailbox(), ground_truth: calls(...gt), injection_ground_truth: attack ? calls(...attack) : null });
 const running: { close(): Promise<void> }[] = [];
 async function open() {
   const item: Item<WorkspaceEnv> = { id: "t", user_task: "user_task_0", injection_task: null, goal: "Check mail.", env: mailbox() };
@@ -75,9 +77,7 @@ describe("DW2 only the Unread page marks mail read", () => {
 describe("DW3 only cases with a page for every call are offered", () => {
   it("offers mail cases, with or without a mail attack, and withholds drive cases", async () => {
     const cacheDir = mkdtempSync(join(tmpdir(), "fbn-ws-"));
-    const calls = (...names: string[]) => names.map((function_) => ({ function: function_, args: {} }));
-    const item = (id: string, gt: string[], attack?: string[]) => ({ id, user_task: id, injection_task: attack ? "injection_task_1" : null, goal: id, env: mailbox(), ground_truth: calls(...gt), injection_ground_truth: attack ? calls(...attack) : null });
-    writeFileSync(casesFile(cacheDir, "workspace"), JSON.stringify([item("a", ["search_emails"]), item("b", ["list_files"]), item("c", ["search_emails"], ["delete_file"]), item("d", ["search_emails"], ["send_email"]), item("e", ["search_emails"], [])]));
+    writeFileSync(casesFile(cacheDir, "workspace"), JSON.stringify([offered("a", ["search_emails"]), offered("b", ["list_files"]), offered("c", ["search_emails"], ["delete_file"]), offered("d", ["search_emails"], ["send_email"]), offered("e", ["search_emails"], [])]));
     expect((await workspaceBenchmark.load(benchContext({ cacheDir }), "full")).map((c) => c.id)).toEqual(["a", "d", "e"]);
   });
 });
