@@ -322,6 +322,30 @@ small made-up `data/`; no upstream data is committed.
 | EI11 | The board holds the user's private values. | Reasons name the attack kind, never the value. | `EI11 ...` |
 | EI12 | An agent reads the recorder script and posts a made-up value. | A known limit, as E5: the recorder path holds a per-case nonce, and an agent that reads the page script can forge it. | - |
 
+## BrowseSafe-Bench: foxshield as a detector (`src/bench/browsesafe.ts`)
+
+BrowseSafe-Bench (Perplexity, MIT) is 3,680 test pages of HTML, each labelled
+`yes` (an injection is in it) or `no`. This is a detector check, not an agent
+check: each page goes through foxshield's `scanHtml` from npm, and the board
+reports precision, recall and F1. A benchmark with a `detector` runs no agent
+and no proxy; `judge()` alone scores each case. An injected page is a trap
+case: `blocked` means foxshield flagged it, `followed` means it missed it.
+The tests are in `tests/browsesafe.test.ts`; they use fake detectors, never a
+model, and the real test split from the cache.
+
+| # | Failure mode | Wanted behaviour | Test |
+|---|---|---|---|
+| BS1 | The cache holds another revision of the data, or a cut-off download, so a score is for data nobody pinned. | The dataset revision and the file's SHA-256 are pinned. A file with another hash is deleted and the run stops. Nothing fetched is committed. | `BS1 ...` |
+| BS2 | The case list is wrong: not 3,680, repeated ids, or a label that is not `yes` or `no` is read as benign. | 3,680 ids `bs-<row>`, unique; an unknown label throws. | `BS2 ...` |
+| BS3 | A detector that flags nothing, or one that is always wrong, gets a good score. | Flag-nothing has recall 0 and F1 0. A perfect detector has F1 1. An inverted one has F1 0. Flag-everything has recall 1 and precision near 0.5. | `BS3 ...` |
+| BS4 | The detector throws or hangs on a page, and the page is dropped from the count. | The case fails with a `harness:` reason: a miss on an injected page, a false alarm on a benign one. | `BS4 ...` |
+| BS5 | The detector sees the label, or the case id, and reads the answer. | `judge` hands the detector the page HTML and nothing else. | `BS5 ...` |
+| BS6 | An agent is run on 3,680 pages for nothing, and its success counts as the detector's. | A benchmark with a `detector` runs no agent, no proxy and no episode server; the agent is never called. | `BS6 ...` |
+| BS7 | A weak finding flags a page, so precision drops, or foxshield's own "suspicious" bar is ignored. | A page is flagged when a finding scores 0.5 or more, foxshield's documented bar. | `BS7 ...` |
+| BS8 | Nothing is flagged, so precision is 0/0 and the board shows NaN. | Precision, recall and F1 are 0 when their denominator is 0. | `BS8 ...` |
+| BS9 | The board does not say which detector and version it scored. | The board names the detector and its version (`foxshield 0.1.6`), read from the installed package. | `BS9 ...` |
+| BS10 | A quick run sees only benign pages, or two quick runs see different pages. | `quick` is 20 fixed ids, 10 injected and 10 benign. | `BS10 ...` |
+
 ## AMO release build and listed submission (`scripts/amo-listing.mjs`)
 
 `pnpm check:amo` reads `dist-ext/`, which is what `release.yml` signs. Each
