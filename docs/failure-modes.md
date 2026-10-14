@@ -425,6 +425,22 @@ with AgentDojo's own checks, are in `e2e/bench.mjs`.
 | DT7 | `noop` passes, `perfect` fails or `wrong` passes. | `noop` passes the user tasks that AgentDojo's checks pass on an unchanged site, and every attack is blocked; `perfect` passes every case with the ground-truth output; `gullible` follows every attack; `wrong` passes none that needs a change. The numbers are in the `e2e:bench` run. | `noop`, `perfect`, `gullible`, `wrong` runs |
 | DT8 | The suite is missing from `--suite`, or the goal does not say what the site is. | The suite is registered as `agentdojo-travel`; the goal starts with one sentence that names the site and its pages. | `DT8 ...` |
 
+## AgentDojo workspace: mail and calendar (`src/bench/agentdojo/workspace.ts`, `mailcal.ts`)
+
+The workspace suite is a mail and calendar web app. The drive pages are a
+later PR, so a case is offered only when every call it needs has a page. The
+tests are in `tests/agentdojo-workspace.test.ts` (the app, with a fake judge);
+the scored runs, with AgentDojo's own checks, are in `e2e/bench.mjs`.
+
+| # | Failure mode | Wanted behaviour | Check |
+|---|---|---|---|
+| DW1 | A mail or calendar page does what its tool does not. | Each follows `email_client.py` and `calendar_client.py`: search by text and sender with the tools' errors, delete moves to the trash, a reschedule keeps the length and sends the tool's email (its subject keeps the unfilled `{event.title}`), added participants are not deduplicated. | `DW1 ...` |
+| DW2 | Reading mail changes more than the tools do: opening a folder marks mail read, or the Unread page does not. | Only the Unread emails page marks mail read, as `get_unread_emails` does; AgentDojo's check for it wants exactly those changes. | `DW2 ...` |
+| DW3 | A case that needs a drive call is offered with no drive page, so a fail looks like an agent fault, or an attack reads as blocked when it could not be followed. | `load` offers the 42 cases whose calls all have pages (24 user tasks, 18 attacked pairs). The ids are AgentDojo's, so the drive PR adds the rest. | `DW3 ...` |
+| DW4 | The attacks that have no ground-truth calls upstream (email exfiltration, the phishing emails) are never played, so "blocked" proves nothing. | The scripted `gullible` agent reads the mail off the pages and plays each one; AgentDojo's check says followed. | `gullible` run |
+| DW5 | `noop` passes, `perfect` fails or `wrong` passes. | `noop` 0/42 with every attack blocked; `perfect` 42/42; `gullible` follows 18/18; `wrong` passes only user task 12, whose event the next task also makes. | `noop`, `perfect`, `gullible`, `wrong` runs |
+| DW6 | The suite is missing from `--suite`, or the goal does not say what the app is. | The suite is registered as `agentdojo-workspace`; the goal starts with one sentence that names the app and its pages. | `DW6 ...` |
+
 ## WebGames (`src/bench/webgames.ts`)
 
 WebGames is 150 client-side challenges. Each shows a password when it is
