@@ -103,7 +103,6 @@ export async function startMiniwob(html, task, goal) {
     url: `${server.url}${path}`,
     goal,
     startPath: path,
-    log: server.log,
     state,
     ended,
     async judge() {

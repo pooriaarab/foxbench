@@ -2,6 +2,7 @@
 // start, the agent, the benchmark's own judge, and the case's close; then
 // down. A benchmark that cannot run here gets a skip row, not a crash.
 import { parseMetrics, type Adapter, type AgentMetrics, type TaskOutput } from "../adapter.js";
+import { startProxy, type RecordingProxy } from "./proxy.js";
 import { benchContext, readiness } from "./registry.js";
 import type { Benchmark, Case, Env, Episode, SubsetName, Verdict } from "./types.js";
 
@@ -29,6 +30,8 @@ export interface TaskResult {
   posts: number;
   /** Time to the first request that is not a load of the start page, or null. */
   firstActionMs: number | null;
+  /** Requests and bytes to hosts other than the site, through the proxy (P4). */
+  egress: { requests: number; bytes: number };
   /** Questions to the user, where the benchmark has a user to ask. */
   asks: number;
   /** What the agent reported about itself, or null. Never used in the score. */
@@ -58,6 +61,8 @@ export interface Scoreboard {
   /** Benchmarks that could not run here, and why. */
   skipped: { benchmark: string; reason: string; fix?: string }[];
   medianRequests: number;
+  /** Egress over all tasks. */
+  egress: { requests: number; bytes: number };
   /** Questions sent to the user, over all tasks. */
   asks: number;
   /** The median over tasks with a first action, or null when none had one. */
@@ -107,14 +112,14 @@ function totals(results: TaskResult[]): AgentMetrics | null {
 const message = (error: unknown) => (error instanceof Error ? error.message : String(error));
 
 /** Hands one case to the agent, with the timeout and the episode end. */
-async function play(adapter: Adapter, episode: Episode, timeoutMs: number, graceMs: number) {
+async function play(adapter: Adapter, episode: Episode, url: string, timeoutMs: number, graceMs: number) {
   const started = Date.now();
   let output: TaskOutput = { done: false, log: "" };
   let adapterError = false;
   let endedEarly = false;
   let timer: NodeJS.Timeout | undefined;
   try {
-    const work = adapter.runTask({ url: episode.url, goal: episode.goal });
+    const work = adapter.runTask({ url, goal: episode.goal });
     const limit = new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error(`timed out after ${timeoutMs} ms`)), timeoutMs); });
     const ended = episode.ended ? episode.ended.then(() => "ended" as const) : new Promise<never>(() => {});
     const first = await Promise.race([work, limit, ended]);
@@ -138,24 +143,32 @@ async function play(adapter: Adapter, episode: Episode, timeoutMs: number, grace
 
 async function runCase(bench: Benchmark, env: Env, item: Case, options: BenchRunOptions): Promise<TaskResult> {
   let episode: Episode | null = null;
+  let proxy: RecordingProxy | null = null;
   let verdict: Verdict;
   let ran = { output: { done: false, log: "" } as TaskOutput, adapterError: false, endedEarly: false, ms: 0 };
   try {
     episode = await bench.start(env, item);
-    ran = await play(options.adapter, episode, options.timeoutMs ?? 600_000, options.graceMs ?? 30_000);
-    verdict = await bench.judge(env, episode, ran.output, { requests: [] });
+    // The agent gets the proxy's URL, never the site's own (P1).
+    proxy = await startProxy(episode.url, { ...(episode.headers ? { headers: episode.headers } : {}), ...(episode.port ? { port: episode.port } : {}) });
+    const start = new URL(episode.url);
+    ran = await play(options.adapter, episode, proxy.origin + start.pathname + start.search, options.timeoutMs ?? 600_000, options.graceMs ?? 30_000);
+    verdict = await bench.judge(env, episode, ran.output, { requests: proxy.trace });
   } catch (error) {
     verdict = { success: false, attack: null, reasons: [`harness: ${message(error)}`], judgedBy: "programmatic" };
   }
+  await proxy?.close();
   await episode?.close?.().catch(() => {});
-  // Server metrics from the case's request log (M4, M6).
-  const log = episode?.log?.() ?? [];
+  // Steps are posts and page loads on the site, not control endpoints (M4, P2).
+  const trace = proxy?.trace ?? [];
+  const log = trace.filter((r) => !r.egress && !r.path.startsWith("/__") && (r.method === "POST" || r.type === "text/html"));
   const first = log.find((r) => !(r.method === "GET" && r.path === episode?.startPath));
+  const egress = trace.filter((r) => r.egress);
   return {
     id: item.id, benchmark: bench.id, suite: item.suite ?? bench.id, tier: item.tier ?? null, trap: Boolean(item.trap),
     success: verdict.success, attack: verdict.attack, secure: verdict.success && verdict.attack !== "followed", reasons: verdict.reasons, ms: ran.ms,
     done: Boolean(ran.output.done), adapterError: ran.adapterError, endedEarly: ran.endedEarly, log: String(ran.output.log ?? "").slice(0, 4000),
-    requests: log.length, posts: log.filter((r) => r.method === "POST").length, firstActionMs: first ? first.at : null, asks: verdict.asks ?? 0, agentMetrics: parseMetrics(ran.output.metrics),
+    requests: log.length, posts: log.filter((r) => r.method === "POST").length, firstActionMs: first ? first.at : null,
+    egress: { requests: egress.length, bytes: egress.reduce((n, r) => n + r.bytes, 0) }, asks: verdict.asks ?? 0, agentMetrics: parseMetrics(ran.output.metrics),
   };
 }
 
@@ -219,6 +232,7 @@ function scoreboard(agent: string, results: TaskResult[], skipped: Scoreboard["s
     benchmarks: countBy(results, "benchmark"),
     skipped,
     medianRequests: median(results.map((r) => r.requests)),
+    egress: { requests: results.reduce((n, r) => n + r.egress.requests, 0), bytes: results.reduce((n, r) => n + r.egress.bytes, 0) },
     asks: results.reduce((n, r) => n + r.asks, 0),
     medianFirstActionMs: firsts.length ? median(firsts) : null,
     agentTotals: totals(results),

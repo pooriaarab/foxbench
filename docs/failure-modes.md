@@ -83,8 +83,8 @@ its own request log, and metrics that the agent reports. The tests are in
 | M1 | `runSuite` with no task list runs the new suites too, so a core score is no longer comparable with old ones. | With no `tasks`, `runSuite` runs `core` only. | `M1 ...` |
 | M2 | A task has no suite or tier, or `core` changes size. | Every task has a known suite and tier, and `core` has the same 13 ids as 0.1.x. | `M2 ...` |
 | M3 | `--suite` with an unknown name runs nothing and exits 0. | Exit 2 and name the suites. | `M3 ...` |
-| M4 | Requests to the control endpoints, the style sheet or a site script count as agent steps. | Only page loads and posts below a site count. | `M4 ...` |
-| M5 | The request log of one task leaks into the next. | A reset starts an empty log. | `M5 ...` |
+| M4 | Requests to the control endpoints, the style sheet or a site script count as agent steps. | Only POSTs and HTML page loads count, from the proxy trace (P2). | `M4 ...` |
+| M5 | The request log of one task leaks into the next. | Each case gets its own proxy and trace. | `M5 ...` |
 | M6 | The first action time counts the load of the start page, so every agent looks instant. | `firstActionMs` is the time to the first request that is not a GET of the start page, or null. | `M6 ...` |
 | M7 | Agent-reported numbers are mixed into the server metrics, or a missing number shows as 0. | They stay in `agentMetrics`. A number the agent did not report is absent, and the board says "not reported". | `M7 ...` |
 | M8 | An MCP reply with bad metrics (text, negative numbers) breaks the run or lands in the board. | Only finite numbers of 0 or more are kept. The rest is ignored. | `M8 ...` |
@@ -185,6 +185,23 @@ could hide a missing benchmark or lose a result. The tests are in
 | L5 | Two quick runs see different cases, or the quick list names a case that no longer exists. | `quick` is the committed list in `src/bench/subsets/<id>.json`, at most 20 ids. An id the benchmark does not have is an error, not a silent drop. | `L5 ...` |
 | L6 | The results of two benchmarks mix in the board, so one benchmark's pass rate cannot be read. | Each result names its benchmark. The board counts tasks and passes per benchmark, and they add up to the totals. | `L1 L6 ...` |
 | L7 | `foxbench doctor` hides a benchmark that is not ready, or exits 0 when a required one is not. | It prints each benchmark with ready, or the reason and the fix. With `--require` it exits 1 when a named one is not ready. | `L7 ...` |
+
+## The recording proxy (`src/bench/proxy.ts`)
+
+The run loop puts a recording proxy in front of every case. The agent gets the
+proxy's `127.0.0.1` URL; the proxy forwards to the case's site and logs each
+request. That log is the `Trace` the judge gets, and the source of the board's
+request metrics and egress count. The same port also works as an HTTP proxy
+for the agent's browser, so requests to other hosts show up as egress. The
+tests are in `tests/proxy.test.ts`.
+
+| # | Failure mode | Wanted behaviour | Test |
+|---|---|---|---|
+| P1 | The agent learns the site's own port, from its URL or a redirect, and goes around the proxy, so the trace misses requests. | The agent's URL is the proxy's. A `Location` on the site's origin is rewritten to the proxy's. | `P1 ...` |
+| P2 | The trace or the metrics differ per benchmark, or count style sheets, scripts and control endpoints as steps (M4). | One trace per case: method, host, path, status, bytes, type and time. Requests and posts count POSTs and HTML page loads, not `/__` paths. The judge gets the same trace. | `P2 ...` |
+| P3 | An auto-login header reaches the agent, or never reaches the site. | `Episode.headers` go on each request to the site, and only there. | `P3 ...` |
+| P4 | A request to another host through the proxy is not seen, so a cloud agent shows 0 egress. | An absolute URL or a CONNECT to any other host is logged as egress with its host and bytes, and forwarded or tunnelled, never decrypted. The board sums egress per case. | `P4 ...` |
+| P5 | The proxy stays up after the case, so a late request reaches the next case (R1), or a fixed port changes per case (R6). | The loop closes the proxy after the judge. With `Episode.port`, the proxy listens on that port, so a site keeps its origin. | `P5 ...` |
 
 ## External benchmarks (`external/`)
 

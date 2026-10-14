@@ -5,7 +5,6 @@ import { noopAdapter, type Adapter } from "../src/adapter.js";
 import { runSuite } from "../src/runner.js";
 import { startServer, type FoxbenchServer, type Startable } from "../src/server.js";
 import { sites } from "../src/sites/index.js";
-import { serverMetrics } from "../src/state.js";
 import { taskById, type Task } from "../src/tasks.js";
 
 let server: FoxbenchServer | null = null;
@@ -70,7 +69,7 @@ describe("U5 the asks metric", () => {
     await open(SIZE);
     await post("/user/", { q: "" });
     await post("/user/", { q: "Which size?" });
-    expect(serverMetrics(server!.state).asks).toBe(1);
+    expect(server!.state.questions.length).toBe(1);
   });
   it("is summed on the board", async () => {
     const asker: Adapter = {

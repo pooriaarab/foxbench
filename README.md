@@ -247,9 +247,12 @@ interface Adapter {
 
 An adapter may also return `metrics: { steps, modelCalls, tokensIn, tokensOut, approvals }`
 (an MCP tool can put the same object in a JSON reply). The scoreboard sums
-them but never scores them. Beside them it shows what the server measured
-itself: requests (page loads and posts on the sites), posts, and the time to
-the first action after the start page load. It also shows passes per suite
+them but never scores them. Beside them it shows what foxbench measured
+itself, through a recording proxy in front of every case (the agent gets the
+proxy's `127.0.0.1` URL): requests (page loads and posts), posts, the time to
+the first action after the start page load, and egress. Egress counts requests
+to other hosts that reach the proxy when the agent's browser uses the task URL's
+origin as its HTTP proxy; a fully local agent shows 0. It also shows passes per suite
 and utility under attack: trap tasks that passed, whether or not the attack
 was blocked.
 
