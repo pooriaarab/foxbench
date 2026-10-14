@@ -12,3 +12,5 @@ export type { RunOptions, Scoreboard, TaskResult } from "./runner.js";
 export { toMarkdown, writeScore } from "./score.js";
 export { mcpAdapter } from "./mcp.js";
 export type { McpAdapterOptions } from "./mcp.js";
+export { benchContext, benchmarkById, benchmarks, readiness, resolveSuites, suiteNames } from "./bench/registry.js";
+export type { BenchContext, Benchmark, Baseline, Case, Env, Episode, Readiness, SubsetName, Trace, TraceEntry, Verdict } from "./bench/types.js";

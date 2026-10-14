@@ -1,0 +1,107 @@
+// The common shape of every benchmark foxbench runs: the in-house suites,
+// MiniWoB++, AgentDojo and the public benchmarks to come. The run loop knows
+// only this interface; each benchmark brings its own cases and its own judge.
+import type { TaskOutput } from "../adapter.js";
+
+/** What every benchmark call gets: where the cache is, which Firefox, the environment. */
+export interface BenchContext {
+  /** Fetched upstream code and data, never committed. FOXBENCH_CACHE or ~/.cache/foxbench. */
+  cacheDir: string;
+  /** The Firefox binary for benchmarks that need a browser of their own (a judge browser). */
+  firefox?: string;
+  env: NodeJS.ProcessEnv;
+}
+
+/** One case of a benchmark. Ids are stable across versions, so boards stay comparable. */
+export interface Case {
+  id: string;
+  tags: string[];
+  tier?: "easy" | "medium" | "hard";
+  trap?: boolean;
+  /** The goal text, for `foxbench list`. Absent for benchmarks whose licence forbids showing it. */
+  goal?: string;
+}
+
+/** What the agent gets for one case. */
+export interface Episode {
+  url: string;
+  goal: string;
+  /** The start path: the first load of it is not an action (M6). */
+  startPath: string;
+  /** Settles when the benchmark itself ends the episode (MiniWoB); the run loop then stops the agent. */
+  ended?: Promise<void>;
+  /** Stops what this case started, for example its own server, after the judge. */
+  close?(): Promise<void>;
+}
+
+/** The environment a benchmark brought up: nothing, a local server, or a tunnel to a VM. */
+export type Env = Record<string, unknown>;
+
+/** One request the agent made, as the recording proxy logs it. */
+export interface TraceEntry {
+  method: string;
+  host: string;
+  path: string;
+  status: number;
+  bytes: number;
+  /** Milliseconds from the start of the case. */
+  at: number;
+}
+
+export interface Trace {
+  requests: TraceEntry[];
+}
+
+export interface Verdict {
+  success: boolean;
+  /** Partial credit, a rubric average or a reward, where the benchmark has one. */
+  score?: number;
+  attack: "followed" | "blocked" | null;
+  /** Why the case failed. Empty when it passed. */
+  reasons: string[];
+  judgedBy: "programmatic" | `llm:${string}`;
+}
+
+export type SubsetName = "quick" | "published" | "full" | `tag:${string}`;
+
+export type Readiness = { ready: true } | { ready: false; reason: string; fix?: string };
+
+/** A published score on the same subset, with its source. */
+export interface Baseline {
+  agent: string;
+  subset: string;
+  /** Success rate from 0 to 1. */
+  score: number;
+  source: string;
+  vendorReported?: boolean;
+}
+
+export interface Benchmark {
+  /** "foxbench", "miniwob", "webarena-verified". */
+  id: string;
+  title: string;
+  /** The pinned commit or tag of the upstream code. */
+  upstream: { repo: string; ref: string; paper?: string };
+  licence: {
+    code: string;
+    data: string;
+    mode: "vendored" | "fetch-at-run" | "user-access" | "hosted-by-upstream";
+  };
+  where: "local" | "vm" | "live-web" | "upstream-hosted" | "user-instance";
+  measures: Array<"task" | "injection" | "privacy" | "policy" | "harm" | "ask-user" | "info-seeking">;
+  /** Who scores: code, an LLM judge, or both. Named apart from judge(), which does the scoring. */
+  scoring: "programmatic" | "llm" | "mixed";
+  /** Preflight. A skip carries the reason that goes in the board. */
+  check(ctx: BenchContext): Promise<Readiness>;
+  /** The cases of a subset. */
+  load(ctx: BenchContext, subset: SubsetName): Promise<Case[]>;
+  /** Brings the environment up. Idempotent. */
+  up(ctx: BenchContext): Promise<Env>;
+  /** Resets the state for one case and hands back what the agent gets. */
+  start(env: Env, item: Case): Promise<Episode>;
+  /** The benchmark's own scorer. Reads state, trace and the agent output, never `done`. */
+  judge(env: Env, episode: Episode, output: TaskOutput, trace: Trace): Promise<Verdict>;
+  /** Stops local servers. VMs stop only through `foxbench env down`. */
+  down(env: Env): Promise<void>;
+  baselines: Baseline[];
+}

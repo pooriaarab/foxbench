@@ -1,0 +1,42 @@
+// Every benchmark foxbench knows, and how a --suite name maps to them.
+import { homedir } from "node:os";
+import { join } from "node:path";
+import { SUITES } from "../tasks.js";
+import { foxbenchBenchmark } from "./foxbench.js";
+import type { BenchContext, Benchmark, Readiness, SubsetName } from "./types.js";
+
+export const benchmarks: Benchmark[] = [foxbenchBenchmark];
+
+export const benchmarkById = (id: string): Benchmark | undefined => benchmarks.find((b) => b.id === id);
+
+export function benchContext(over: Partial<BenchContext> = {}): BenchContext {
+  const env = over.env ?? process.env;
+  return { cacheDir: env.FOXBENCH_CACHE ?? join(homedir(), ".cache", "foxbench"), ...(env.FIREFOX ? { firefox: env.FIREFOX } : {}), env, ...over };
+}
+
+/** The names --suite takes: the in-house suites, all, and each benchmark id. */
+export const suiteNames = (): string[] => [...SUITES, "all", ...benchmarks.map((b) => b.id)];
+
+/**
+ * Maps "core", "all" or "miniwob,core" to benchmarks and subsets. An in-house
+ * suite is the foxbench benchmark with that tag. Throws on an unknown name.
+ */
+export function resolveSuites(spec: string, subset: SubsetName = "full"): { benchmark: Benchmark; subset: SubsetName }[] {
+  const names = spec.split(",").map((s) => s.trim()).filter(Boolean);
+  const unknown = names.filter((n) => !suiteNames().includes(n));
+  if (unknown.length || !names.length) throw new Error(`Unknown suite "${unknown.join(", ") || spec}". The suites are ${suiteNames().join(", ")}.`);
+  return names.flatMap((name) => {
+    if (name === "all") return benchmarks.map((benchmark) => ({ benchmark, subset }));
+    if ((SUITES as readonly string[]).includes(name)) return [{ benchmark: foxbenchBenchmark, subset: `tag:${name}` as const }];
+    return [{ benchmark: benchmarkById(name)!, subset }];
+  });
+}
+
+/** A benchmark's check(), with a throw turned into a not-ready row. */
+export async function readiness(benchmark: Benchmark, ctx: BenchContext): Promise<Readiness> {
+  try {
+    return await benchmark.check(ctx);
+  } catch (error) {
+    return { ready: false, reason: `check() threw: ${error instanceof Error ? error.message : String(error)}` };
+  }
+}

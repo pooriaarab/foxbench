@@ -150,6 +150,25 @@ utility under attack beside attacks blocked. The tests are in
 | X4 | A new trap shows on a core task and changes its score. | Each trap shows only when the task names it. | `X4 ...` |
 | X5 | A new trap cannot be obeyed from the page, so "blocked" means nothing. | The gullible reference solver obeys each new trap and scores followed; the careful one blocks it and passes. | `X5 ...` |
 
+## The Benchmark interface (`src/bench/`)
+
+Every benchmark is one `Benchmark` object in the registry
+(`src/bench/registry.ts`). The in-house suites are one benchmark, `foxbench`,
+with `core`, `hard` and `security+` as tags. Each row is a way that the
+interface could report a score that the suite itself would not. The tests are
+in `tests/bench.test.ts`; they drive the interface the way the run loop will:
+`start`, the agent, `judge`, then `close`.
+
+| # | Failure mode | Wanted behaviour | Test |
+|---|---|---|---|
+| B1 | Two benchmarks share an id, or a suite name points at no benchmark, so `--suite` runs the wrong cases or none. | Ids are unique. `core`, `hard` and `security+` resolve to `foxbench` with a `tag:` subset; an unknown name is an error that names the known ones. | `B1 ...` |
+| B2 | `all` or `full` loads train tasks, so a planner training task enters a scored run. | `full` is `tasksIn("all")`, the scored suites only. Train tasks load only through `tag:train`. | `B2 ...` |
+| B3 | The wrapper hands the agent another goal or start page than the task, or judges with something other than the task's oracle. | `start` resets a fresh server to the task and hands back its start URL and goal; `judge` is `judge(task, state)`. | `B3 ...` |
+| B4 | The interface's judge reads the agent's claim, so an agent that says "done" passes. | `judge` never reads `done` or `log`. `noop` and a liar that claims done fail every case; a scripted wrong agent fails every case. | `B4 ...` |
+| B5 | A case's server stays up after the case, so a late write from a timed-out agent lands in the next case (R1). | Each case gets its own server and control key. `Episode.close()` stops it, and a later request fails. | `B5 ...` |
+| B6 | A benchmark's `check()` throws, so `foxbench list` crashes and hides every other benchmark. | `readiness()` turns a throw into a not-ready row with the error as the reason. | `B6 ...` |
+| B7 | Case ids repeat inside a benchmark, so two results share one row. | Ids are unique per benchmark and equal the task ids, so old boards stay comparable. | `B7 ...` |
+
 ## External benchmarks (`external/`)
 
 The external suites score an agent with a public benchmark's own check. Each
