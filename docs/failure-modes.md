@@ -455,6 +455,29 @@ are in `tests/tau2-retail.test.ts` and run tau2's real code through `uv`.
 | WL4 | `quick` changes between runs, or covers one app, so a quick score is not comparable. | `quick` is the committed list in `src/bench/subsets/webarena-infinity.json`: 20 ids that exist, every app, both kinds and every tier, in the same order each time. | `WL4 ...` |
 | WL5 | A function task is judged by a real task's verifier, or the function verifier path is not checked. | A function case runs its own `function-tasks/` verifier. A scripted perfect agent passes real function cases, and noop and a wrong agent fail them. | `WL5 ...` |
 
+## The user channel (`src/bench/user.ts`)
+
+Some benchmarks (tau2, Gaia2) test whether the agent asks the user for what it
+does not know. A benchmark that has a user sets `Episode.userChannel`; the
+recording proxy then serves a chat at `/user/` on the agent's own origin, and
+a scripted user or a Claude user answers. Each row is a way that a score with
+a user could mean something other than what the board says. The tests are in
+`tests/user.test.ts`, on a toy benchmark whose answer only the user knows, and
+with a fake fetch: no test calls the Anthropic API.
+
+| # | Failure mode | Wanted behaviour | Test |
+|---|---|---|---|
+| Q1 | The chat is not on the agent's origin, so the agent cannot find it, or reaches it around the proxy and the trace misses the asks. | The proxy answers `GET` and `POST /user/` itself, on the origin the agent got, and logs both in the trace. Other paths go to the site. | `Q1 ...` |
+| Q2 | The chat shows the user's answer before the agent asks, so asking is not needed. | The page shows the user's opening line (if any) and the turns so far, nothing else. | `Q2 ...` |
+| Q3 | Asks are not counted, or a refused message counts. | One ask per message the agent sent; an empty message gets 400 and is not sent. The result and the board count asks, unless the judge gives its own count. | `Q3 ...` |
+| Q4 | An agent that guesses without asking passes, or one that asks passes without acting. | On the toy benchmark: `noop` 0, guessing 0, asking then acting passes with 1 ask, asking only fails. | `Q4 ...` |
+| Q5 | The user says the task is done (tau2's `###STOP###`) and the agent keeps working, so the time grows. | A user reply that holds a stop token ends the episode; the loop calls `abort()` and records `endedEarly`. The token is not shown to the agent. | `Q5 ...` |
+| Q6 | The Claude user is not the one the flag names, or gets the turns in the wrong roles, so the user model is not what the board says. | The request carries the model from `--user-model` (default `claude-sonnet-5-5`), the scenario as `system`, the agent's messages as `user` turns and the user's own lines as `assistant` turns, in order. | `Q6 ...` |
+| Q7 | A failed API call, or a refusal, shows as the user's words, and the case is scored as if the user had answered. | The chat answers 502 and records no turn; the case fails with `harness: the simulated user failed: ...`. | `Q7 ...` |
+| Q8 | The board does not say which user answered, so a score with another user looks comparable (plan 5.4). | Each result names its user (`scripted` or `llm:<model>`); the fingerprint lists the user models of the run. | `Q8 ...` |
+| Q9 | The API key reaches the agent, the trace or the board. | The key and the workspace id go only on the request to the API, as `x-api-key` and `anthropic-workspace-id`. The board JSON holds neither. A missing key is a not-ready row, never a request. | `Q9 ...` |
+| Q10 | Two messages at once interleave, so a reply answers the wrong question. | Replies run one at a time, in the order the messages came. | `Q10 ...` |
+
 ## AMO release build and listed submission (`scripts/amo-listing.mjs`)
 
 `pnpm check:amo` reads `dist-ext/`, which is what `release.yml` signs. Each
