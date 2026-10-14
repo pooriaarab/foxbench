@@ -286,6 +286,7 @@ and run against the real upstream build.
 | G10 | The quick list names a case that no longer exists, or a case that cannot run offline. | 20 ids from the 147 offline cases; `pickSubset` throws on an unknown id. | `G10 ...` |
 | G11 | The goal names the site's own address, as upstream's prompt does, so the agent goes around the recording proxy (P1) and the trace misses its requests. | The goal says "the start page you were given"; the agent gets only the proxy's URL as `url`. | `G11 ...` |
 | G12 | The password is readable in the built JS, so an agent could read it without playing. | A known limit, the same as the hosted site. Only the answer is scored; the board marks no case as read. | - |
+| G13 | Two runs or test files fetch or build into the same cache at once, and one reads a half-written tree ("shallow file has changed"). | Fetch and build each take a lock on the cache dir, and re-check inside it. | `G13 ...` |
 
 ## AMO release build and listed submission (`scripts/amo-listing.mjs`)
 

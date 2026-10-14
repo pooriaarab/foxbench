@@ -4,7 +4,7 @@
 // fetched at a pinned commit into the cache, built with Vite and served from
 // 127.0.0.1, one server per case. Nothing upstream is committed.
 import { execFile, spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, readdirSync, readFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync } from "node:fs";
 import { createServer, type IncomingMessage } from "node:http";
 import { extname, join, normalize, sep } from "node:path";
 import { promisify } from "node:util";
@@ -65,8 +65,29 @@ export function parseCases(dir: string): WebgamesCase[] {
   return out;
 }
 
+/** One writer at a time per cache dir, across processes: parallel runs and test files share the cache (G13). */
+async function locked<T>(dir: string, work: () => Promise<T>): Promise<T> {
+  const lock = `${dir}.lock`;
+  mkdirSync(join(dir, ".."), { recursive: true });
+  for (;;) {
+    try {
+      mkdirSync(lock);
+      break;
+    } catch {
+      // A lock that is 20 minutes old belongs to a run that died.
+      if (Date.now() - (statSync(lock, { throwIfNoEntry: false })?.mtimeMs ?? Date.now()) > 20 * 60_000) rmSync(lock, { recursive: true, force: true });
+      await new Promise((r) => setTimeout(r, 500));
+    }
+  }
+  try {
+    return await work();
+  } finally {
+    rmSync(lock, { recursive: true, force: true });
+  }
+}
+
 /** The pinned commit in the cache, fetched once. */
-async function fetchSource(ctx: BenchContext): Promise<string> {
+const fetchSource = (ctx: BenchContext): Promise<string> => locked(webgamesDir(ctx), async () => {
   const dir = webgamesDir(ctx);
   if (!existsSync(join(appDir(ctx), "src", "router", "routes.ts"))) {
     mkdirSync(dir, { recursive: true });
@@ -76,16 +97,17 @@ async function fetchSource(ctx: BenchContext): Promise<string> {
     await git("checkout", "-q", "FETCH_HEAD");
   }
   return dir;
-}
+});
 
 /** `vite build` of the pinned source into its dist/, once. The lockfile pins the packages, and no install script runs. */
 async function build(ctx: BenchContext): Promise<string> {
   await fetchSource(ctx);
   const app = appDir(ctx);
-  if (!existsSync(join(app, "dist", "index.html"))) {
+  await locked(`${webgamesDir(ctx)}-build`, async () => {
+    if (existsSync(join(app, "dist", "index.html"))) return;
     await run("pnpm", ["--dir", app, "install", "--frozen-lockfile", "--ignore-scripts"], { env: ctx.env, maxBuffer: 1 << 26 });
     await run("pnpm", ["--dir", app, "exec", "vite", "build"], { env: ctx.env, maxBuffer: 1 << 26 });
-  }
+  });
   return join(app, "dist");
 }
 

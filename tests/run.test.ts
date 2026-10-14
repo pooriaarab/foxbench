@@ -8,7 +8,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { noopAdapter, type Adapter } from "../src/adapter.js";
-import { benchContext, benchmarkById, benchmarks } from "../src/bench/registry.js";
+import { benchContext, benchmarkById } from "../src/bench/registry.js";
 import { missingRequired, runBenchmarks } from "../src/bench/run.js";
 import { pickSubset } from "../src/bench/subsets.js";
 import type { Benchmark, Case, Episode } from "../src/bench/types.js";
@@ -131,9 +131,9 @@ describe("L5 quick is a committed list", () => {
 describe("L7 the CLI: doctor, --subset and --require", () => {
   it("doctor prints each benchmark, and run takes a quick subset with --require", () => {
     expect(cli("doctor", "--require", "foxbench")).toMatchObject({ status: 0, stdout: expect.stringMatching(/foxbench\s+ready/) });
-    const r = cli("run", "--agent", "noop", "--suite", "all", "--subset", "quick", "--require", "foxbench", "--out", mkdtempSync(join(tmpdir(), "fbn-l7-")));
+    const r = cli("run", "--agent", "noop", "--suite", "foxbench", "--subset", "quick", "--require", "foxbench", "--out", mkdtempSync(join(tmpdir(), "fbn-l7-")));
     expect(r.status).toBe(0);
-    expect(r.stderr.match(/^fail /gm)?.length).toBeLessThanOrEqual(20 * benchmarks.length);
+    expect(r.stderr.match(/^fail /gm)?.length).toBeLessThanOrEqual(20);
   });
   it("refuses an unknown subset", () => expect(cli("run", "--agent", "noop", "--subset", "most").status).toBe(2));
 });

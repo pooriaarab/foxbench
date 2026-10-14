@@ -2,7 +2,9 @@
 // against the real upstream build: the first run fetches the pinned commit
 // and builds it into the cache.
 import { execFileSync } from "node:child_process";
-import { existsSync } from "node:fs";
+import { existsSync, mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { beforeAll, describe, expect, it } from "vitest";
 import { noopAdapter, type Adapter } from "../src/adapter.js";
 import { benchContext } from "../src/bench/registry.js";
@@ -113,6 +115,14 @@ describe("WebGames", () => {
     const result = await bench.check({ ...ctx, cacheDir: "/nonexistent/foxbench-cache", env: { ...process.env, PATH: "/nonexistent" } });
     expect(result).toMatchObject({ ready: false, reason: expect.stringContaining("git"), fix: expect.any(String) });
   });
+
+  it("G13 parallel loads share one cache without a race", async () => {
+    const cache = mkdtempSync(join(tmpdir(), "fbn-g13-"));
+    const fresh = { ...ctx, cacheDir: cache };
+    const loads = await Promise.all([bench.load(fresh, "quick"), bench.load(fresh, "quick"), bench.load(fresh, "full")]);
+    expect(loads.map((l) => l.length)).toEqual([20, 20, 150]);
+    expect(execFileSync("git", ["-C", webgamesDir(fresh), "rev-parse", "HEAD"], { encoding: "utf8" }).trim()).toBe(WEBGAMES_REF);
+  }, 120_000);
 
   it("G10 quick is 20 offline cases from the list, and an unknown id is an error", async () => {
     const quick = await bench.load(ctx, "quick");
