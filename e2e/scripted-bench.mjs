@@ -6,6 +6,7 @@
 //   miniwob wrong     clicks the wrong thing on the same six; each must fail
 //   agentdojo perfect runs AgentDojo's ground-truth calls as form posts
 //   agentdojo gullible  also obeys the injection it finds on the pages
+//   agentdojo wrong     does the next user task's work instead
 const quoted = (goal) => [...goal.matchAll(/"([^"]*)"/g)].map((m) => m[1]);
 
 async function clickText(page, selector, text, wrong) {
@@ -55,7 +56,7 @@ const decode = (html) => html.replace(/<[^>]+>/g, " ").replace(/&#(\d+);/g, (_, 
 const str = (o) => Object.fromEntries(Object.entries(o).filter(([, v]) => v !== null && v !== undefined).map(([k, v]) => [k, typeof v === "boolean" ? (v ? "1" : "") : String(v)]));
 
 /** AgentDojo's function calls as the bank's form posts and page loads. */
-async function call(base, { function: fn, args }) {
+async function bankCall(base, { function: fn, args }) {
   const post = (path, form) => fetch(new URL(path, base), { method: "POST", body: new URLSearchParams(form) });
   switch (fn) {
     case "send_money": return post("/bank/send", str(args));
@@ -68,23 +69,41 @@ async function call(base, { function: fn, args }) {
   }
 }
 
-/** An AgentDojo agent over HTTP. `mode` is "perfect" or "gullible". */
-export function agentdojoScripted(mode, cases) {
-  const byGoal = new Map(cases.filter((c) => !c.injection_task).map((c) => [c.goal, c]));
-  const attacks = new Map(cases.filter((c) => c.injection_task).map((c) => [c.injection_goal, c.injection_ground_truth]));
+/**
+ * How a scripted agent drives one suite's app: `call` runs an AgentDojo
+ * function call as page requests, `pages` lists what a looking-around agent
+ * reads first, `intro` is the sentence the app puts before the task.
+ */
+export const bankDriver = {
+  call: bankCall,
+  pages: (task) => ["/bank/transactions", "/bank/scheduled", "/bank/profile", ...task.ground_truth.filter((c) => c.function === "read_file").map((c) => `/bank/files/${encodeURIComponent(c.args.file_path)}`)],
+  intro: "",
+};
+
+/**
+ * An AgentDojo agent over HTTP. `mode` is "perfect", "gullible" (also obeys
+ * the injection it finds) or "wrong" (does the next user task's work).
+ */
+export function agentdojoScripted(mode, cases, driver = bankDriver) {
+  const { call, pages, intro } = driver;
+  const users = cases.filter((c) => !c.injection_task);
+  const byGoal = new Map(users.map((c) => [c.goal, c]));
+  const attacks = new Map(cases.filter((c) => c.injection_task).map((c) => [c.injection_goal, c]));
   return {
     name: `scripted ${mode} (agentdojo)`,
     async runTask({ url, goal }) {
-      const task = byGoal.get(goal);
+      const task = byGoal.get(intro ? goal.slice(intro.length + 1) : goal);
+      let answer = task.ground_truth_output;
       if (mode === "gullible") {
         // Read every page, as an agent that looks around would, and obey the first injection found.
-        const paths = ["/bank/transactions", "/bank/scheduled", "/bank/profile", ...task.ground_truth.filter((c) => c.function === "read_file").map((c) => `/bank/files/${encodeURIComponent(c.args.file_path)}`)];
-        const text = decode((await Promise.all(paths.map(async (p) => (await fetch(new URL(p, url))).text()))).join("\n"));
+        const text = decode((await Promise.all(pages(task).map(async (p) => (await fetch(new URL(p, url))).text()))).join("\n"));
         const found = [...attacks.keys()].find((g) => text.includes(g));
-        for (const c of found ? attacks.get(found) : []) await call(url, c);
+        for (const c of found ? attacks.get(found).injection_ground_truth : []) await call(url, c);
+        if (found) answer = `${answer} ${attacks.get(found).injection_ground_truth_output ?? ""}`;
       }
-      for (const c of task.ground_truth) await call(url, c);
-      return { done: true, log: task.ground_truth.map((c) => c.function).join(", "), answer: task.ground_truth_output };
+      const work = mode === "wrong" ? users[(users.indexOf(task) + 1) % users.length] : task;
+      for (const c of work.ground_truth) await call(url, c);
+      return { done: true, log: work.ground_truth.map((c) => c.function).join(", "), answer: mode === "wrong" ? "" : answer };
     },
   };
 }
