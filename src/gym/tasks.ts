@@ -30,10 +30,14 @@ const cheapestIn = (hotels: Hotel[], room: string, checkin: string, nights: numb
   hotels.reduce((a, b) => (total(b, room, checkin, nights, false) < total(a, room, checkin, nights, false) ? b : a));
 const inCity = (city: string) => HOTELS.filter((h) => h.city === city);
 const nightsText = (n: number) => `${n} night${n > 1 ? "s" : ""}`;
-/** The fields of a correct record for each train task, for the suite's own test (G4). */
-export const TRAIN_ANSWERS = new Map<string, Record<string, string>>();
+/** A form post: the path and its fields. */
+export type Post = [path: string, fields: Record<string, string>];
+/** The form posts that do each train task right, in order, for the suite's own test (G4). */
+export const TRAIN_POSTS = new Map<string, Post[]>();
 const stayTask = (id: string, goal: string, want: Record<string, string>, extra: Partial<Task> = {}, match: Record<string, RegExp> = {}): Task => {
-  TRAIN_ANSWERS.set(id, { ...want, ...GUEST });
+  const city = HOTELS.find((h) => h.id === want.hotel)!.city;
+  TRAIN_POSTS.set(id, [["/stay/guest", { id: want.hotel!, city, checkin: want.checkin!, nights: want.nights!, guests: want.guests!, room: want.room!,
+    ...(want.breakfast === "yes" ? { breakfast: "yes" } : {}), ...GUEST, arrival: want.arrival!, requests: "A quiet room, please.", policy: "yes" }]]);
   return { id, suite: "train", tier: "medium", site: "stay", path: "/", goal, check: oneRecord("stay", "booking", { ...want, ...GUEST }, match), ...extra };
 };
 
