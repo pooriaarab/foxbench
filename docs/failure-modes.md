@@ -288,6 +288,28 @@ container starts with the proxy's URL as its base. The tests are in
 | WV8 | The VM is too small: GitLab needs 4 GB and the two Magento sites run MySQL and Elasticsearch each, or the disk cannot hold the pulled and unpacked images. | n2-standard-8 (8 vCPU, 32 GB) and a 200 GB disk. Measured: the images pull 33 GB and take 91 GB on disk; the four sites use about 6 GB of RAM at rest. | `WV8 ...` |
 | WV9 | The agent's browser reaches an env-ctrl port (it is on `127.0.0.1` too) and stops or restarts a site. | A known limit: env-ctrl has no key. The agent gets only the proxy's URL, and no page links to the env-ctrl ports. | - |
 
+## WebArena-Verified tasks (`src/bench/wav/tasks.ts`)
+
+The `webarena-verified` benchmark loads its 812 tasks from the
+`webarena-verified` package on PyPI, at a pinned version, through `uv`. The
+package and the task list stay in the cache. Each case starts on one site of
+`wav-core`, through the recording proxy on that site's port. The tests are in
+`tests/wav-tasks.test.ts`; they load the real task list and start real cases
+against fake sites on the tunnel ports.
+
+| # | Failure mode | Wanted behaviour | Test |
+|---|---|---|---|
+| WT1 | The task list is not upstream's pinned release: tasks are missing, repeated or renumbered, so boards are not comparable. | The 812 tasks of `webarena-verified==1.2.3`. Each case id is upstream's `task_id`. | `WT1 ...` |
+| WT2 | The hard subset is not upstream's. The README says 258 tasks and OpenReview says 137. | `tag:hard` is the package's own `subsets/webarena-verified-hard.json`: 258 tasks. Each has tier `hard`. | `WT2 ...` |
+| WT3 | A case has the wrong site tags, so `tag:<site>` runs the wrong cases. | The tags are upstream's `sites`, the task type (retrieve, mutate, navigate) and `multi-site`. | `WT3 ...` |
+| WT4 | A start URL keeps its `__SITE__` placeholder, misses the site's base path, or a page links to the tunnel port, so the agent leaves the proxy (P1, WV2). | The episode opens the site's tunnel URL plus the start path; shopping_admin's site URL is `/admin`, as upstream's config has it. The proxy listens on the site port, which is also the base URL, and sends `Host: 127.0.0.1:<site port>`, because reddit and gitlab build their links from the Host header. | `WT4 ...` |
+| WT5 | The agent starts logged out, or sees the login header or cookie. | shopping, shopping_admin and reddit get upstream's auto-login header. GitLab has no such header, so `start` signs in as upstream's user and the proxy sends that session cookie. Both go only to the site (P3). The user name and password do show in the goal, because upstream's prompt gives them for a re-login. | `WT5 ...` |
+| WT6 | A task on two sites gives the agent only one. | `start` runs a recording proxy on each other site's port, with that site's headers; the goal lists every start URL. `close` stops them. | `WT6 ...` |
+| WT7 | A map or Wikipedia task runs on wav-core and counts as the agent's failure with no reason. | `start` fails it with a reason that names the missing site and wav-full. | `WT7 ...` |
+| WT8 | Two quick runs see different cases. | `quick` is 20 single-site ids, 5 per wav-core site, committed in `src/bench/subsets/webarena-verified.json`. | `WT8 ...` |
+| WT9 | `uv` is missing, and every case fails late. | `check()` is not ready, with the fix. | `WT9 ...` |
+| WT10 | The agent gets another prompt than upstream's agents, so the scores are not comparable. | The goal is upstream's prompt for the task's sites, from the repo at the pinned commit and kept in the cache, with the intent and the start URLs on the proxy ports filled in. | `WT10 ...` |
+
 ## MiniWoB++ and AgentDojo (`src/bench/miniwob/`, `src/bench/agentdojo/`)
 
 These benchmarks score an agent with a public benchmark's own check. They are
