@@ -35,16 +35,29 @@ export const fetchTau2 = (ctx: BenchContext): Promise<string> => locked(tau2Dir(
 
 export interface Tau2Reply { content: string; error: boolean }
 
+/** One step of a case, in time order, for tau2's evaluator: a tool call, or a chat line. */
+export type Tau2Event = { kind: "call"; name: string; arguments: Record<string, unknown>; content: string; error: boolean } | { kind: "agent" | "user"; text: string };
+
+/** tau2's verdict: the reward and its breakdown. */
+export interface Tau2Result { reward: number; info: { db_check?: { db_match: boolean } | null; nl_assertions?: { nl_assertion: string; met: boolean }[] | null; reward_breakdown?: Record<string, number> | null } }
+
 export interface Tau2Bridge {
   /** A fresh environment from the start database (T5). */
   reset(): Promise<void>;
   /** One tool call, run by tau2. A tool error is a reply with `error`; a dead bridge rejects. */
   call(name: string, args: Record<string, unknown>): Promise<Tau2Reply>;
+  /** The user simulator's system prompt for a task, as tau2 builds it, and tau2's first agent line. */
+  task(id: string): Promise<{ system: string; greeting: string }>;
+  /** tau2's evaluate_simulation on the trajectory; `stop` is who ended the conversation. */
+  evaluate(id: string, events: Tau2Event[], stop: "user" | "agent"): Promise<Tau2Result>;
   close(): Promise<void>;
 }
 
+/** Answers the LLM calls of tau2's NL-assertion judge. */
+export type Tau2Llm = (q: { system: string; prompt: string }) => Promise<string>;
+
 /** Starts bridge.py for a domain under uv, from a directory foxbench owns, never inside the fetched tree. */
-export async function startBridge(ctx: BenchContext, domain: "retail" | "airline"): Promise<Tau2Bridge> {
+export async function startBridge(ctx: BenchContext, domain: "retail" | "airline", llm?: Tau2Llm): Promise<Tau2Bridge> {
   const dir = await fetchTau2(ctx);
   const script = fileURLToPath(new URL("./bridge.py", import.meta.url));
   const work = join(ctx.cacheDir, "tau2-run");
@@ -55,7 +68,14 @@ export async function startBridge(ctx: BenchContext, domain: "retail" | "airline
   child.stderr.on("data", (chunk: Buffer) => { stderr = (stderr + String(chunk)).slice(-4000); });
   const waiting: { resolve(reply: Record<string, unknown>): void; reject(error: Error): void }[] = [];
   let dead: Error | null = null;
-  createInterface({ input: child.stdout }).on("line", (line) => waiting.shift()?.resolve(JSON.parse(line)));
+  createInterface({ input: child.stdout }).on("line", (line) => {
+    const reply = JSON.parse(line) as Record<string, unknown>;
+    if (!reply.llm) return waiting.shift()?.resolve(reply);
+    // tau2's judge asks mid-evaluation; the answer goes back on stdin.
+    const answer = llm ? llm(reply.llm as { system: string; prompt: string }) : Promise.reject(new Error("no judge"));
+    void answer.then((text) => ({ text }), (error: unknown) => ({ error: error instanceof Error ? error.message : String(error) }))
+      .then((a) => child.stdin.write(`${JSON.stringify(a)}\n`));
+  });
   const die = (why: string) => {
     dead ??= new Error(`the tau2 bridge stopped (${why}): ${stderr.trim().split("\n").at(-1) ?? ""}`);
     for (const w of waiting.splice(0)) w.reject(dead);
@@ -78,6 +98,11 @@ export async function startBridge(ctx: BenchContext, domain: "retail" | "airline
       const reply = await send({ op: "call", name, arguments: args });
       return { content: String(reply.content), error: Boolean(reply.error) };
     },
+    task: async (id) => {
+      const reply = await send({ op: "task", id });
+      return { system: String(reply.system), greeting: String(reply.greeting) };
+    },
+    evaluate: async (id, events, stop) => (await send({ op: "evaluate", id, events, stop })) as unknown as Tau2Result,
     close: async () => {
       if (child.exitCode !== null || child.signalCode !== null) return;
       const exited = new Promise((r) => child.once("exit", r));

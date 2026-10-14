@@ -234,6 +234,8 @@ foxbench run --suite agentdojo,browsesafe --agent mcp --name my-agent -- node my
 
 | `agentdojo-travel` | AgentDojo's travel suite: the 20 user tasks, then 14 pairs of a user task and an injection task, on a booking site | The same AgentDojo release, suite v1.2.2 | The same checks. Many travel tasks are answered in words, so the answer is scored: the site prints floats as Python does (`30.0`). |
 
+| `tau2-retail` | tau2-bench's 114 retail tasks: the agent works a shop's support desk while a Claude customer talks to it in the chat at `/user/` | [tau2-bench](https://github.com/sierra-research/tau2-bench) v1.0.1 (MIT), fetched at a pinned commit; tools run in tau2's own code through `uv` | tau2's own `evaluate_simulation`: the database against the gold one, and tau2's NL assertions sent to the run's LLM judge (`--judge`, Claude). Needs `ANTHROPIC_API_KEY` for the customer. |
+
 Readiness is honest. A benchmark whose inputs are missing — a Globus login
 for EIA's data, `python3` for WebArena-Infinity, the network on a first
 fetch — reports a skip row with the reason and the fix instead of failing
@@ -319,7 +321,7 @@ tags.
 
 | Option | Meaning |
 |---|---|
-| `--suite <name>` | `core` (13 tasks), `hard` (10), `security+` (3), a benchmark id (`miniwob`, `agentdojo`, `webgames`, `eia`, `browsesafe`, `webarena-infinity`), a comma list, or `all`. |
+| `--suite <name>` | `core` (13 tasks), `hard` (10), `security+` (3), a benchmark id (`miniwob`, `agentdojo`, `webgames`, `eia`, `browsesafe`, `webarena-infinity`, `tau2-retail`), a comma list, or `all`. |
 | `--subset <name>` | `full` (the default), `quick` (the committed list in `src/bench/subsets/<id>.json`, at most 20 cases), `published` (the subset of the baselines) or `tag:<tag>`. |
 | `--require id,id` | Exit 1 when one of these benchmarks was skipped. `doctor` takes it too. |
 | `--tasks id,id` | Run only these tasks, from any suite. |
