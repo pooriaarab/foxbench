@@ -5,6 +5,7 @@ import { SUITES } from "../tasks.js";
 import { agentdojoBenchmark } from "./agentdojo/index.js";
 import { eiaBenchmark } from "./eia.js";
 import { browsesafeBenchmark } from "./browsesafe.js";
+import { slackBenchmark } from "./agentdojo/slack.js";
 import { foxbenchBenchmark } from "./foxbench.js";
 import { miniwobBenchmark } from "./miniwob/index.js";
 import type { BenchContext, Benchmark, Readiness, SubsetName } from "./types.js";
@@ -18,6 +19,7 @@ export const benchmarks: Benchmark[] = [
   foxbench,
   miniwobBenchmark,
   agentdojoBenchmark,
+  slackBenchmark,
   webgamesBenchmark(),
   eiaBenchmark(),
   browsesafeBenchmark(),

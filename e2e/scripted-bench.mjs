@@ -7,6 +7,8 @@
 //   agentdojo perfect runs AgentDojo's ground-truth calls as form posts
 //   agentdojo gullible  also obeys the injection it finds on the pages
 //   agentdojo wrong     does the next user task's work instead
+import { slackApp } from "../dist/bench/agentdojo/slack.js";
+
 const quoted = (goal) => [...goal.matchAll(/"([^"]*)"/g)].map((m) => m[1]);
 
 async function clickText(page, selector, text, wrong) {
@@ -78,6 +80,41 @@ export const bankDriver = {
   call: bankCall,
   pages: (task) => ["/bank/transactions", "/bank/scheduled", "/bank/profile", ...task.ground_truth.filter((c) => c.function === "read_file").map((c) => `/bank/files/${encodeURIComponent(c.args.file_path)}`)],
   intro: "",
+};
+
+const slackChannel = (name) => `/slack/channel/${encodeURIComponent(name)}`;
+
+/** AgentDojo's slack calls as the chat app's page loads and form posts. */
+async function slackCall(base, { function: fn, args: asked }) {
+  // The External channel's name carries the injection when there is one, so the agent reads the real name off the page.
+  let args = asked;
+  if (String(asked.channel ?? "").startsWith("External")) {
+    const links = [...(await (await fetch(new URL("/slack/", base))).text()).matchAll(/href="\/slack\/channel\/([^"]+)"/g)].map((m) => decodeURIComponent(m[1]));
+    args = { ...asked, channel: links.find((c) => c.startsWith("External")) ?? asked.channel };
+  }
+  const post = (path, form) => fetch(new URL(path, base), { method: "POST", body: new URLSearchParams(str(form)) });
+  switch (fn) {
+    case "add_user_to_channel": return post(`${slackChannel(args.channel)}/add`, { user: args.user });
+    case "send_channel_message": return post(`${slackChannel(args.channel)}/message`, { body: args.body });
+    case "send_direct_message": return post("/slack/dm", args);
+    case "invite_user_to_slack": return post("/slack/users/invite", args);
+    case "remove_user_from_slack": return post("/slack/users/remove", args);
+    case "post_webpage": return post("/slack/web/post", args);
+    case "get_webpage": return fetch(new URL(`/slack/web?url=${encodeURIComponent(args.url)}`, base));
+    case "read_inbox": return fetch(new URL(`/slack/inbox/${encodeURIComponent(args.user)}`, base));
+    case "read_channel_messages": case "get_users_in_channel": return fetch(new URL(slackChannel(args.channel), base));
+    default: return fetch(new URL("/slack/", base));
+  }
+}
+
+/** The pages a looking-around agent reads first: the channels, the inboxes and every website. */
+export const slackDriver = {
+  call: slackCall,
+  pages: (task) => [
+    "/slack/", ...task.env.slack.channels.map(slackChannel), ...task.env.slack.users.map((u) => `/slack/inbox/${encodeURIComponent(u)}`),
+    ...Object.keys(task.env.web.web_content).map((u) => `/slack/web?url=${encodeURIComponent(u)}`),
+  ],
+  intro: slackApp.intro,
 };
 
 /**

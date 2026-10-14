@@ -5,11 +5,14 @@
 //               tasks, and the page's end of the episode stops the agent
 //   AgentDojo   noop 10/34 with every attack blocked (E7); perfect 34/34
 //               with 0 followed (E8); gullible follows 17/18 (E9)
+//   AgentDojo slack  noop 0/31 with every attack blocked (DS6); perfect 31/31
+//               with 0 followed; gullible follows 10/10; wrong passes only the
+//               four cases its overlap allows (DS7)
 // Writes artifacts/bench/<id>/score-*.{json,md}.
 // Usage: pnpm e2e:bench [--headed]. Needs git, uv and Firefox (FIREFOX).
 import { benchContext, benchmarkById, noopAdapter, runBenchmarks, writeScore } from "../dist/index.js";
 import { prepareCases } from "../dist/bench/agentdojo/common.js";
-import { agentdojoScripted, miniwobScripted, SCRIPTED_MINIWOB } from "./scripted-bench.mjs";
+import { agentdojoScripted, miniwobScripted, SCRIPTED_MINIWOB, slackDriver } from "./scripted-bench.mjs";
 
 const headless = !process.argv.includes("--headed");
 const firefox = process.env.FIREFOX;
@@ -40,10 +43,21 @@ try {
   check("agentdojo perfect passes 34/34 with 0 followed", dojoPerfect.passed === 34 && dojoPerfect.attacksFollowed === 0, `${dojoPerfect.passed}/${dojoPerfect.tasks}`);
   const gullible = await run("agentdojo", agentdojoScripted("gullible", cases));
   check("agentdojo gullible follows 17/18", gullible.attacksFollowed === 17, `${gullible.attacksFollowed}/${gullible.traps}`);
+
+  const slackCases = prepareCases(benchContext().cacheDir, "slack");
+  const slackNoop = await run("agentdojo-slack", noopAdapter());
+  check("slack noop passes 0/31 with every attack blocked", slackNoop.passed === 0 && slackNoop.tasks === 31 && slackNoop.attacksBlocked === 10, `${slackNoop.passed}/${slackNoop.tasks}, blocked ${slackNoop.attacksBlocked}`);
+  const slackPerfect = await run("agentdojo-slack", agentdojoScripted("perfect", slackCases, slackDriver));
+  check("slack perfect passes 31/31 with 0 followed", slackPerfect.passed === 31 && slackPerfect.attacksFollowed === 0, `${slackPerfect.passed}/${slackPerfect.tasks}`);
+  const slackGullible = await run("agentdojo-slack", agentdojoScripted("gullible", slackCases, slackDriver));
+  check("slack gullible follows 10/10", slackGullible.attacksFollowed === 10, `${slackGullible.attacksFollowed}/${slackGullible.traps}`);
+  const slackWrong = await run("agentdojo-slack", agentdojoScripted("wrong", slackCases, slackDriver));
+  const lucky = slackWrong.results.filter((r) => r.success).map((r) => r.id.split("+")[0]);
+  check("slack wrong passes only user tasks 0 and 9", slackWrong.passed === 4 && lucky.every((id) => id === "user_task_0" || id === "user_task_9"), lucky);
 } catch (error) {
   check("the run finished", false, error instanceof Error ? error.message : String(error));
 }
 for (const c of checks) console.log(`${c.ok ? "ok " : "BAD"} ${c.name}: ${JSON.stringify(c.actual)}`);
-const passed = checks.length === 7 && checks.every((c) => c.ok);
+const passed = checks.length === 11 && checks.every((c) => c.ok);
 console.log(passed ? "PASS" : "FAIL");
 process.exitCode = passed ? 0 : 1;

@@ -229,6 +229,7 @@ foxbench run --suite agentdojo,browsesafe --agent mcp --name my-agent -- node my
 | `eia` | Environmental injection cases that test privacy leakage, tagged by domain and risk type | [EIA](https://github.com/OSU-NLP-Group/EIA_against_webagent) ([paper](https://arxiv.org/abs/2409.11295); MIT code, CC-BY-4.0 data); the data comes from Globus behind a login | EIA's own attack check on the page the agent produces. |
 | `browsesafe` | Benign and injected pages from Perplexity's BrowseSafe-Bench | [BrowseSafe-Bench](https://huggingface.co/datasets/perplexity-ai/browsesafe-bench) (MIT), fetched from Hugging Face at run time | A foxshield detector judges each page; the agent does not run, the page itself is the case. |
 | `webarena-infinity` | Task cases generated across WebArena-Infinity's apps and kinds | [WebArena-Infinity](https://github.com/web-arena-x/webarena-infinity) (MIT), fetched at a pinned commit; needs `python3` with `requests` and `git` | The upstream task verifiers, run through `python3`. |
+| `agentdojo-slack` | AgentDojo's slack suite: the 21 user tasks, then 10 pairs of a user task and an injection task, in a web chat app | The same AgentDojo release, suite v1.2.2 | The same checks. Slack's invite and removal checks read the tool calls, so the app records the calls its pages stand for. |
 
 Readiness is honest. A benchmark whose inputs are missing — a Globus login
 for EIA's data, `python3` for WebArena-Infinity, the network on a first
