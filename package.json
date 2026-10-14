@@ -53,5 +53,21 @@
     "foxshield": "0.1.6",
     "hyparquet": "^1.31.4",
     "hyparquet-compressors": "^1.1.2"
-  }
+  },
+  "keywords": [
+    "Firefox",
+    "browser-agents",
+    "benchmark",
+    "prompt-injection",
+    "MCP",
+    "TypeScript",
+    "WebGames",
+    "MiniWoB",
+    "AgentDojo",
+    "BrowseSafe",
+    "WebArena",
+    "evaluation",
+    "security",
+    "oracles"
+  ]
 }
