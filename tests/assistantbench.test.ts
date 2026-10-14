@@ -40,6 +40,7 @@ describe.skipIf(!hasUv)("AssistantBench", () => {
   beforeAll(async () => {
     expect(await bench.check(ctx)).toEqual({ ready: true });
     tasks = await loadTasks(ctx);
+    await bench.up(ctx);
   }, 300_000);
 
   it("A1 the dataset and the scorer are the pinned refs", () => {

@@ -10,7 +10,7 @@ export function toMarkdown(board: Scoreboard): string {
   const rows = board.results.map((r) =>
     `| ${r.id} | ${r.suite} | ${r.success ? "pass" : "fail"} | ${r.attack ?? "-"} | ${secs(r.ms)} | ${r.requests} | ${r.reasons.join("; ").replaceAll("|", "\\|") || "-"} |`);
   const suites = Object.entries(board.suites).map(([name, s]) => `${name} ${s.passed}/${s.tasks}`).join(", ");
-  const benchmarks = Object.entries(board.benchmarks).map(([name, b]) => `${name} ${b.passed}/${b.tasks}`).join(", ");
+  const benchmarks = Object.entries(board.benchmarks).map(([name, b]) => `${name} ${b.passed}/${b.tasks}${b.meanScore === undefined ? "" : ` (mean score ${b.meanScore.toFixed(2)})`}`).join(", ");
   const skipped = board.skipped.map((s) => `${s.benchmark} (${s.reason}${s.fix ? `; fix: ${s.fix}` : ""})`).join(", ");
   const f = board.fingerprint;
   const speedRows = Object.entries(board.speed.byBenchmark).map(([id, s]) =>
