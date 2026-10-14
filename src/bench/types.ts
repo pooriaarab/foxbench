@@ -32,8 +32,10 @@ export interface Episode {
   startPath: string;
   /** Settles when the benchmark itself ends the episode (MiniWoB); the run loop then stops the agent. */
   ended?: Promise<void>;
-  /** The page loads and posts the case's own server saw, until the recording proxy logs them. */
-  log?(): { method: string; path: string; at: number }[];
+  /** Headers the proxy adds to each request to the site, such as an auto-login header. The agent never sees them. */
+  headers?: Record<string, string>;
+  /** The port the agent sees, so a site keeps its origin across cases (R6). The default is a free port. */
+  port?: number;
   /** Stops what this case started, for example its own server, after the judge. */
   close?(): Promise<void>;
 }
@@ -47,7 +49,12 @@ export interface TraceEntry {
   host: string;
   path: string;
   status: number;
+  /** Response bytes; for a CONNECT tunnel, the bytes both ways. */
   bytes: number;
+  /** The response's content type, without parameters. */
+  type: string;
+  /** A request to a host that is not the case's site (P4). */
+  egress: boolean;
   /** Milliseconds from the start of the case. */
   at: number;
 }
