@@ -59,13 +59,14 @@ describe("G3 every train task fails on its start state", () => {
 });
 
 describe("G4 the correct posts pass each train oracle", () => {
-  it("passes the correct posts, and fails them with one wrong field or sent twice", async () => {
+  it("passes the correct posts, and fails them with one wrong field or the last one sent twice", async () => {
     for (const task of trainTasks) {
       const posts = TRAIN_POSTS.get(task.id)!;
       await open(task);
       await sendAll(posts, task.id);
       expect(judge(task, server!.state), task.id).toMatchObject({ success: true });
-      await sendAll(posts, task.id);
+      // The last post again: a second booking, transfer or payment.
+      await sendAll(posts.slice(-1), task.id);
       expect(judge(task, server!.state).success, `${task.id} twice`).toBe(false);
       await server!.close();
       await open(task);
