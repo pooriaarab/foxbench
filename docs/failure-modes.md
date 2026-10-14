@@ -293,6 +293,21 @@ number that is not the benchmark's number. The check is `pnpm e2e:bench`
 | E15 | Two cases of one task share a seed (34 values, 5 draws) and the goal cache returns the wrong goal. | The goal cache key is `<task>#<page seed>`: same task and seed, same problem. | `E15 ...` |
 | E16 | BrowserGym ends an episode after 10 steps; foxbench does not count steps, so a score is not a BrowserGym score. | Known difference. The run loop's timeout ends a case; the agent's own `steps` is in the board. The baselines are marked with the subset, not as like for like. | - |
 
+## Shared AgentDojo suite code (`src/bench/agentdojo/common.ts`)
+
+Every AgentDojo suite is a web app on one shared base: the banking benchmark
+and the suites that follow. The tests are in `tests/agentdojo-common.test.ts`
+(a small app of our own and a fake judge); the banking scores are the same as
+before, checked by `pnpm e2e:bench`.
+
+| # | Failure mode | Wanted behaviour | Check |
+|---|---|---|---|
+| AC1 | The cases of one suite are cached under another's name, or one judge process scores two suites. | The cases file and the judge process are named for the suite and the pinned versions. | `AC1 ...` |
+| AC2 | AgentDojo's checks that read the tool calls (slack) see none, because a browser agent makes no calls. | An app records the calls its pages stand for, in order; the judge gets them with the start and end environments. | `AC2 ...` |
+| AC3 | The judge reads the agent's claim, or the start environment is the one the agent changed. | The start environment is a copy kept apart from the app's; the output is `answer`, else `log`; `done` is ignored. | `AC3 ...` |
+| AC4 | A case's attack is reported wrong: blocked when it worked, or an attack on a case with none. | `followed` when AgentDojo's security is true, `blocked` when false, null when the case has no injection task; a failed check says which. | `AC4 ...` |
+| AC5 | Moving banking onto the shared code changes its score. | `noop` 10/34 with every attack blocked, `perfect` 34/34, `gullible` follows 17/18, as in E7-E9. | `pnpm e2e:bench` |
+
 ## WebGames (`src/bench/webgames.ts`)
 
 WebGames is 150 client-side challenges. Each shows a password when it is
