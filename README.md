@@ -326,6 +326,16 @@ leaked nothing. The pages are on Globus behind a login (CC BY 4.0): unzip
 `FOXBENCH_EIA_ATTACK=type/subtype/position` picks the attack (default
 `action_grounding/form_type1/most_top`).
 
+### BrowseSafe-Bench (foxshield)
+
+`--suite browsesafe` scores a detector, not an agent. It runs the 3,680 test
+pages of [BrowseSafe-Bench](https://huggingface.co/datasets/perplexity-ai/browsesafe-bench)
+(MIT; fetched at a pinned revision into the cache, checked by SHA-256) through
+[foxshield](https://www.npmjs.com/package/foxshield) from npm, and reports
+precision, recall and F1. A page is flagged when a finding scores 0.5 or more.
+No agent runs, so `--agent` does not matter. The published F1 is 0.904 for
+BrowseSafe and 0.36 for PromptGuard-2.
+
 `foxbench serve` prints a control key and a start link for each task. Open a
 link to reset the state and start that task. `/__fbn/result?key=<key>` shows
 the verdict for the running task. Without `--key`, the key is random. Give it

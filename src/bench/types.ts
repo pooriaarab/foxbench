@@ -104,6 +104,8 @@ export interface Benchmark {
   measures: Array<"task" | "injection" | "privacy" | "policy" | "harm" | "ask-user" | "info-seeking">;
   /** Who scores: code, an LLM judge, or both. Named apart from judge(), which does the scoring. */
   scoring: "programmatic" | "llm" | "mixed";
+  /** The detector this benchmark scores, with its version. When set, no agent runs: judge() alone scores each case, and the board reports precision, recall and F1. */
+  detector?: string;
   /** Preflight. A skip carries the reason that goes in the board. */
   check(ctx: BenchContext): Promise<Readiness>;
   /** The cases of a subset. */
