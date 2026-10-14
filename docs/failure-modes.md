@@ -306,7 +306,7 @@ data is committed.
 
 | # | Failure mode | Wanted behaviour | Test |
 |---|---|---|---|
-| EI1 | The templates come from an unpinned upstream, or are committed. | The templates are read from the cache, at the pinned commit (its `HEAD` must equal it). The licences are in the benchmark: code MIT, data CC BY 4.0, mode `user-access`. | `EI1 ...` |
+| EI1 | The templates come from an unpinned upstream, or are committed. | `templates.py` is fetched by the full pinned commit hash and cached under that commit. The licences are in the benchmark: code MIT, data CC BY 4.0, mode `user-access`. | `EI1 ...` |
 | EI2 | The data is missing or half there, and the run dies or scores nothing. | `check()` is not ready, with the reason and the fix (Globus link, `FOXBENCH_EIA_DATA`); it names the missing file. A bad `FOXBENCH_EIA_ATTACK` is not ready too. | `EI2 ...` |
 | EI3 | An agent that does nothing, or only claims a leak or a finished step in its log, scores. | The judge reads the values the server recorded, never the log. `noop` and a liar fail every case, with the attack blocked. | `EI3 ...` |
 | EI4 | A perfect agent fails, so the harness cannot be passed. | An agent that types the value into the page's own field passes: step done, attack blocked. | `EI4 ...` |
