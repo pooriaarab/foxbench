@@ -266,6 +266,28 @@ llama-server; no test calls a real API.
 | J7 | The API key leaks into a board, a log or an error message. | The key is read from the environment only and is scrubbed from every judge error. | `J7 ...` |
 | J8 | The clients send the wrong request: no key header, the wrong model, or the prompt in the wrong field. | The Claude judge sends `x-api-key`, the model from `--judge-model` (default `claude-sonnet-5-5`) and the prompt as the user message; the local judge posts to `/v1/chat/completions`. | `J8 ...` |
 
+## WebArena-Verified sites (`wav-core`, `src/bench/wav/`)
+
+The `wav-core` env runs the WebArena-Verified shopping, shopping_admin,
+reddit and gitlab containers (`am1n3e/webarena-verified-*:0.1.0`) on one VM.
+The agent reaches each site through the recording proxy on the site's own
+port (7770, 7780, 9999, 8023); the proxy forwards to the IAP tunnel on that
+port plus 10000. The sites bake their base URL into every page, so each
+container starts with the proxy's URL as its base. The tests are in
+`tests/wav-env.test.ts`, against fake env-ctrl servers.
+
+| # | Failure mode | Wanted behaviour | Test |
+|---|---|---|---|
+| W1 | A newer image changes the sites under the tasks, so two runs score different sites. | The startup script runs only the pinned tag `0.1.0` of each image, never `latest`. | `W1 ...` |
+| W2 | A site's pages link to its container or tunnel port, so the agent leaves the proxy and the trace misses requests (P1). | Each container gets `WA_ENV_CTRL_EXTERNAL_SITE_URL=http://127.0.0.1:<site port>`, the proxy's URL. The tunnel uses another local port, so the proxy can listen on the site port. | `W2 ...` |
+| W3 | The env tunnels a port that no container serves, or misses a site or its env-ctrl port. | The env's ports, the startup script's `-p` mappings and `check()` come from one site table. | `W3 ...` |
+| W4 | A run starts while a site is down or still booting (GitLab takes minutes), so every case on it fails as the agent's fault. | `check()` asks each site's env-ctrl `/status` and loads the site's health page. Any failure is a not-ready row that names the site, the URL and the fix. | `W4 ...` |
+| W5 | env-ctrl answers but reports a service down (`success: false`), and the run goes ahead. | That site is not ready. | `W5 ...` |
+| W6 | A probe hangs on a dead tunnel, so `foxbench doctor` hangs. | Each probe times out after 10 s. | `W6 ...` |
+| W7 | The containers run on another host (local Docker), and the benchmark cannot reach them. | `FOXBENCH_WAV_HOST` replaces `127.0.0.1` as the host of the tunnel ports. | `W7 ...` |
+| W8 | The VM is too small: GitLab needs 4 GB and the two Magento sites run MySQL and Elasticsearch each, or the disk cannot hold the pulled and unpacked images. | n2-standard-8 (32 GB) and a 200 GB disk. The images are about 33 GB to pull and about 56 GB unpacked. | `W8 ...` |
+| W9 | The agent's browser reaches an env-ctrl port (it is on `127.0.0.1` too) and stops or restarts a site. | A known limit: env-ctrl has no key. The agent gets only the proxy's URL, and no page links to the env-ctrl ports. | - |
+
 ## MiniWoB++ and AgentDojo (`src/bench/miniwob/`, `src/bench/agentdojo/`)
 
 These benchmarks score an agent with a public benchmark's own check. They are
