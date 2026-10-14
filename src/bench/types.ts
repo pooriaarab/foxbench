@@ -2,6 +2,7 @@
 // MiniWoB++, AgentDojo and the public benchmarks to come. The run loop knows
 // only this interface; each benchmark brings its own cases and its own judge.
 import type { TaskOutput } from "../adapter.js";
+import type { Judge, JudgeResult } from "./judge.js";
 
 /** What every benchmark call gets: where the cache is, which Firefox, the environment. */
 export interface BenchContext {
@@ -10,6 +11,8 @@ export interface BenchContext {
   /** The Firefox binary for benchmarks that need a browser of their own (a judge browser). */
   firefox?: string;
   env: NodeJS.ProcessEnv;
+  /** The LLM judges of this run, by name, for cases marked `judge: "llm"`. The first decides. */
+  judges?: Judge[];
 }
 
 /** One case of a benchmark. Ids are stable across versions, so boards stay comparable. */
@@ -22,6 +25,8 @@ export interface Case {
   suite?: string;
   /** The goal text, for `foxbench list`. Absent for benchmarks whose licence forbids showing it. */
   goal?: string;
+  /** "llm" when an LLM judge scores this case; the default is the benchmark's own code. */
+  judge?: "programmatic" | "llm";
 }
 
 /** What the agent gets for one case. */
@@ -73,6 +78,8 @@ export interface Verdict {
   /** Questions the agent asked the user, where the benchmark has a user to ask. */
   asks?: number;
   judgedBy: "programmatic" | `llm:${string}`;
+  /** Each LLM judge's verdict, when one or more judged the case. */
+  judges?: JudgeResult[];
 }
 
 export type SubsetName = "quick" | "published" | "full" | `tag:${string}`;
