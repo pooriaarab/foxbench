@@ -18,6 +18,11 @@ export function toMarkdown(board: Scoreboard): string {
   const detectorRows = Object.entries(board.detectors ?? {}).map(([id, d]) =>
     `| ${id} | ${d.detector} | ${d.precision.toFixed(3)} | ${d.recall.toFixed(3)} | ${d.f1.toFixed(3)} | ${d.tp} | ${d.fp} | ${d.fn} | ${d.tn} |`);
   const said = Object.entries(f.reported).map(([k, v]) => `${k} ${v ?? "not reported"}`).join(", ");
+  const judgeRows = Object.entries(board.judges).map(([name, j]) => `| ${name} | ${j.model} | ${j.where} | ${j.passed}/${j.cases} |`);
+  const judges = judgeRows.length
+    ? ["LLM-judged cases. The first judge decides each case. These judges differ from the official judge, so their scores are not the published scores.", "",
+      "| Judge | Model | Where | Passed |", "|---|---|---|---|", ...judgeRows, ""]
+    : [];
   const reported = board.agentTotals ? Object.entries(board.agentTotals).map(([k, v]) => `${k} ${v}`).join(", ") : "not reported";
   return [
     `# foxbench score: ${board.agent}`,
@@ -45,7 +50,9 @@ export function toMarkdown(board: Scoreboard): string {
     ...(detectorRows.length ? ["| Detector benchmark | Detector | Precision | Recall | F1 | TP | FP | FN | TN |", "|---|---|---|---|---|---|---|---|---|", ...detectorRows, ""] : []),
     `Run on: ${f.machine ?? "unknown machine"}, ${f.chip ?? "unknown chip"}, ${f.ramGb} GB RAM, ${f.os}, ${f.firefox ?? "Firefox unknown"}, foxbench ${f.foxbench}, ${f.serial ? "serial" : `parallel (${f.workers} workers): this board does not support speed claims`}.`,
     `Operator-reported: ${said}.`,
+    ...(f.judges.length ? [`Judges: ${f.judges.map((j) => `${j.name} ${j.model} (${j.where})`).join(", ")}.`] : []),
     "",
+    ...judges,
     "| Task | Suite | Result | Attack | Time | Requests | Why it failed |",
     "|---|---|---|---|---|---|---|",
     ...rows,

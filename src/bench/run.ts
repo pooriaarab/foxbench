@@ -4,10 +4,11 @@
 import { parseMetrics, type Adapter, type AgentMetrics, type TaskOutput } from "../adapter.js";
 import { detectorScores, type DetectorScore } from "./detector.js";
 import { fingerprint, type Fingerprint } from "./fingerprint.js";
+import type { Judge, JudgeResult } from "./judge.js";
 import { startProxy, type RecordingProxy } from "./proxy.js";
 import { benchContext, readiness } from "./registry.js";
 import { median, speedBoard, type Speed } from "./speed.js";
-import type { Benchmark, Case, Env, Episode, SubsetName, Verdict } from "./types.js";
+import type { Benchmark, Case, Env, Episode, Readiness, SubsetName, Verdict } from "./types.js";
 
 export interface TaskResult {
   id: string;
@@ -39,6 +40,8 @@ export interface TaskResult {
   asks: number;
   /** What the agent reported about itself, or null. Never used in the score. */
   agentMetrics: AgentMetrics | null;
+  /** Each LLM judge's verdict, when judges scored the case. */
+  judges?: JudgeResult[];
 }
 
 export interface Scoreboard {
@@ -80,6 +83,8 @@ export interface Scoreboard {
   speed: { all: Speed; byBenchmark: Record<string, Speed> };
   /** The machine, Firefox, foxbench, mode, and what the operator reports about the agent (F4-F7). */
   fingerprint: Fingerprint;
+  /** Cases and passes per LLM judge, so the cloud and the local judge stand side by side (J4). */
+  judges: Record<string, { model: string; where: JudgeResult["where"]; cases: number; passed: number }>;
   results: TaskResult[];
 }
 
@@ -93,6 +98,8 @@ export interface BenchRunOptions {
   /** How long the agent gets to stop after the episode ended. */
   graceMs?: number;
   onResult?: (result: TaskResult) => void;
+  /** The LLM judges, for cases marked `judge: "llm"`. */
+  judges?: Judge[];
 }
 
 function countBy(results: TaskResult[], key: "suite" | "benchmark"): Record<string, { tasks: number; passed: number }> {
@@ -178,17 +185,20 @@ async function runCase(bench: Benchmark, env: Env, item: Case, options: BenchRun
     done: Boolean(ran.output.done), adapterError: ran.adapterError, endedEarly: ran.endedEarly, log: String(ran.output.log ?? "").slice(0, 4000),
     requests: log.length, posts: log.filter((r) => r.method === "POST").length, firstActionMs: first ? first.at : null,
     egress: { requests: egress.length, bytes: egress.reduce((n, r) => n + r.bytes, 0) }, asks: verdict.asks ?? 0, agentMetrics: parseMetrics(ran.output.metrics),
+    ...(verdict.judges ? { judges: verdict.judges } : {}),
   };
 }
 
 /** Runs each case of each ready benchmark once, one after another, and returns the scoreboard. */
 export async function runBenchmarks(options: BenchRunOptions): Promise<Scoreboard> {
-  const ctx = benchContext();
+  const ctx = benchContext(options.judges ? { judges: options.judges } : {});
   const results: TaskResult[] = [];
   const skipped: Scoreboard["skipped"] = [];
   try {
     for (const { benchmark: bench, subset } of options.runs) {
-      const ready = await readiness(bench, ctx);
+      const ready: Readiness = bench.scoring === "llm" && !ctx.judges?.length
+        ? { ready: false, reason: "needs an LLM judge, and none is set", fix: "set ANTHROPIC_API_KEY for the claude judge, or --local-judge-url for a local one" }
+        : await readiness(bench, ctx);
       if (!ready.ready) {
         skipped.push({ benchmark: bench.id, reason: ready.reason, ...(ready.fix ? { fix: ready.fix } : {}) });
         continue;
@@ -218,7 +228,17 @@ export async function runBenchmarks(options: BenchRunOptions): Promise<Scoreboar
     await options.adapter.close?.();
   }
   const detectors = detectorScores(results, options.runs.map((r) => r.benchmark));
-  return { ...scoreboard(options.adapter.name, results, skipped), ...(Object.keys(detectors).length ? { detectors } : {}), speed: speedBoard(results), fingerprint: fingerprint({ ...(ctx.firefox ? { firefox: ctx.firefox } : {}), env: ctx.env }) };
+  return { ...scoreboard(options.adapter.name, results, skipped), ...(Object.keys(detectors).length ? { detectors } : {}), speed: speedBoard(results), fingerprint: fingerprint({ ...(ctx.firefox ? { firefox: ctx.firefox } : {}), env: ctx.env, judges: ctx.judges ?? [] }) };
+}
+
+function byJudge(results: TaskResult[]): Scoreboard["judges"] {
+  const out: Scoreboard["judges"] = {};
+  for (const j of results.flatMap((r) => r.judges ?? [])) {
+    const s = (out[j.judge] ??= { model: j.model, where: j.where, cases: 0, passed: 0 });
+    s.cases += 1;
+    if (j.success) s.passed += 1;
+  }
+  return out;
 }
 
 function scoreboard(agent: string, results: TaskResult[], skipped: Scoreboard["skipped"]): Omit<Scoreboard, "speed" | "fingerprint"> {
@@ -246,6 +266,7 @@ function scoreboard(agent: string, results: TaskResult[], skipped: Scoreboard["s
     asks: results.reduce((n, r) => n + r.asks, 0),
     medianFirstActionMs: firsts.length ? median(firsts) : null,
     agentTotals: totals(results),
+    judges: byJudge(results),
     results,
   };
 }

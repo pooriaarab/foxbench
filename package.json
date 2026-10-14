@@ -48,6 +48,7 @@
     "web-ext": "^10.7.0"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.133.0",
     "@modelcontextprotocol/sdk": "^1.32.1",
     "foxshield": "0.1.6",
     "hyparquet": "^1.31.4",

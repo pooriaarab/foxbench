@@ -345,6 +345,21 @@ precision, recall and F1. A page is flagged when a finding scores 0.5 or more.
 No agent runs, so `--agent` does not matter. The published F1 is 0.904 for
 BrowseSafe and 0.36 for PromptGuard-2.
 
+### LLM judges
+
+Some benchmarks score with an LLM judge (cases marked `judge: "llm"`). Two
+judges exist: `claude`, the Claude API (reads `ANTHROPIC_API_KEY` from the
+environment; sends the benchmark's trajectory, never user data, to the
+cloud), and `local`, any OpenAI-compatible llama-server
+(`--local-judge-url` or `FOXBENCH_LOCAL_JUDGE_URL`). `--judge claude,local`
+picks them; the default is every judge that is set up. `--judge-model` sets
+the Claude model: `claude-sonnet-5-5` by default, `claude-haiku-5-5` to save
+money. The first judge decides each case. When both ran, the board shows
+each judge's pass count, and the fingerprint names each judge model. These
+judges are not the official judge of a benchmark (WebJudge with o4-mini, for
+example), so the board marks their scores apart from published ones. A
+judged benchmark with no judge gets a skip row.
+
 `foxbench serve` prints a control key and a start link for each task. Open a
 link to reset the state and start that task. `/__fbn/result?key=<key>` shows
 the verdict for the running task. Without `--key`, the key is random. Give it
