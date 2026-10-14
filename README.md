@@ -295,6 +295,33 @@ link to reset the state and start that task. `/__fbn/result?key=<key>` shows
 the verdict for the running task. Without `--key`, the key is random. Give it
 to people, not to an agent that you test on the sites. foxbench has no MCP server of its own; it is an MCP client.
 
+### Cloud environments
+
+```text
+foxbench env up <env> [--no-spot] [--max-run-duration 4h]
+foxbench env down <env>
+foxbench env status [<env>]
+```
+
+Some benchmarks need sites too heavy for a laptop. `foxbench env up` makes a
+GCP VM from the env's startup script (`src/env/envs.ts`) and opens an IAP
+tunnel from `127.0.0.1` ports to it. It runs `gcloud` (or `FOXBENCH_GCLOUD`)
+with your own login. Give the project, zone and account with `--project`,
+`--zone` and `--account`, or `FOXBENCH_GCP_PROJECT`, `FOXBENCH_GCP_ZONE` and
+`FOXBENCH_GCP_ACCOUNT`. The only env so far is `smoke`, a static page on
+`http://127.0.0.1:18080`.
+
+Every VM is Spot unless you pass `--no-spot`, has no external IP, has the
+label `foxbench-env=<env>` and the network tag `foxbench`, and deletes itself
+after `--max-run-duration`. `down` closes the tunnel and deletes every VM with
+the env's label. State is in `~/.foxbench/env/<env>.json`. IAP needs a
+firewall rule once per network:
+
+```bash
+gcloud compute firewall-rules create foxbench-iap --network=default \
+  --direction=INGRESS --action=allow --rules=tcp --source-ranges=35.235.240.0/20 --target-tags=foxbench
+```
+
 ### The extension
 
 Install from AMO: [addons.mozilla.org/firefox/addon/foxbench](https://addons.mozilla.org/firefox/addon/foxbench/)
