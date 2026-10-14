@@ -403,6 +403,26 @@ the agent. The tests are in `tests/presets.test.ts`.
 | A2 | An unknown agent name runs nothing and exits 0. | Exit 2, and name the presets found and the files read. | `A2 ...` |
 | A3 | The config-directory file wins over the working directory, so a repo's own preset is ignored. | The working directory's file is read first; a name there wins. | `A3 ...` |
 | A4 | A preset runs with other options than the same `--agent mcp` command, so its score differs. | A preset becomes the same `mcpAdapter` call: command, args, tool, name and extra arguments. | `A4 ...` |
+## tau2 retail site (`src/bench/tau2/`)
+
+tau2-bench retail is Python tools over a JSON database. foxbench serves it as
+a web site: each page view and each form is one call of a tau2 retail tool,
+run by tau2's own code through a Python bridge (`src/bench/tau2/bridge.py`),
+and the site records each call for tau2's evaluator. tau2 is fetched at a
+pinned commit into the cache. Each row is a way that a page could make a call
+that tau2's agent would not, or score a database tau2 did not make. The tests
+are in `tests/tau2-retail.test.ts` and run tau2's real code through `uv`.
+
+| # | Failure mode | Wanted behaviour | Test |
+|---|---|---|---|
+| T1 | The cache holds another commit, or upstream code or data is committed. | The cache dir is named for the pinned commit and its `HEAD` equals it. Only the paths the site needs are checked out. | `T1 ...` |
+| T2 | A form does something its tau2 tool does not, so a correct agent fails or a wrong one passes. | The forms only collect arguments; tau2's own tool code runs them. A scripted agent that does each task's gold actions through the pages makes the gold write calls for all 114 tasks, with no tool error. | `T2 ...` |
+| T3 | Viewing a page changes the database, or counts as a write the agent never chose. | Each page view makes exactly one read tool call, never a write. | `T3 ...` |
+| T4 | A wrong form looks like it worked, or changes the database anyway. | The page shows tau2's error with status 400; tau2's tool raised before any change. | `T4 ...` |
+| T5 | One case's writes are still there in the next case. | `reset()` builds a fresh tau2 environment from the start database, and clears the recorded calls. | `T5 ...` |
+| T6 | An order id with `#` cannot be opened, so an agent cannot reach the order. | Order pages are `/orders/<id>` with the `#` encoded as `%23`; the links on the site are already encoded. | `T6 ...` |
+| T7 | tau2 prints at import time and breaks the bridge's line protocol, or the bridge dies and the site hangs. | The bridge writes replies to its own copy of stdout and sends tau2's prints to stderr. A dead bridge fails each call at once, and the page answers 502. | `T7 ...` |
+| T8 | Text from the database (names, addresses) breaks the page or injects markup. | Every value is HTML-escaped. | `T8 ...` |
 
 ### The task loader
 
