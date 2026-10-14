@@ -239,10 +239,19 @@ foxbench run --suite agentdojo,browsesafe --agent mcp --name my-agent -- node my
 | `tau2-retail` | tau2-bench's 114 retail tasks: the agent works a shop's support desk while a Claude customer talks to it in the chat at `/user/` | [tau2-bench](https://github.com/sierra-research/tau2-bench) v1.0.1 (MIT), fetched at a pinned commit; tools run in tau2's own code through `uv` | tau2's own `evaluate_simulation`: the database against the gold one, and tau2's NL assertions sent to the run's LLM judge (`--judge`, Claude). Needs `ANTHROPIC_API_KEY` for the customer. |
 | `tau2-airline` | tau2-bench's 50 airline tasks on an airline's reservations desk, with the same Claude customer | [tau2-bench](https://github.com/sierra-research/tau2-bench) v1.0.1 (MIT), as for `tau2-retail` | tau2's own `evaluate_simulation`: the database and what the agent must tell the customer. No LLM judge. |
 
+| `online-mind2web` | 300 live-web tasks on 136 sites, tagged easy, medium and hard | [Online-Mind2Web](https://huggingface.co/datasets/osunlp/Online-Mind2Web) (CC BY 4.0), gated (auto-approved): needs `HF_TOKEN` with access; fetched at a pinned revision | An LLM judge (`--judge claude,local`) with a WebJudge-style rubric: key points, then the outcome from the answer, the action history and the requests. Not the official o4-mini WebJudge, which also reads screenshots. |
+
 Readiness is honest. A benchmark whose inputs are missing — a Globus login
 for EIA's data, `python3` for WebArena-Infinity, the network on a first
 fetch — reports a skip row with the reason and the fix instead of failing
 or faking a run. `--require` turns a selected skip into a failure.
+
+LLM-judged cases (`judge: "llm"`) call judges by name: `claude`, the Claude
+API (`ANTHROPIC_API_KEY`; `--judge-model`, default `claude-sonnet-5-5`,
+`claude-haiku-5-5` to save money), and `local`, an OpenAI-compatible
+llama-server (`--local-judge-url`). The first judge decides each case; the
+board shows each judge's pass count and the fingerprint names each model. A
+judged benchmark with no judge is a skip row.
 
 MiniWoB tasks run the way BrowserGym runs them: the seed is fixed, the time
 limit is 1,000,000 ms, the in-page goal and timer are hidden, and the goal
