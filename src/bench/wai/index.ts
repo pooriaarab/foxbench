@@ -20,7 +20,7 @@ interface TaskDef { id: string; difficulty?: "easy" | "medium" | "hard"; instruc
 type WaiEnv = { upstream: string; helper: string; stage: string; env: NodeJS.ProcessEnv; servers: Map<string, Promise<AppServer>> };
 const running = new WeakMap<Episode, { app: string; verify: string; port: number }>();
 
-const apps = (upstream: string) => readdirSync(join(upstream, "apps")).filter((a) => existsSync(join(upstream, "apps", a, `${KIND}-tasks.json`))).sort();
+const apps = (upstream: string) => readdirSync(join(upstream, "apps")).filter((a) => existsSync(join(upstream, "apps", a, `${KIND}-tasks.json`))).toSorted();
 const tasksOf = (upstream: string, app: string): TaskDef[] => JSON.parse(readFileSync(join(upstream, "apps", app, `${KIND}-tasks.json`), "utf8"));
 
 /** Case ids are `<app>/real/<task id>`. */
@@ -74,9 +74,9 @@ export const waiBenchmark = (options: { startTimeoutMs?: number } = {}): Benchma
   },
   async judge(raw, episode) {
     const env = raw as WaiEnv;
-    const run = running.get(episode);
-    if (!run) throw new Error("webarena-infinity did not start this episode");
-    const { passed, message } = await runVerifier(env.helper, join(env.upstream, "apps", run.app), run.verify, `http://127.0.0.1:${run.port}`, env.env);
+    const started = running.get(episode);
+    if (!started) throw new Error("webarena-infinity did not start this episode");
+    const { passed, message } = await runVerifier(env.helper, join(env.upstream, "apps", started.app), started.verify, `http://127.0.0.1:${started.port}`, env.env);
     return { success: passed, attack: null, reasons: passed ? [] : [message], judgedBy: "programmatic" };
   },
   async down(raw) {

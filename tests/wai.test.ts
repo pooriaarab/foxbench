@@ -42,6 +42,7 @@ function scripted(kind: "perfect" | "wrong" | "liar"): Adapter {
 }
 
 const run = (adapter: Adapter, ids = IDS) => runBenchmarks({ adapter, runs: [{ benchmark: bench, subset: "full" }], ids });
+const board = async (a: Adapter) => (await run(a)).results.map((r) => [r.id, r.success, r.reasons.length > 0]);
 
 beforeAll(async () => {
   process.env.FOXBENCH_CACHE = cache;
@@ -61,7 +62,6 @@ describe("WebArena-Infinity", () => {
   }, 180_000);
 
   it("WI5 WI6 noop and a liar score 0, perfect passes, wrong fails, on three real cases", async () => {
-    const board = async (a: Adapter) => (await run(a)).results.map((r) => [r.id, r.success, r.reasons.length > 0]);
     expect(await board(noopAdapter())).toEqual(IDS.map((id) => [id, false, true]));
     expect(await board(scripted("liar"))).toEqual(IDS.map((id) => [id, false, true]));
     expect(await board(scripted("wrong"))).toEqual(IDS.map((id) => [id, false, true]));
@@ -94,8 +94,8 @@ describe("WebArena-Infinity", () => {
     const original = readFileSync(tasks, "utf8");
     writeFileSync(tasks, original.replace("real-tasks/task_e1.py", "../../LICENSE"));
     try {
-      const board = await run(noopAdapter(), [IDS[0]!]);
-      expect(board.results[0]!.reasons.join()).toMatch(/harness: .*outside/);
+      const result = await run(noopAdapter(), [IDS[0]!]);
+      expect(result.results[0]!.reasons.join()).toMatch(/harness: .*outside/);
     } finally {
       writeFileSync(tasks, original);
     }
