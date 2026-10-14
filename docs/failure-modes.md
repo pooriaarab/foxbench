@@ -322,6 +322,27 @@ against fake sites on the tunnel ports.
 | WT9 | `uv` is missing, and every case fails late. | `check()` is not ready, with the fix. | `WT9 ...` |
 | WT10 | The agent gets another prompt than upstream's agents, so the scores are not comparable. | The goal is upstream's prompt for the task's sites, from the repo at the pinned commit and kept in the cache, with the intent and the start URLs on the proxy ports filled in. | `WT10 ...` |
 
+## WebArena-Verified scoring (`src/bench/wav/judge.ts`, `src/bench/wav/har.ts`)
+
+WebArena-Verified scores a case from two things only: the agent's JSON
+answer and the network trace. foxbench runs upstream's own
+`WebArenaVerified.evaluate_task` from the pinned PyPI package through `uv`.
+A HAR recorder sits behind the recording proxy for each site of a case. The
+tests are in `tests/wav-judge.test.ts`; they run real cases through the run
+loop with scripted agents against fake sites, and upstream's evaluator
+judges them.
+
+| # | Failure mode | Wanted behaviour | Test |
+|---|---|---|---|
+| WJ1 | The judge reads the agent's claim, or a rewrite of upstream's checks, so the score is not WebArena-Verified's. | `judge` passes `answer` and the HAR to upstream's `evaluate_task`; a case passes only on its `success`. `done` is never read. | `WJ1 ...` |
+| WJ2 | The trace lacks what upstream's NetworkEventEvaluator reads (query, request headers, post data, status, redirect URL, JSON bodies), so a correct navigate or mutate case fails. | Each site's HAR recorder logs every request in HAR shape, with the URL on the site port the agent saw. | `WJ2 ...` |
+| WJ3 | The HAR file keeps the auto-login header or the GitLab session cookie. | The recorder drops `cookie` and every `*-auto-login` request header. | `WJ3 ...` |
+| WJ4 | An agent that does nothing, or answers wrong, passes. | noop and a scripted wrong agent fail every case; a scripted perfect agent, with upstream's expected answers and requests, passes every case. | `WJ4 ...` |
+| WJ5 | Upstream's evaluator errors (no requests, an answer that is not JSON) and the case passes, or the run stops. | The case fails with upstream's message as the reason. | `WJ5 ...` |
+| WJ6 | A case changes a site (a post, an order), and the next case on that site starts from the changed state. | After a case whose HAR has a request that is not GET, HEAD or OPTIONS to a site, the next case on that site first resets it: the env's reset service recreates the container from its image, then `start` waits for the site's probe. Cases that only read share one reset. The marks are kept in the cache, so the next run resets a site that the last one changed. | `WJ6 ...` |
+| WJ7 | A reset never ends (GitLab boots for minutes), so the run hangs. | `start` waits up to 10 minutes, then the case fails with a `harness:` reason, and the site stays marked for reset. | `WJ7 ...` |
+| WJ8 | The agent reaches the reset service (it is on a tunnel port too) and resets a site during its case. | A known limit. The reset service has no key. A reset can only remove the agent's own work, and the score reads the trace, not the site. | - |
+
 ## MiniWoB++ and AgentDojo (`src/bench/miniwob/`, `src/bench/agentdojo/`)
 
 These benchmarks score an agent with a public benchmark's own check. They are
