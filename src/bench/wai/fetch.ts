@@ -32,8 +32,9 @@ export async function fetchUpstream(cacheDir: string): Promise<string> {
     if (head !== WAI_REF) throw new Error(`fetched ${head}, not the pinned ${WAI_REF}`);
     rmSync(join(tmp, ".git"), { recursive: true, force: true });
     writeFileSync(join(tmp, ".foxbench-ref"), `${WAI_REF}\n`);
-    if (existsSync(dir)) rmSync(dir, { recursive: true, force: true });
-    renameSync(tmp, dir);
+    // A run that finished first has already put the same tree there; keep it, as a reader may be using it.
+    if (existsSync(join(dir, ".foxbench-ref"))) rmSync(tmp, { recursive: true, force: true });
+    else renameSync(tmp, dir);
   } catch (error) {
     rmSync(tmp, { recursive: true, force: true });
     throw error;
