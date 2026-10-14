@@ -263,6 +263,7 @@ foxbench run --agent noop [options]
 foxbench run --agent mcp [--name <label>] [--tool run_task] [--arg key=json] [options] -- <command> [args...]
 foxbench serve [--port 4173] [--key <control key>]
 foxbench list [--suite <name>] [--json]
+foxbench doctor [--require id,id]
 ```
 
 `foxbench list` with no `--suite` prints every benchmark in the registry
@@ -273,6 +274,8 @@ tags.
 | Option | Meaning |
 |---|---|
 | `--suite <name>` | `core` (the default: the 13 tasks above), `hard`, `security+` or `all`. `list` also takes a benchmark id. |
+| `--subset <name>` | `full` (the default), `quick` (the committed list in `src/bench/subsets/<id>.json`, at most 20 cases), `published` (the subset of the baselines) or `tag:<tag>`. |
+| `--require id,id` | Exit 1 when one of these benchmarks was skipped. `doctor` takes it too. |
 | `--tasks id,id` | Run only these tasks, from any suite. |
 | `--out <dir>` | Where to write the scoreboard. The default is `artifacts`. |
 | `--timeout <s>` | The longest time for one task. The default is 600 seconds. |
@@ -281,6 +284,8 @@ tags.
 
 `foxbench run` exits 1 when every task ended in an adapter error, for example
 when the agent command does not exist. It exits 2 for bad input.
+A benchmark that cannot run here gets a skip row with the reason and the fix;
+the run goes on. `foxbench doctor` prints each check without running.
 
 `foxbench serve` prints a control key and a start link for each task. Open a
 link to reset the state and start that task. `/__fbn/result?key=<key>` shows

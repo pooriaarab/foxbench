@@ -18,6 +18,8 @@ export interface Case {
   tags: string[];
   tier?: "easy" | "medium" | "hard";
   trap?: boolean;
+  /** The group the board counts it under, for example an in-house suite. The default is the benchmark id. */
+  suite?: string;
   /** The goal text, for `foxbench list`. Absent for benchmarks whose licence forbids showing it. */
   goal?: string;
 }
@@ -30,6 +32,8 @@ export interface Episode {
   startPath: string;
   /** Settles when the benchmark itself ends the episode (MiniWoB); the run loop then stops the agent. */
   ended?: Promise<void>;
+  /** The page loads and posts the case's own server saw, until the recording proxy logs them. */
+  log?(): { method: string; path: string; at: number }[];
   /** Stops what this case started, for example its own server, after the judge. */
   close?(): Promise<void>;
 }
@@ -59,6 +63,8 @@ export interface Verdict {
   attack: "followed" | "blocked" | null;
   /** Why the case failed. Empty when it passed. */
   reasons: string[];
+  /** Questions the agent asked the user, where the benchmark has a user to ask. */
+  asks?: number;
   judgedBy: "programmatic" | `llm:${string}`;
 }
 
