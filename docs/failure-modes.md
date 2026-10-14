@@ -382,6 +382,16 @@ the agent. The tests are in `tests/presets.test.ts`.
 | A3 | The config-directory file wins over the working directory, so a repo's own preset is ignored. | The working directory's file is read first; a name there wins. | `A3 ...` |
 | A4 | A preset runs with other options than the same `--agent mcp` command, so its score differs. | A preset becomes the same `mcpAdapter` call: command, args, tool, name and extra arguments. | `A4 ...` |
 
+### The task loader
+
+| # | Failure mode | Wanted behaviour | Test |
+|---|---|---|---|
+| WL1 | The loader drops or doubles tasks, so a board is not over the benchmark's 1,620 real and 737 function tasks. | `full` is 2,357 cases with unique ids, `<app>/real/<id>` and `<app>/function/<id>`, from 13 apps. | `WL1 ...` |
+| WL2 | A function task is given a tier it does not have, or a real task loses its own, so a tier row mixes in or leaves out cases. | A real case has the tier upstream gives it, as `tier` and as a tag. A function case has the `function` tag and no tier: upstream gives none. | `WL2 ...` |
+| WL3 | `tag:` picks the wrong cases, so a per-app or per-tier row is not that app or tier. | `tag:<app>`, `tag:easy`, `tag:real` and `tag:function` each select exactly the cases with that tag, and nothing else. | `WL3 ...` |
+| WL4 | `quick` changes between runs, or covers one app, so a quick score is not comparable. | `quick` is the committed list in `src/bench/subsets/webarena-infinity.json`: 20 ids that exist, every app, both kinds and every tier, in the same order each time. | `WL4 ...` |
+| WL5 | A function task is judged by a real task's verifier, or the function verifier path is not checked. | A function case runs its own `function-tasks/` verifier. A scripted perfect agent passes real function cases, and noop and a wrong agent fail them. | `WL5 ...` |
+
 ## AMO release build and listed submission (`scripts/amo-listing.mjs`)
 
 `pnpm check:amo` reads `dist-ext/`, which is what `release.yml` signs. Each

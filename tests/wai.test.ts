@@ -15,13 +15,13 @@ import type { Benchmark, Case, Env } from "../src/bench/types.js";
 const solve = join(import.meta.dirname, "fixtures/wai_solve.py");
 const cache = mkdtempSync(join(tmpdir(), "foxbench-wai-"));
 const upstream = join(cache, `webarena-infinity-${WAI_REF.slice(0, 12)}`);
-const IDS = ["gmail/real/task_e1", "gmail/real/task_e6", "xero-invoicing/real/task_e1"];
+const IDS = ["gmail/real/task_e1", "gmail/real/task_e6", "xero-invoicing/real/task_e1", "gmail/function/task_1", "xero-invoicing/function/task_1"];
 const ctx = benchContext({ cacheDir: cache });
 let bench: Benchmark;
 let cases: Case[];
 
-const solved = (app: string, task: string): { seed: unknown; solved: unknown } =>
-  JSON.parse(execFileSync("python3", ["-I", solve, join(upstream, "apps", app), task], { encoding: "utf8", maxBuffer: 1 << 28 }));
+const solved = (app: string, kind: string, task: string): { seed: unknown; solved: unknown } =>
+  JSON.parse(execFileSync("python3", ["-I", solve, join(upstream, "apps", app), kind, task], { encoding: "utf8", maxBuffer: 1 << 28 }));
 const origin = (url: string) => `http://127.0.0.1:${new URL(url).port}`;
 const put = (url: string, state: unknown) => fetch(`${origin(url)}/api/state`, { method: "PUT", body: JSON.stringify(state) });
 
@@ -31,9 +31,9 @@ function scripted(kind: "perfect" | "wrong" | "liar"): Adapter {
     name: kind,
     async runTask({ url, goal }: TaskInput): Promise<TaskOutput> {
       const id = cases.find((c) => c.goal === goal)!.id;
-      const [app, , task] = id.split("/");
+      const [app, kind, task] = id.split("/");
       if (kind === "liar") return { done: true, log: "claims done" };
-      const states = solved(app!, task!);
+      const states = solved(app!, kind!, task!);
       await put(url, states.seed);
       await put(url, kind === "perfect" ? states.solved : { ...(states.seed as object), unrelated: true });
       return { done: true, log: `${kind} pushed state` };
@@ -57,22 +57,22 @@ describe("WebArena-Infinity", () => {
     expect(readdirSync(cache).filter((n) => n.startsWith("webarena-infinity-"))).toEqual([`webarena-infinity-${WAI_REF.slice(0, 12)}`]);
     expect(existsSync(join(upstream, "apps/gmail/server.py"))).toBe(true);
     expect(existsSync(join(upstream, "apps/user-manuals"))).toBe(false);
-    expect(cases.length).toBe(1620);
-    expect(new Set(cases.map((c) => c.id)).size).toBe(1620);
+    expect(cases.length).toBe(2357);
+    expect(new Set(cases.map((c) => c.id)).size).toBe(2357);
   }, 180_000);
 
-  it("WI5 WI6 noop and a liar score 0, perfect passes, wrong fails, on three real cases", async () => {
+  it("WI5 WI6 noop and a liar score 0, perfect passes, wrong fails, on real and function cases", async () => {
     expect(await board(noopAdapter())).toEqual(IDS.map((id) => [id, false, true]));
     expect(await board(scripted("liar"))).toEqual(IDS.map((id) => [id, false, true]));
     expect(await board(scripted("wrong"))).toEqual(IDS.map((id) => [id, false, true]));
-    expect((await board(scripted("perfect"))).map((r) => r[1])).toEqual([true, true, true]);
+    expect((await board(scripted("perfect"))).map((r) => r[1])).toEqual(IDS.map(() => true));
   }, 180_000);
 
   it("WI2 WI3 resets between cases, hides the verifiers, and WI8 stops the servers", async () => {
     const env: Env = await bench.up(ctx);
     const item = cases.find((c) => c.id === IDS[0])!;
     const first = await bench.start(env, item);
-    const states = solved("gmail", "task_e1");
+    const states = solved("gmail", "real", "task_e1");
     await put(first.url, states.seed);
     await put(first.url, states.solved);
     expect((await bench.judge(env, first, { done: false, log: "" }, { requests: [] })).success).toBe(true);
