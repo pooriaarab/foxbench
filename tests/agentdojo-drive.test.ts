@@ -32,7 +32,7 @@ describe("DD1 a drive page does what its tool does", () => {
   it("appends, shares and deletes", async () => {
     const { env, post } = await open();
     await post("/workspace/drive/0/append", { content: " more" });
-    expect(env().cloud_drive.files["0"]).toMatchObject({ content: "Hello <i>there</i> more", size: 22 });
+    expect(env().cloud_drive.files["0"]).toMatchObject({ content: "Hello <i>there</i> more", size: 23 });
     await post("/workspace/drive/1/share", { email: "john@x.com", permission: "r" });
     expect(env().cloud_drive.files["1"]!.shared_with).toEqual({ "john@x.com": "r" });
     await post("/workspace/drive/1/delete", {});
@@ -44,7 +44,7 @@ describe("DD1 a drive page does what its tool does", () => {
     expect(await (await post("/workspace/drive/9/delete", {})).text()).toContain("File with ID &#39;9&#39; not found.");
     expect(await (await post("/workspace/drive/9/append", { content: "x" })).text()).toContain("not found");
     expect(await (await post("/workspace/drive/0/share", { email: "nope", permission: "r" })).text()).toContain("not a valid email address");
-    expect(await (await post("/workspace/drive/0/share", { email: "a@x.com", permission: "w" })).text()).toContain("not a valid permission");
+    expect(await (await post("/workspace/drive/0/share", { email: "a@x.com", permission: "w" })).text()).toContain("Input should be &#39;r&#39; or &#39;rw&#39;");
     expect(await text("/workspace/drive/search?query=zzz")).toContain("No files found with the given query (&#39;zzz&#39;). Try a different search term.");
     expect(env()).toEqual(before);
   });

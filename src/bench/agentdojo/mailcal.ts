@@ -18,11 +18,11 @@ export interface MailCalEnv {
 }
 
 export const refuse = (message: string): never => { throw new Error(message); };
-const nextId = (table: Record<string, unknown>) => String(Math.max(0, ...Object.keys(table).map(Number)) + 1);
+export const nextId = (table: Record<string, unknown>) => String(Math.max(0, ...Object.keys(table).map(Number)) + 1);
 /** A list from a form field: comma-separated addresses. */
 export const list = (value = "") => value.split(",").map((s) => s.trim()).filter(Boolean);
 /** pydantic's EmailStr refuses these; AgentDojo could not load the end state with one in it. */
-const addresses = (values: string[]) => values.map((v) => (/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v) ? v : refuse(`value is not a valid email address: ${v}`)));
+export const addresses = (values: string[]) => values.map((v) => (/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v) ? v : refuse(`value is not a valid email address: ${v}`)));
 /** datetime.strptime(value, "%Y-%m-%d %H:%M") or "%Y-%m-%d", as an ISO string. */
 export function parseTime(value: string, withTime = true): string {
   const m = (withTime ? /^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2})$/ : /^(\d{4})-(\d{2})-(\d{2})$/).exec(value);
@@ -43,7 +43,7 @@ export function sendEmail(env: MailCalEnv, recipients: string[], subject: string
   return email;
 }
 
-const some = <T>(items: T[], error: string) => (items.length ? items : refuse(error));
+export const some = <T>(items: T[], error: string) => (items.length ? items : refuse(error));
 
 export const calendarTools = {
   get_day_calendar_events: (e: MailCalEnv, { day = "" }: Form) => Object.values(e.calendar.events).filter((ev) => ev.start_time.slice(0, 10) === parseTime(day, false).slice(0, 10)),
@@ -87,7 +87,7 @@ export const calendarTools = {
 const byStatus = (e: MailCalEnv, status: Email["status"]) => Object.values(e.inbox.emails).filter((m) => m.status === status);
 
 export const emailTools = {
-  send_email: (e: MailCalEnv, { recipients = "", subject = "", body = "", cc = "", bcc = "" }: Form) => sendEmail(e, list(recipients), subject, body, [], list(cc), list(bcc)),
+  send_email: (e: MailCalEnv, { recipients = "", subject = "", body = "", cc = "", bcc = "", attachments = "" }: Form) => sendEmail(e, list(recipients), subject, body, list(attachments), list(cc), list(bcc)),
   search_emails(e: MailCalEnv, { query = "", sender = "" }: Form) {
     const q = query.toLowerCase();
     const all = Object.values(e.inbox.emails).filter((m) => !sender || m.sender.toLowerCase() === sender.toLowerCase());
@@ -153,7 +153,7 @@ export function mailcalPage({ eventForms = () => "", env, calls, base, path, pos
     return "error" in r ? fail("Calendar", r.error) : shell("Calendar", `<p role="status">Event ${esc(cancel[1])} has been canceled and the participants have been notified.</p>`);
   }
   if (path === `${base}/mail/new`) {
-    if (!post) return shell("Send an email", `<form method="post">${field("recipients", "To (comma-separated)")}${field("subject", "Subject")}${field("body", "Body")}${field("cc", "Cc")}${field("bcc", "Bcc")}<button>Send</button></form>`);
+    if (!post) return shell("Send an email", `<form method="post">${field("recipients", "To (comma-separated)")}${field("subject", "Subject")}${field("body", "Body")}${field("cc", "Cc")}${field("bcc", "Bcc")}${field("attachments", "Attach files (file IDs, comma-separated)")}<button>Send</button></form>`);
     const r = use("send_email", form, emailTools.send_email);
     return "error" in r ? fail("Send an email", r.error) : shell("Send an email", `<p role="status">Email ${esc(r.value.id_)} sent.</p>`);
   }
