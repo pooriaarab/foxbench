@@ -346,6 +346,29 @@ model, and the real test split from the cache.
 | BS9 | The board does not say which detector and version it scored. | The board names the detector and its version (`foxshield 0.1.6`), read from the installed package. | `BS9 ...` |
 | BS10 | A quick run sees only benign pages, or two quick runs see different pages. | `quick` is 20 fixed ids, 10 injected and 10 benign. | `BS10 ...` |
 
+## WebArena-Infinity (`src/bench/wai/`)
+
+WebArena-Infinity is generated web apps. Each app has a stdlib `server.py`
+that keeps the page's state, and tasks whose verifiers read `GET /api/state`.
+The browser pushes its state to the server (`PUT /api/state`); the first push
+is kept as the seed, and `POST /api/reset` restores it. Each row is a way that
+a score could come from something other than the agent's work. The tests are
+in `tests/wai.test.ts`, on real Gmail and Xero tasks: a scripted agent does
+what the app's page does, a `PUT` of the state, and the verifier is the
+task's own.
+
+| # | Failure mode | Wanted behaviour | Test |
+|---|---|---|---|
+| WI1 | The upstream tree is not the pinned one, or a half-fetched cache is used, so the tasks and verifiers differ from run to run. | One pinned commit. The fetch goes to a temporary directory, must end at that commit, and is renamed into `<cache>/webarena-infinity-<ref>` only when whole. | `WI1 ...` |
+| WI2 | State from the last case stays, so a noop agent passes a task that the last case solved. | `start` calls `POST /api/reset` and fails the case if the reset does not answer ok. A noop run after a perfect run of the same task scores 0. | `WI2 ...` |
+| WI3 | The agent reads the verifier, the solver or the task list over HTTP, because `server.py` serves its own directory. | Each app is served from a copy that leaves out the task lists, the verifiers, the sanity scripts and the docs. They return 404. | `WI3 ...` |
+| WI4 | The page keeps its last state in `localStorage` and pushes it on load, over the reset, so a new case starts dirty. | Each case reaches the app through the run loop's own recording proxy, on a new port, so the agent's browser has a new origin and a page never sees an earlier case's storage. | `WI4 ...` |
+| WI5 | An agent that opens nothing passes, because the verifier gets no state. | `noop` scores 0 on every case, on a fresh app (no state, HTTP 404) and on a reset one (the seed). | `WI5 WI2 ...` |
+| WI6 | The judge reads the agent's claim, or a verifier that throws or hangs counts as a pass. | The verdict is the verifier's `(passed, message)` and nothing else. A throw, a timeout or no answer is a fail with the reason. A wrong agent that claims `done` fails. | `WI6 ...` |
+| WI7 | A task names a verifier outside its app, so the judge runs other code. | The verifier path must stay inside the app's directory, else the case fails with a `harness:` reason. | `WI7 ...` |
+| WI8 | An app server stays up after the run, or a start that never answers hangs the run. | `down` stops every server and removes the copy. A server that does not answer in 10 s fails the case. | `WI8 ...` |
+| WI9 | `check()` fetches, or says ready when python3, git or `requests` (the verifiers import it) is missing. | `check()` fetches nothing. It is not ready, with the fix, when a tool is missing. | `WI9 ...` |
+
 ## AMO release build and listed submission (`scripts/amo-listing.mjs`)
 
 `pnpm check:amo` reads `dist-ext/`, which is what `release.yml` signs. Each

@@ -8,10 +8,11 @@ import { browsesafeBenchmark } from "./browsesafe.js";
 import { foxbenchBenchmark } from "./foxbench.js";
 import { miniwobBenchmark } from "./miniwob/index.js";
 import type { BenchContext, Benchmark, Readiness, SubsetName } from "./types.js";
+import { waiBenchmark } from "./wai/index.js";
 import { webgamesBenchmark } from "./webgames.js";
 
 const foxbench = foxbenchBenchmark();
-export const benchmarks: Benchmark[] = [foxbench, miniwobBenchmark, agentdojoBenchmark, webgamesBenchmark(), eiaBenchmark(), browsesafeBenchmark()];
+export const benchmarks: Benchmark[] = [foxbench, miniwobBenchmark, agentdojoBenchmark, webgamesBenchmark(), eiaBenchmark(), browsesafeBenchmark(), waiBenchmark()];
 
 export const benchmarkById = (id: string): Benchmark | undefined => benchmarks.find((b) => b.id === id);
 
