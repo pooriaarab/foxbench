@@ -203,6 +203,31 @@ tests are in `tests/proxy.test.ts`.
 | P4 | A request to another host through the proxy is not seen, so a cloud agent shows 0 egress. | An absolute URL or a CONNECT to any other host is logged as egress with its host and bytes, and forwarded or tunnelled, never decrypted. The board sums egress per case. | `P4 ...` |
 | P5 | The proxy stays up after the case, so a late request reaches the next case (R1), or a fixed port changes per case (R6). | The loop closes the proxy after the judge. With `Episode.port`, the proxy listens on that port, so a site keeps its origin. | `P5 ...` |
 
+## Cloud environments (`foxbench env`, `src/env/`)
+
+`foxbench env up|down|status <env>` makes a GCP VM from an env's startup
+script and opens an IAP tunnel from local ports to it. It shells out to
+`gcloud` (`FOXBENCH_GCLOUD`). A mistake here costs money or leaves a VM
+running that nobody watches. The tests in `tests/env.test.ts` run the built
+CLI against a fake gcloud (`tests/fixtures/fake-gcloud.mjs`) that records its
+argv and prints canned JSON.
+
+| # | Failure mode | Wanted behaviour | Test |
+|---|---|---|---|
+| V1 | A forgotten VM runs for days. | Every VM gets `--max-run-duration` (default `4h`) and `--instance-termination-action=DELETE`. | `V1 ...` |
+| V2 | A VM cannot be found again, so `down` and `status` miss it. | Every VM gets the label `foxbench-env=<env>`. `down` and `status` find VMs by that label, not by name. | `V2 ...` |
+| V3 | `down` deletes a VM of another env, or one that foxbench did not make. | `down` asks gcloud for this env's label and also checks each returned VM's label before it deletes. | `V3 ...` |
+| V4 | A VM costs on-demand prices by default. | Spot by default; `--no-spot` makes a standard VM. | `V4 ...` |
+| V5 | The VM gets a public IP, so the sites are open to the internet. | `--no-address`; the only way in is the IAP tunnel. | `V1 ...` |
+| V6 | The VM starts without the env's startup script, or with another env's. | `--metadata-from-file=startup-script=<file>` with the script from the env registry. An unknown env stops before any gcloud call. | `V6 ...` |
+| V7 | A failed gcloud call (quota, auth, no project) is hidden, or leaves a state file that says the env is up. | The CLI stops with exit 1 and gcloud's stderr, and writes no state file. | `V7 ...` |
+| V8 | A real project id, account or zone is in the public repo. | Project, zone and account come only from flags or `FOXBENCH_GCP_PROJECT`, `FOXBENCH_GCP_ZONE`, `FOXBENCH_GCP_ACCOUNT`. A missing project or zone stops before any gcloud call. | `V8 ...` |
+| V9 | `down` leaves the tunnel process running, or `up` twice makes two VMs. | `down` kills the tunnel's process group and removes the state file. `up` stops when the env's state file exists. | `V9 ...` |
+| V10 | `status` with no VMs prints nothing, which looks like a hang or a crash. | It prints `none`. | `V10 ...` |
+| V11 | A local tunnel port is taken, so `up` makes a VM it cannot reach. | `up` checks the local ports before it makes the VM. | `V11 ...` |
+| V12 | The tunnel starts before the VM listens and gcloud's connection test fails. | `up` restarts the tunnel until gcloud says `Listening on port`, for up to 5 minutes, then stops and names the log. The state file stays so `down` can delete the VM. | - (needs a real VM) |
+| V13 | IAP cannot reach the VM because no firewall rule allows Google's IAP range. | A setup step, not code: `README.md` gives the firewall rule for the `foxbench` network tag that every VM gets. | - |
+
 ## External benchmarks (`external/`)
 
 The external suites score an agent with a public benchmark's own check. Each
