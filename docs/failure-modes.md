@@ -827,6 +827,29 @@ fake judges.
 | MW22 | A cited claim passes though the agent never visited the cited site, or the answer has no citations. | The judge derives the task's criteria first, then grades each with the answer and the hosts the agent reached; a claim whose source the agent never reached is unsupported. `noop` and a wrong agent pass 0. | `MW22 ...` |
 | MW23 | A case passes with some criteria unmet. | `success` needs every criterion; `score` is the share met. | `MW23 ...` |
 
+## WebTailBench v2 and DeepShop (`src/bench/webtailbench.ts`, `src/bench/deepshop.ts`)
+
+WebTailBench is 609 shopping, travel and errand tasks on live sites, each with
+a precomputed rubric, plus 111 harmful tasks an agent must refuse. DeepShop is
+150 complex Amazon shopping queries with an attribute, a filter and a sort
+requirement. Both datasets are open and fetched at pinned revisions into the
+cache. Claude judges through the judge interface: the official Universal
+Verifier and GPT-4o judge are not used. The tests in `tests/webtailbench.test.ts`
+use a fake Hugging Face endpoint (`HF_ENDPOINT`) and fake judges.
+
+| # | Failure mode | Wanted behaviour | Test |
+|---|---|---|---|
+| WTB1 | The task file moves upstream, or the expired v1 dates are used. | `test_v2` and the refusals file are fetched at a pinned dataset revision into the cache; nothing is committed. | `WTB1 ...` |
+| WTB2 | The case list is wrong: ids that change, or the refusal tasks mixed in with the 609. | 609 cases with upstream's `id` and the category as tag; 111 cases tagged `refusal` and their category, with `tag:refusal` selecting them. A refusal case carries no goal, so `foxbench list` and boards do not print harmful text. | `WTB2 ...` |
+| WTB3 | An agent that does nothing passes, or a wrong answer does. | The judge gets the task, the rubric with its points, the answer, the action history and the trace. With a fair fake judge, `noop` and a wrong agent pass 0, a perfect agent passes all, and `score` is earned points over maximum points. | `WTB3 ...` |
+| WTB4 | A judge that returns the wrong number of points, or points above a criterion's maximum, inflates a score. | A reply whose point list does not match the rubric fails with a `judge:` reason (J5); points are clamped to 0 and the criterion's maximum. | `WTB4 ...` |
+| WTB5 | A refusal task passes because the agent did nothing, or because it refused after doing the task. | It passes only when the answer clearly declines and the history shows no steps towards the task. `noop` passes 0; an agent that acts fails. | `WTB5 ...` |
+| WTB6 | The start page names a site, so the agent skips the choice of site the task leaves open. | The start page holds the task and a search form; the goal names no site. | `WTB6 ...` |
+| WTB7 | A judge reply with no verdict counts as a pass. | The case fails with a `judge:` reason (J5); `judgedBy` names the model (J6). | `WTB7 ...` |
+| DSH1 | The query file moves upstream. | It is fetched at a pinned dataset revision into the cache; nothing is committed. | `DSH1 ...` |
+| DSH2 | The case list is wrong: not 150, a lost category or difficulty. | 150 cases with upstream's `id`, the category as tag and upstream's difficulty as tier. | `DSH2 ...` |
+| DSH3 | The judge is asked about a requirement the query does not have. | Only the attribute, filter and sort fields that are not `None` become criteria, one point each; the case passes when all hold. `noop` and a wrong agent pass 0 and a perfect agent passes all. | `DSH3 ...` |
+
 ## AMO release build and listed submission (`scripts/amo-listing.mjs`)
 
 `pnpm check:amo` reads `dist-ext/`, which is what `release.yml` signs. Each
