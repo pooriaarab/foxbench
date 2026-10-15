@@ -405,9 +405,9 @@ with your own login. Give the project, zone and account with `--project`,
   through the recording proxy. The boot loads upstream's demo data (fetched at
   a pinned commit) once. A reset service on VM port 8871 (tunnelled to 18871)
   restores the seeded database on `POST /reset`. Log in as `user` / `bitnami`.
+- `webmall`: the WebMall shops, below.
 
-`FOXBENCH_GCP_ACCOUNT`. The only env so far is `smoke`, a static page on
-`http://127.0.0.1:18080`. If another process holds a local port, `up` stops
+If another process holds a local port, `up` stops
 before it makes a VM; `--local-port-offset N` moves every tunnel port by N.
 
 Every VM is Spot unless you pass `--no-spot`, has no external IP, has the
@@ -435,6 +435,26 @@ The first `env up wav-core` takes about an hour, most of it the image
 downloads. The shopping and Reddit sites can take a few more minutes to
 serve their first page after env-ctrl says they are healthy; run
 `foxbench doctor` until it says ready.
+
+### WebMall
+
+`webmall` is [WebMall](https://github.com/wbsg-uni-mannheim/WebMall) (University
+of Mannheim): four WooCommerce shops, Elasticsearch and a start page on ports
+18081 to 18085. Its repo has no licence, so foxbench commits none of it: the
+env fetches the compose file at a pinned commit and the authors' data backups
+(3.6 GB, one download at a time) at run time. **Scores on WebMall are not
+published until the authors agree.**
+
+```bash
+foxbench env up webmall --provider docker   # local Docker, 127.0.0.1 only
+foxbench env up webmall                     # a GCP VM, e2-standard-4, 40 GB
+foxbench env down webmall [--provider docker]
+```
+
+Local mode needs Docker with the compose plugin, `curl`, `tar` and 8 GB of RAM.
+The first `up` waits for the download; a later one only starts the containers.
+`down` keeps the volumes (`foxbench_webmall_*`). On a VM `up` waits up to 3
+hours for the tunnel. The shops' URLs are `http://127.0.0.1:808x`.
 
 ### The extension
 
