@@ -194,7 +194,9 @@ describe("V14 no two envs share a local port", () => {
     const clashes: string[] = [];
     for (const cloud of cloudEnvs) for (const { local } of cloud.ports) {
       const other = owner.get(local);
-      if (other && other !== cloud.name) clashes.push(`${local}: ${other} and ${cloud.name}`);
+      // An env that replaces another (wav-full for wav-core) uses its local ports: the two never run together.
+      const same = other && (cloud.replaces === other || cloudEnvs.find((e) => e.name === other)?.replaces === cloud.name);
+      if (other && other !== cloud.name && !same) clashes.push(`${local}: ${other} and ${cloud.name}`);
       owner.set(local, cloud.name);
     }
     expect(clashes).toEqual([]);

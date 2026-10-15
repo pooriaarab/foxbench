@@ -411,7 +411,7 @@ with your own login. Give the project, zone and account with `--project`,
   restores the seeded database on `POST /reset`. Log in as `user` / `bitnami`.
 - `webmall`: the WebMall shops, below.
 - `wav-full`: wav-core plus WebArena-Verified's Wikipedia (port 8888, env-ctrl
-  8889) and map (3000, 3001) containers, on an n2-standard-16 with 450 GB. The
+  8889) and map (3000, 3071) containers, on an n2-standard-16 with 450 GB. The
   data comes from upstream's own `webarena-verified env setup init` at the
   pinned version: a 100 GB Wikipedia ZIM file and about 60 GB of map tiles and
   routing graphs, downloaded after the core sites are up (the first boot takes

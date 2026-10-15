@@ -16,6 +16,8 @@ export interface CloudEnv {
   startup: string;
   /** Makes the VM with nested virtualization, for an env that runs QEMU with KVM. */
   nestedVirt?: boolean;
+  /** The env this one is a superset of: it serves the same sites on the same local ports and never runs beside it. */
+  replaces?: string;
   /** How long `up` waits for the first port to answer: the startup script's time to serve. */
   bootMinutes: number;
   /** The same environment on local Docker: a script that takes the cache dir. Absent when the env has no local mode. */
@@ -92,6 +94,7 @@ systemd-run --unit=foxbench-smoke python3 -m http.server 8080 --directory /srv/f
     // map's extracted volumes) and the 91 GB of core images need about 400 GB; 64 GB of RAM holds the map's
     // PostgreSQL, renderd and OSRM next to the four core sites.
     name: "wav-full",
+    replaces: "wav-core",
     machineType: "n2-standard-16",
     diskGb: 450,
     ports: [...wavSites, ...wavFullSites].flatMap((s) => [s.port, s.ctrlPort]).concat(RESET_PORT).map((remote) => ({ remote, local: remote + TUNNEL_OFFSET })),

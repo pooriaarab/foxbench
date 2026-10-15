@@ -25,7 +25,7 @@ const env = cloudEnvs.find((e) => e.name === "wav-full")!;
 describe("WF1 the VM and its ports", () => {
   it("is 64 GB of RAM and 450 GB of disk, and tunnels the core, Wikipedia and map ports at +10000", () => {
     expect(env).toMatchObject({ machineType: "n2-standard-16", diskGb: 450 });
-    expect(wavFullSites.map((s) => [s.id, s.port, s.ctrlPort])).toEqual([["wikipedia", 8888, 8889], ["map", 3000, 3001]]);
+    expect(wavFullSites.map((s) => [s.id, s.port, s.ctrlPort])).toEqual([["wikipedia", 8888, 8889], ["map", 3000, 3071]]);
     const want = [...wavSites, ...wavFullSites].flatMap((s) => [s.port, s.ctrlPort]).concat(8870);
     expect(env.ports).toEqual(want.map((remote) => ({ remote, local: remote + 10000 })));
   });
@@ -96,7 +96,7 @@ describe("WF2 WF3 the startup script", () => {
     expect(at(/^webarena-verified env setup init/)).toBeGreaterThan(at(/^systemd-run /));
     // Wikipedia gets the ZIM directory; the map gets upstream's named volumes; each on its ports.
     expect(first.log.find((l) => l.includes("--name wav-wikipedia "))).toMatch(/-p 8888:8080 -p 8889:8874 .*-v \S+wav-data:\/data:ro/);
-    expect(first.log.find((l) => l.includes("--name wav-map "))).toMatch(/-p 3000:8080 -p 3001:8877 .*-v webarena_verified_map_tile_db:\/data\/database/);
+    expect(first.log.find((l) => l.includes("--name wav-map "))).toMatch(/-p 3000:8080 -p 3071:8877 .*-v webarena_verified_map_tile_db:\/data\/database/);
   });
   it("downloads nothing on the second boot and only starts the containers", () => {
     const second = boot(dir);

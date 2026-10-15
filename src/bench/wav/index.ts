@@ -50,10 +50,10 @@ export const wavSites: WavSite[] = [
   { id: "gitlab", port: 8023, ctrlPort: 8024, containerPort: 8023, health: "/users/sign_in", login: { user: "byteblaze", password: "hello1234" } },
 ];
 
-// Ports and health pages as upstream's config.py (its docs say map is on 3030; its code and the WebArena paper say 3000).
+// Ports and health pages as upstream's config.py (its docs say map is on 3030; its code and the WebArena paper say 3000). Map's env-ctrl is on 3071, not upstream's 3001: mypcbench tunnels its 3001 to the same local port.
 export const wavFullSites: WavSite[] = [
   { id: "wikipedia", port: 8888, ctrlPort: 8889, ctrlInner: 8874, containerPort: 8080, tag: "1.0.0", health: "/", readOnly: true },
-  { id: "map", port: 3000, ctrlPort: 3001, containerPort: 8080, health: "/", readOnly: true },
+  { id: "map", port: 3000, ctrlPort: 3071, containerPort: 8080, health: "/", readOnly: true },
 ];
 
 // The data volumes upstream's `env setup init --site map` fills (its config.py), and the mount each has in the container.

@@ -241,11 +241,12 @@ argv and prints canned JSON.
 | V11 | A local tunnel port is taken, so `up` makes a VM it cannot reach. | `up` checks the local ports before it makes the VM. `--local-port-offset` moves them, so the tests never share a port with another run. | `V11 ...` |
 | V12 | The tunnel starts before the VM listens and gcloud's connection test fails. | `up` restarts the tunnel until gcloud says `Listening on port`, for up to 5 minutes, then stops and names the log. The state file stays so `down` can delete the VM. | - (needs a real VM) |
 | V13 | IAP cannot reach the VM because no firewall rule allows Google's IAP range. | A setup step, not code: `README.md` gives the firewall rule for the `foxbench` network tag that every VM gets. | - |
-| V14 | Two envs tunnel to the same local port (SuiteCRM and WebMall both took 18081), so the second `up` cannot open its tunnel, or a probe reaches the wrong site. | Every local port is used by one env only. | `tests/env.test.ts` V14 |
 | V15 | A Spot VM is preempted. Its tunnel processes keep running and hold the local ports, and `down` says "No VMs" and leaves them. | `down` stops every tunnel in the env's state even when no VM exists, then removes the state. A tunnel that `up` started but had not yet recorded is in the state too: `up` records the pid when it starts the process. | `V15 ...` |
 | V16 | The next `up` stops at "Local port N is in use" because of the env's own tunnels from an earlier run. | `up` finds the env's state. When no VM has the env's label it stops the state's tunnels and removes it before it checks ports. When a VM exists it still stops with "up already". | `V16 ...` |
 | V17 | V16 kills a process that is not a tunnel: the pid in an old state file now belongs to another program, or another program holds the port. | A pid is stopped only when its command line has `start-iap-tunnel`. A port held by another program still stops `up` and nothing is killed. | `V17 ...` |
 | V18 | V16 stops the old tunnel, but its port is still bound for a moment after the signal (long on a loaded machine), so `up` stops at "Local port N is in use" anyway. | After it stops the old tunnels, `up` waits up to 10 s for their ports to be free before it checks ports. | `V18 ...` |
+
+| V14 | Two envs tunnel to the same local port (SuiteCRM and WebMall both took 18081), so the second `up` cannot open its tunnel, or a probe reaches the wrong site. | Every local port is used by one env only, except an env that `replaces` another (wav-full serves wav-core's sites on the same ports, plus two more). | `tests/env.test.ts` V14 |
 
 ## WebMall env (`src/bench/webmall/env.ts`, `foxbench env up webmall`)
 
@@ -418,7 +419,7 @@ ports.
 
 | # | Failure mode | Wanted behaviour | Test |
 |---|---|---|---|
-| WF1 | The VM is too small or its ports are missing, so the data does not fit or a site cannot be reached. | `wav-full` is n2-standard-16 (64 GB) with a 450 GB disk, and tunnels every wav-core port plus Wikipedia (8888, ctrl 8889) and map (3000, ctrl 3001), each at +10000. | `WF1 ...` |
+| WF1 | The VM is too small or its ports are missing, so the data does not fit or a site cannot be reached. | `wav-full` is n2-standard-16 (64 GB) with a 450 GB disk, and tunnels every wav-core port plus Wikipedia (8888, ctrl 8889) and map (3000, ctrl 3071), each at +10000. | `WF1 ...` |
 | WF2 | The startup script is broken, unpinned, or downloads the data again on every boot. | It passes `sh -n`; it installs `python3-venv` when `ensurepip` is missing (Debian 12), then `webarena-verified==1.2.3`; every image name comes from one table (`wavImage`) at a tag Docker Hub has (Wikipedia is `1.0.0`, the rest `0.1.0`), checked with `docker manifest inspect` when there is network; it runs upstream's `env setup init` for each site once (a marker file per site); a second boot downloads nothing and only starts the containers. | `WF2 ...` |
 | WF3 | A failed 160 GB download leaves the four core sites down. | The script starts the core sites and the reset service first, and the data setup last. | `WF3 ...` |
 | WF4 | Only wav-core is up, and the benchmark is not ready, or a core case fails. | `check()` is ready when the four core sites answer. A map or Wikipedia case fails at start with a reason that names the missing site and `wav-full`. A multi-site case with one missing site fails the same way, and the reason names only the missing one. | `WF4 ...` |
