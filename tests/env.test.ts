@@ -1,7 +1,7 @@
-// Tests for the foxbench env failure modes in docs/failure-modes.md (V1-V11).
+// Tests for the foxbench env failure modes in docs/failure-modes.md (V1-V17).
 // They run the built CLI against a fake gcloud that records its argv.
-import { spawnSync } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { spawn, spawnSync } from "node:child_process";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -197,5 +197,95 @@ describe("V14 no two envs share a local port", () => {
       owner.set(local, cloud.name);
     }
     expect(clashes).toEqual([]);
+  });
+});
+
+const dead = (pid: number) => { try { return !process.kill(pid, 0); } catch { return true; } };
+const stateFile = () => join(home, ".foxbench/env/smoke.json");
+function writeState(tunnels: { remote: number; local: number; pid: number; log: string }[]) {
+  mkdirSync(join(home, ".foxbench/env"), { recursive: true });
+  writeFileSync(stateFile(), JSON.stringify({ env: "smoke", vm: "foxbench-smoke-old", zone: "test-zone-a", tunnels }));
+}
+/** A tunnel an earlier `up` left behind: the fake gcloud, in its own process group, bound to `local`. */
+async function orphanTunnel(local: number): Promise<number> {
+  const child = spawn(process.execPath, [join(root, "tests/fixtures/fake-gcloud.mjs"), "compute", "start-iap-tunnel", "foxbench-smoke-old", "8080", `--local-host-port=127.0.0.1:${local}`],
+    { detached: true, stdio: "ignore", env: { ...process.env, FAKE_GCLOUD_LOG: join(home, "orphans.jsonl") } });
+  child.unref();
+  await expect.poll(async () => { try { await new Promise<void>((ok, no) => { const s = createServer(); s.once("error", no); s.listen(local, "127.0.0.1", () => s.close(() => ok())); }); return false; } catch { return true; } }).toBe(true);
+  return child.pid!;
+}
+
+describe("V15 a preempted VM leaves its tunnels", () => {
+  it("down stops the state's tunnels when no VM exists", async () => {
+    await fresh();
+    const pid = await orphanTunnel(port);
+    writeState([{ remote: 8080, local: port, pid, log: join(home, "t.log") }]);
+    const r = env("down", "smoke");
+    expect(r.status).toBe(0);
+    await expect.poll(() => dead(pid)).toBe(true);
+    expect(existsSync(stateFile())).toBe(false);
+  });
+  it("an up that died while its tunnel was still opening left its pid in the state", async () => {
+    await fresh({ FAKE_GCLOUD_NOBIND: "1" });
+    const child = spawn(process.execPath, [join(root, "dist/cli.js"), "env", "up", "smoke", "--local-port-offset", String(offset)],
+      { stdio: "ignore", env: { ...process.env, HOME: home, FOXBENCH_GCLOUD: join(root, "tests/fixtures/fake-gcloud.mjs"), FAKE_GCLOUD_LOG: join(home, "calls.jsonl"),
+        FOXBENCH_GCP_PROJECT: "test-project", FOXBENCH_GCP_ZONE: "test-zone-a", FAKE_GCLOUD_NOBIND: "1" } });
+    await expect.poll(() => existsSync(stateFile()) && JSON.parse(readFileSync(stateFile(), "utf8")).tunnels.length).toBe(1);
+    const pid = JSON.parse(readFileSync(stateFile(), "utf8")).tunnels[0].pid;
+    child.kill("SIGKILL");
+    expect(dead(pid)).toBe(false);
+    expect(env("down", "smoke").status).toBe(0);
+    await expect.poll(() => dead(pid)).toBe(true);
+  });
+});
+
+describe("V16 up after a preempted VM", () => {
+  it("stops its own env's old tunnels, then opens new ones", async () => {
+    await fresh();
+    const pid = await orphanTunnel(port);
+    writeState([{ remote: 8080, local: port, pid, log: join(home, "t.log") }]);
+    const r = up();
+    expect(r.status).toBe(0);
+    expect(dead(pid)).toBe(true);
+    expect(JSON.parse(readFileSync(stateFile(), "utf8")).tunnels[0].pid).not.toBe(pid);
+  });
+  it("still stops when a VM of the env exists", async () => {
+    await fresh();
+    listing([{ name: "foxbench-smoke-old", env: "smoke" }]);
+    const pid = await orphanTunnel(port);
+    writeState([{ remote: 8080, local: port, pid, log: join(home, "t.log") }]);
+    expect(up().status).toBe(1);
+    expect(dead(pid)).toBe(false);
+    process.kill(-pid);
+  });
+});
+
+describe("V17 only tunnels are stopped", () => {
+  it("leaves a pid that is not a tunnel", async () => {
+    await fresh();
+    const other = spawn("sleep", ["60"], { detached: true, stdio: "ignore" });
+    other.unref();
+    try {
+      writeState([{ remote: 8080, local: port, pid: other.pid!, log: join(home, "t.log") }]);
+      expect(env("down", "smoke").status).toBe(0);
+      expect(dead(other.pid!)).toBe(false);
+    } finally {
+      process.kill(-other.pid!);
+    }
+  });
+  it("a port held by another program stops up and keeps the program", async () => {
+    await fresh();
+    const server = createServer();
+    await new Promise<void>((done) => server.listen(port, "127.0.0.1", done));
+    try {
+      writeState([]);
+      const r = up();
+      expect(r.status).toBe(1);
+      expect(r.stderr).toContain(`Local port ${port} is in use`);
+      expect(calls().some((c) => c.argv.includes("create"))).toBe(false);
+      expect(server.listening).toBe(true);
+    } finally {
+      server.close();
+    }
   });
 });
