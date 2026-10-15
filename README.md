@@ -381,7 +381,9 @@ GCP VM from the env's startup script  and opens an IAP
 tunnel from `127.0.0.1` ports to it. It runs `gcloud` (or `FOXBENCH_GCLOUD`)
 with your own login. Give the project, zone and account with `--project`,
 `--zone` and `--account`, or `FOXBENCH_GCP_PROJECT`, `FOXBENCH_GCP_ZONE` and
-`FOXBENCH_GCP_ACCOUNT`. The envs:
+`FOXBENCH_GCP_ACCOUNT`. When a zone has no VMs left, `up` tries the region's
+other zones in name order, says which it used and keeps it in the env state;
+`--zones a,b` tries only those. It never falls back from standard to Spot. The envs:
 
 - `smoke`: a static page on `http://127.0.0.1:18080`.
 - `wav-core`: the WebArena-Verified shopping, shopping_admin, reddit and

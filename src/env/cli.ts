@@ -9,15 +9,17 @@ import { join } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 import { parseArgs } from "node:util";
 import { dockerDown, dockerStatus, dockerUp } from "./docker.js";
-import { cloudEnvs } from "./envs.js";
-import { createVm, deleteVm, listVms, startTunnel, type Gcp } from "./gcp.js";
+import { cloudEnvs, type CloudEnv } from "./envs.js";
+import { createVm, deleteVm, listVms, listZones, startTunnel, zoneExhausted, type Gcp } from "./gcp.js";
 
 const USAGE = `Usage:
-  foxbench env up <env> [--no-spot] [--max-run-duration 4h] [--local-port-offset N] [gcp options]
+  foxbench env up <env> [--no-spot] [--max-run-duration 4h] [--local-port-offset N] [--zones a,b] [gcp options]
   foxbench env down <env> [gcp options]
   foxbench env status [<env>] [gcp options]
   foxbench env up|down|status <env> --provider docker   (local Docker, for the envs that have it)
 GCP options: --project (FOXBENCH_GCP_PROJECT), --zone (FOXBENCH_GCP_ZONE), --account (FOXBENCH_GCP_ACCOUNT).
+A zone with no VMs left makes up try the region's other zones, in name order; --zones tries only the zones given
+(a short name such as b takes the region of --zone).
 Envs: ${cloudEnvs.map((e) => e.name).join(", ")}.`;
 
 interface State {
@@ -77,7 +79,28 @@ async function openTunnel(gcp: Gcp, vm: string, port: { remote: number; local: n
   throw new Error(`The tunnel to ${vm}:${port.remote} did not open in ${minutes} minutes. See ${log}. Run foxbench env down to delete the VM.`);
 }
 
-async function up(gcp: Gcp, name: string, spot: boolean, maxRun: string, offset: number): Promise<void> {
+/** Creates the VM in the first zone with room; only an exhausted zone moves on to the next. Returns that zone. */
+function createInSomeZone(gcp: Gcp, env: CloudEnv, vm: string, opts: { spot: boolean; maxRun: string }, zones?: string[]): string {
+  const queue = zones ? [...zones] : [gcp.zone];
+  let listed = !!zones;
+  for (let i = 0; i < queue.length; i++) {
+    try {
+      createVm({ ...gcp, zone: queue[i]! }, env, vm, opts);
+      return queue[i]!;
+    } catch (error) {
+      if (!zoneExhausted(error)) throw error;
+      console.error(`Zone ${queue[i]} is exhausted for ${env.machineType}.`);
+      if (!listed) {
+        listed = true;
+        queue.push(...listZones(gcp, gcp.zone.replace(/-[a-z]$/, "")).filter((z) => z !== gcp.zone));
+      }
+    }
+  }
+  throw new Error(`Every zone is exhausted for ${env.machineType}: ${queue.join(", ")}.${opts.spot ? "" : " Try a Spot VM: drop --no-spot."}`);
+}
+
+async function up(base: Gcp, name: string, spot: boolean, maxRun: string, offset: number, zones?: string[]): Promise<void> {
+  let gcp = base;
   const found = cloudEnvs.find((e) => e.name === name);
   if (!found) throw new UsageError(`Unknown env "${name}".`);
   const env = { ...found, ports: found.ports.map((p) => ({ ...p, local: p.local + offset })) };
@@ -94,10 +117,11 @@ async function up(gcp: Gcp, name: string, spot: boolean, maxRun: string, offset:
   }
   for (const p of env.ports) if (!(await portFree(p.local))) throw new Error(`Local port ${p.local} is in use; ${name} tunnels to it. Free it first.`);
   const vm = `foxbench-${name}-${randomBytes(3).toString("hex")}`;
-  createVm(gcp, env, vm, { spot, maxRun });
+  const zone = createInSomeZone(gcp, env, vm, { spot, maxRun }, zones);
+  gcp = { ...gcp, zone };
   // The VM exists from here on, so write the state before the tunnel: down must find it.
   mkdirSync(stateDir(), { recursive: true });
-  const state: State = { env: name, vm, zone: gcp.zone, tunnels: [] };
+  const state: State = { env: name, vm, zone, tunnels: [] };
   writeFileSync(stateFile(name), JSON.stringify(state, null, 2));
   for (const port of env.ports) {
     const log = join(stateDir(), `${name}.${port.local}.log`);
@@ -109,7 +133,7 @@ async function up(gcp: Gcp, name: string, spot: boolean, maxRun: string, offset:
       writeFileSync(stateFile(name), JSON.stringify(state, null, 2));
     });
   }
-  console.log(`${name} is up on ${vm} (${spot ? "Spot" : "standard"}, deleted after ${maxRun}).`);
+  console.log(`${name} is up on ${vm} in ${zone} (${spot ? "Spot" : "standard"}, deleted after ${maxRun}).`);
   for (const t of state.tunnels) console.log(`  http://127.0.0.1:${t.local} -> ${vm}:${t.remote}`);
 }
 
@@ -137,7 +161,7 @@ function status(gcp: Gcp, name?: string): void {
 export async function envCli(argv: string[]): Promise<void> {
   try {
     const { positionals, values } = parseArgs({ args: argv, allowPositionals: true, allowNegative: true, options: {
-      project: { type: "string" }, zone: { type: "string" }, account: { type: "string" },
+      project: { type: "string" }, zone: { type: "string" }, zones: { type: "string" }, account: { type: "string" },
       provider: { type: "string", default: "gcp" }, spot: { type: "boolean", default: true }, "max-run-duration": { type: "string", default: "4h" }, "local-port-offset": { type: "string", default: "0" }, help: { type: "boolean", short: "h" },
     } });
     if (values.help) return console.log(USAGE);
@@ -159,9 +183,15 @@ export async function envCli(argv: string[]): Promise<void> {
       return;
     }
     if (!project) throw new UsageError("Give a GCP project with --project or FOXBENCH_GCP_PROJECT.");
-    if (command === "up" && !zone) throw new UsageError("Give a GCP zone with --zone or FOXBENCH_GCP_ZONE.");
-    const gcp: Gcp = { project, zone: zone ?? "", account };
-    if (command === "up") await up(gcp, name!, values.spot, values["max-run-duration"], offset);
+    if (command === "up" && !zone && !values.zones) throw new UsageError("Give a GCP zone with --zone or FOXBENCH_GCP_ZONE, or zones with --zones.");
+    const zones = values.zones?.split(",").map((z) => z.trim()).filter(Boolean).map((z) => {
+      if (z.includes("-")) return z;
+      if (!zone) throw new UsageError(`--zones ${z} needs a full zone name, or --zone for its region.`);
+      return `${zone.replace(/-[a-z]$/, "")}-${z}`;
+    });
+    if (values.zones !== undefined && !zones?.length) throw new UsageError("--zones needs zone names, like a,b or us-central1-a,us-central1-b.");
+    const gcp: Gcp = { project, zone: zones?.[0] ?? zone ?? "", account };
+    if (command === "up") await up(gcp, name!, values.spot, values["max-run-duration"], offset, zones);
     else if (command === "down") down(gcp, name!);
     else status(gcp, name);
   } catch (error) {
