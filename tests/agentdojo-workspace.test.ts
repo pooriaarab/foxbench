@@ -1,25 +1,20 @@
-// Tests for DW1-DW3 and DW6 in docs/failure-modes.md. They drive the workspace
+// Tests for DW1, DW2 and DW6 in docs/failure-modes.md. They drive the workspace
 // app over HTTP, as an agent does, on a small mailbox of our own and with a
 // fake judge. The scored runs with AgentDojo's own checks are in e2e/bench.mjs:
 // they need uv.
-import { mkdtempSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { casesFile, startApp, type Item } from "../src/bench/agentdojo/common.js";
+import { startApp, type Item } from "../src/bench/agentdojo/common.js";
 import type { Email } from "../src/bench/agentdojo/mailcal.js";
-import { workspaceApp, workspaceBenchmark, type WorkspaceEnv } from "../src/bench/agentdojo/workspace.js";
+import { workspaceApp, type WorkspaceEnv } from "../src/bench/agentdojo/workspace.js";
 import { benchContext, benchmarkById, resolveSuites } from "../src/bench/registry.js";
 
 const mail = (id_: string, over: Partial<Email>): Email => ({ id_, sender: "lily@x.com", recipients: ["emma@x.com"], cc: [], bcc: [], subject: "Hi", body: "Party", status: "received", read: true, timestamp: "2024-05-14T11:00:00", attachments: [], ...over });
 const mailbox = (): WorkspaceEnv => ({
   inbox: { account_email: "emma@x.com", initial_emails: [], contact_list: [{ email: "lily@x.com", name: "Lily White" }], trash: {}, emails: { "0": mail("0", {}), "1": mail("1", { subject: "Code", body: "Your code is 4638", read: false }), "2": mail("2", { sender: "emma@x.com", status: "sent", recipients: ["lily@x.com"], body: "Sure" }) } },
   calendar: { current_day: "2024-05-15", account_email: "emma@x.com", initial_events: [], events: { "0": { id_: "0", title: "Sync", description: "Weekly", start_time: "2024-05-15T10:00:00", end_time: "2024-05-15T11:30:00", location: null, participants: ["emma@x.com", "bob@x.com"], all_day: false, status: "confirmed" } } },
-  cloud_drive: {},
+  cloud_drive: { account_email: "emma@x.com", initial_files: [], files: {} },
 });
 
-const calls = (...names: string[]) => names.map((name) => ({ function: name, args: {} }));
-const offered = (id: string, gt: string[], attack?: string[]) => ({ id, user_task: id, injection_task: attack ? "injection_task_1" : null, goal: id, env: mailbox(), ground_truth: calls(...gt), injection_ground_truth: attack ? calls(...attack) : null });
 const running: { close(): Promise<void> }[] = [];
 async function open() {
   const item: Item<WorkspaceEnv> = { id: "t", user_task: "user_task_0", injection_task: null, goal: "Check mail.", env: mailbox() };
@@ -71,14 +66,6 @@ describe("DW2 only the Unread page marks mail read", () => {
     expect(await text("/workspace/mail/unread")).toContain("Your code is 4638");
     expect(env().inbox.emails["1"]!.read).toBe(true);
     expect(await text("/workspace/mail/unread")).not.toContain("Your code is 4638");
-  });
-});
-
-describe("DW3 only cases with a page for every call are offered", () => {
-  it("offers mail cases, with or without a mail attack, and withholds drive cases", async () => {
-    const cacheDir = mkdtempSync(join(tmpdir(), "fbn-ws-"));
-    writeFileSync(casesFile(cacheDir, "workspace"), JSON.stringify([offered("a", ["search_emails"]), offered("b", ["list_files"]), offered("c", ["search_emails"], ["delete_file"]), offered("d", ["search_emails"], ["send_email"]), offered("e", ["search_emails"], [])]));
-    expect((await workspaceBenchmark.load(benchContext({ cacheDir }), "full")).map((c) => c.id)).toEqual(["a", "d", "e"]);
   });
 });
 
