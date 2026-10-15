@@ -9,7 +9,7 @@ import type { Judge } from "../src/bench/judge.js";
 import { benchContext } from "../src/bench/registry.js";
 import { runBenchmarks } from "../src/bench/run.js";
 import { fetchTau2 } from "../src/bench/tau2/bridge.js";
-import { TAU2_GOAL, tau2Benchmark } from "../src/bench/tau2/index.js";
+import { tau2Benchmark, tau2Goal } from "../src/bench/tau2/index.js";
 import { RETAIL_WRITES } from "../src/bench/tau2/retail.js";
 import { scriptedUser } from "../src/bench/user.js";
 import { goldStep, type Action } from "./fixtures/tau2-agent.js";
@@ -89,7 +89,7 @@ describe("tau2-retail", () => {
   it("T12 the agent sees one goal for every case, and only the customer's opening", async () => {
     const seen = { goals: [] as string[], chats: [] as string[] };
     await run(agent("perfect", ["0", "1"], seen), ["0", "1"]);
-    expect(seen.goals).toEqual([TAU2_GOAL, TAU2_GOAL]);
+    expect(seen.goals).toEqual([tau2Goal("retail"), tau2Goal("retail")]);
     expect(seen.chats[0]).toContain("Hi, I need help with my order.");
     expect(seen.chats.join()).not.toMatch(/Yusuf|Reason for call|19122/);
   }, 300_000);
