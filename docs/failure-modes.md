@@ -224,7 +224,7 @@ argv and prints canned JSON.
 | V8 | A real project id, account or zone is in the public repo. | Project, zone and account come only from flags or `FOXBENCH_GCP_PROJECT`, `FOXBENCH_GCP_ZONE`, `FOXBENCH_GCP_ACCOUNT`. A missing project or zone stops before any gcloud call. | `V8 ...` |
 | V9 | `down` leaves the tunnel process running, or `up` twice makes two VMs. | `down` kills the tunnel's process group and removes the state file. `up` stops when the env's state file exists. | `V9 ...` |
 | V10 | `status` with no VMs prints nothing, which looks like a hang or a crash. | It prints `none`. | `V10 ...` |
-| V11 | A local tunnel port is taken, so `up` makes a VM it cannot reach. | `up` checks the local ports before it makes the VM. | `V11 ...` |
+| V11 | A local tunnel port is taken, so `up` makes a VM it cannot reach. | `up` checks the local ports before it makes the VM. `--local-port-offset` moves them, so the tests never share a port with another run. | `V11 ...` |
 | V12 | The tunnel starts before the VM listens and gcloud's connection test fails. | `up` restarts the tunnel until gcloud says `Listening on port`, for up to 5 minutes, then stops and names the log. The state file stays so `down` can delete the VM. | - (needs a real VM) |
 | V13 | IAP cannot reach the VM because no firewall rule allows Google's IAP range. | A setup step, not code: `README.md` gives the firewall rule for the `foxbench` network tag that every VM gets. | - |
 
