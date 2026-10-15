@@ -49,6 +49,15 @@ export function createVm(gcp: Gcp, env: CloudEnv, name: string, opts: { spot: bo
   }
 }
 
+/** True for the create errors that mean one zone has no VMs of that type left. */
+export const zoneExhausted = (error: unknown): boolean =>
+  /ZONE_RESOURCE_POOL_EXHAUSTED|does not have enough resources available/.test(error instanceof Error ? error.message : String(error));
+
+/** The zones of `region`, by name. */
+export function listZones(gcp: Gcp, region: string): string[] {
+  return call(gcp, ["compute", "zones", "list", `--filter=region:${region}`, "--format=value(name)"]).split("\n").map((z) => z.trim()).filter(Boolean).toSorted();
+}
+
 /** VMs with the foxbench label, in every zone; only `env`'s when given. */
 export function listVms(gcp: Gcp, env?: string): Vm[] {
   const filter = env ? `labels.${LABEL}=${env}` : `labels.${LABEL}:*`;
