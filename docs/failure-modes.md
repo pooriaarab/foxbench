@@ -344,6 +344,26 @@ judges them.
 | WJ7 | A reset never ends (GitLab boots for minutes), so the run hangs. | `start` waits up to 10 minutes, then the case fails with a `harness:` reason, and the site stays marked for reset. | `WJ7 ...` |
 | WJ8 | The agent reaches the reset service (it is on a tunnel port too) and resets a site during its case. | A known limit. The reset service has no key. A reset can only remove the agent's own work, and the score reads the trace, not the site. | - |
 
+## SuiteCRM env (`suitecrm`, `src/bench/suitecrm/`)
+
+The `suitecrm` env runs SuiteCRM 8 and MariaDB on one e2-standard-4 VM, for the
+ST-WebAgentBench SuiteCRM tasks. Upstream's compose file names
+`public.ecr.aws/bitnami/suitecrm:8`, which no longer exists, so the env runs
+the same Bitnami images from `bitnamilegacy` at pinned tags. The agent reaches
+SuiteCRM through the recording proxy on port 8080; the proxy forwards to the
+tunnel on local port 18081. The tests are in `tests/suitecrm-env.test.ts`.
+
+| # | Failure mode | Wanted behaviour | Test |
+|---|---|---|---|
+| SE1 | A newer image changes SuiteCRM under the tasks, or upstream's dead registry is used, so the VM does not boot or two runs score different CRMs. | The startup script runs only `bitnamilegacy/suitecrm:8.8.1` and `bitnamilegacy/mariadb:11.4.7`, never `latest`, and never `public.ecr.aws`. | `SE1 ...` |
+| SE2 | SuiteCRM links to `localhost:8080` or the tunnel port, so the agent leaves the proxy and the trace misses requests (P1). | SuiteCRM's first-run site URL is `http://127.0.0.1:8080`, the proxy's; the tunnel uses local port 18081. | `SE2 ...` |
+| SE3 | The seed data is committed to this public repo, or is fetched from a moving branch, so two runs seed differently. | The startup script fetches `demo_data.sql` from upstream at a pinned commit; no copy is in the repo. | `SE3 ...` |
+| SE4 | The seed loads before SuiteCRM has made its tables, and the insert fails or half-loads. | The script waits for the `users` table, then loads the seed once; a reboot keeps the loaded data and does not load again. | `SE4 ...` |
+| SE5 | A case changes the CRM and the next case starts from the changed data. | `POST /reset` on the reset service drops and restores the database from a dump taken right after the seed load. | `SE5 ...` |
+| SE6 | The env tunnels a port nothing serves, or the reset service is unreachable. | The env's ports, the container's `-p` mapping and the reset service's port come from one table. | `SE6 ...` |
+| SE7 | The VM is too small or too big: SuiteCRM, PHP and MariaDB need about 2 GB; the images take about 1 GB. | e2-standard-4 and a 30 GB disk, as the plan says. | `SE7 ...` |
+| SE8 | The reset service accepts any path or method and drops the database. | Only `POST /reset` resets; anything else gets 404 or 405 and changes nothing. | `SE8 ...` |
+
 ## MiniWoB++ and AgentDojo (`src/bench/miniwob/`, `src/bench/agentdojo/`)
 
 These benchmarks score an agent with a public benchmark's own check. They are

@@ -399,6 +399,12 @@ with your own login. Give the project, zone and account with `--project`,
   WA_ENV_CTRL_EXTERNAL_SITE_URL=http://127.0.0.1:7770
   am1n3e/webarena-verified-shopping:0.1.0`. Set `FOXBENCH_WAV_HOST` when
   that Docker host is not `127.0.0.1`.
+- `suitecrm`: SuiteCRM 8.8.1 and MariaDB 11.4.7 (`bitnamilegacy` images) on an
+  e2-standard-4 with 30 GB, for ST-WebAgentBench's SuiteCRM tasks. SuiteCRM on
+  VM port 8080 is tunnelled to 18081; the agent sees `http://127.0.0.1:8080`
+  through the recording proxy. The boot loads upstream's demo data (fetched at
+  a pinned commit) once. A reset service on VM port 8871 (tunnelled to 18871)
+  restores the seeded database on `POST /reset`. Log in as `user` / `bitnami`.
 
 `FOXBENCH_GCP_ACCOUNT`. The only env so far is `smoke`, a static page on
 `http://127.0.0.1:18080`. If another process holds a local port, `up` stops
