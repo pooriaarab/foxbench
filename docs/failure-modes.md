@@ -1037,6 +1037,28 @@ not have; they are not run. The task file is fetched at a pinned commit.
 | MB11 | The rubric text leaks to the board. | Reasons name the items by number and weight, not by text. | `MB11 ...` |
 | MB12 | Cases run with no judge, so every case fails and looks like an agent fault. | With no judge, the run loop gives a skip row (J2). | `MB12 ...` |
 
+## VisualWebArena env (`vwa`, `src/bench/vwa/`)
+
+VisualWebArena's start state needs three sites: Shopping, Reddit and
+Classifieds. The original WebArena shopping and reddit images are gone, so the
+`vwa` env runs the WebArena-Verified images that wav-core uses (the spike found
+the same products and posts, and the reddit posts serve their images), plus the
+Classifieds site from its compose zip on archive.org. VWA's Wikipedia tasks
+need the Wikipedia site that wav-full runs, not this env. The tests are in
+`tests/vwa-env.test.ts`.
+
+| # | Failure mode | Wanted behaviour | Test |
+|---|---|---|---|
+| VW1 | A moving image (`jykoh/classifieds:latest`, an unpinned MySQL) changes the site under the tasks. | Classifieds and its MySQL run by `@sha256:` digest; shopping and reddit run at the wav-core tag. The script names no `latest`. | `VW1 ...` |
+| VW2 | The Classifieds compose zip and its 84 MB data file are committed, or a changed or hijacked zip is trusted. | The script fetches the zip from archive.org, checks its SHA-1 before it unpacks, and stops on a mismatch. The repo holds no copy. | `VW2 ...` |
+| VW3 | A site links to its own port or the tunnel, so the agent leaves the proxy and the trace misses requests (P1). | Each site is told `http://127.0.0.1:<its port>`, the port the proxy serves; the tunnel uses other local ports. | `VW3 ...` |
+| VW4 | The Classifieds reset uses upstream's token, which is public in its zip, so anyone who reaches the site can wipe it. | The VM makes its own token once, keeps it in a root-only file, and gives it to the site and to the reset service. The repo and the logs never hold it. | `VW4 ...` |
+| VW5 | A case changes a site and the next case starts from the change. | `POST /reset/shopping` and `/reset/reddit` recreate the container from its image; `/reset/classifieds` posts the token to the site's own reset. | `VW5 ...` |
+| VW6 | The reset service accepts any path or method, or a failed reset answers 200. | Only `POST /reset/<site>` for a known site resets; anything else is 404 or 405 and changes nothing. A failed reset is 500 with the reason. | `VW6 ...` |
+| VW7 | The env tunnels a port nothing serves, or two ports collide with wav-core's local ports. | One site table gives the tunnel ports, the `-p` mappings and the reset service's port; the local ports are not wav-core's. | `VW7 ...` |
+| VW8 | The VM is too small for the images (about 45 GB pulled for shopping and reddit) and boot fails halfway. | n2-standard-8 and a 100 GB disk. | `VW8 ...` |
+| VW9 | The Classifieds data loads twice or not at all on a reboot. | The data loads when the DB container is first made (MySQL's init folder); a reboot only starts the containers. | `VW9 ...` |
+
 ## AMO release build and listed submission (`scripts/amo-listing.mjs`)
 
 `pnpm check:amo` reads `dist-ext/`, which is what `release.yml` signs. Each
