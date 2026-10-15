@@ -458,6 +458,9 @@ env fetches the compose file at a pinned commit and the authors' data backups
 (3.6 GB, one download at a time) at run time. **Scores on WebMall are not
 published until the authors agree.**
 
+`--suite webmall` runs the 91 tasks (from the authors' BrowserGym fork, at a
+pinned commit) and scores the answer's URLs, the carts and the orders, as WebMall does. Run it serially: the shops hold one cart.
+
 ```bash
 foxbench env up webmall --provider docker   # local Docker, 127.0.0.1 only
 foxbench env up webmall                     # a GCP VM, e2-standard-4, 40 GB
