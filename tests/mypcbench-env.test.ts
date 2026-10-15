@@ -28,7 +28,7 @@ const isFree = (port: number) => new Promise<boolean>((r) => { const s = tcp(); 
 /** An offset that puts all of an env's tunnel ports on free local ports; other checkouts' tests can hold any of them. */
 async function freeOffset(ports: number[]): Promise<number> {
   for (let tries = 0; tries < 50; tries++) {
-    const offset = 20000 + Math.floor(Math.random() * 30000);
+    const offset = 20000 + Math.floor(Math.random() * (65535 - Math.max(...ports) - 20000));
     if ((await Promise.all(ports.map((p) => isFree(p + offset)))).every(Boolean)) return offset;
   }
   throw new Error("no free local port range for the tunnels");
