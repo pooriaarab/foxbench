@@ -95,9 +95,9 @@ systemd-run --unit=foxbench-smoke python3 -m http.server 8080 --directory /srv/f
     machineType: "n2-standard-16",
     diskGb: 450,
     ports: [...wavSites, ...wavFullSites].flatMap((s) => [s.port, s.ctrlPort]).concat(RESET_PORT).map((remote) => ({ remote, local: remote + TUNNEL_OFFSET })),
-    // The core sites boot first (about 60 min); the data download comes after them. `up` waits for the first port,
-    // so doctor says which of the two data sites is still missing.
-    bootMinutes: 90,
+    // The core sites boot first (about 60 min); the data download comes after them and took about 4 hours on a
+    // real run. `up` waits for the first port, so doctor says which of the two data sites is still missing.
+    bootMinutes: 330,
     startup: wavStartup(true),
   },
 ];

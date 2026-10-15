@@ -415,8 +415,10 @@ with your own login. Give the project, zone and account with `--project`,
   data comes from upstream's own `webarena-verified env setup init` at the
   pinned version: a 100 GB Wikipedia ZIM file and about 60 GB of map tiles and
   routing graphs, downloaded after the core sites are up (the first boot takes
-  hours). A WebArena-Verified case on map or Wikipedia runs when the site
-  answers, and fails with a reason that names `wav-full` when it does not.
+  about 4 hours). A WebArena-Verified case on map or Wikipedia runs when the
+  site answers, and fails with a reason that names `wav-full` when it does not.
+  A Spot VM can be taken back during that download: use
+  `foxbench env up wav-full --no-spot --max-run-duration 10h`.
 
 If another process holds a local port, `up` stops
 before it makes a VM; `--local-port-offset N` moves every tunnel port by N.
