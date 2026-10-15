@@ -889,6 +889,22 @@ forms. The tests are in `tests/gaia2-pages.test.ts`.
 | GP5 | Text from the scenario breaks a page or injects markup. | Every value is HTML-escaped. | `GP5 ...` |
 | GP6 | A wrong form looks as if it worked. | ARE's error shows with status 400; ARE's tool raised before any change. | `GP6 ...` |
 
+### Gaia2 chat, shop and file pages (`src/bench/gaia2/chats.ts`, `shopping.ts`, `files.ts`)
+
+`Chats` and `Messages` (the same tools, at `/chats` and `/messages`), `Shopping`
+(`/shop`) and `Files` (`/files`) get pages the same way. The tests are in
+`tests/gaia2-pages2.test.ts`.
+
+| # | Failure mode | Wanted behaviour | Test |
+|---|---|---|---|
+| GQ1 | Viewing a page writes, so ARE counts an action the agent never chose. | A page view makes one read call. An agent that browses every list first still passes ARE's judge. | `GQ1 ...` |
+| GQ2 | A form sends other arguments than the oracle's, or cannot use an id the run made, so a correct agent fails. | Each form is one write call with the arguments as given: send in both chat apps, new group and a message to it, add to cart and checkout, make a folder, move, delete. The oracle actions of four scenarios pass, with the new group's id taken from the page. | `GQ2 ...` |
+| GQ3 | An agent that does nothing, or leaves out one action, passes. | ARE's judge fails both. | `GQ3 ...` |
+| GQ4 | A list hides items, or asks ARE for more than it allows (5 conversations, 10 messages), so the page is an error. | Lists use ARE's own offset and limit with a Next link; the product pages together show the 500 products ARE counts. | `GQ4 ...` |
+| GQ5 | Names from the scenario break a page or inject markup. | Every value is HTML-escaped, file names too. | `GQ5 ...` |
+| GQ6 | A wrong form looks as if it worked. | ARE's error shows with status 400; ARE's tool raised before any change. | `GQ6 ...` |
+| GQ7 | A form that the oracle never uses does nothing, or the wrong thing. | Remove from cart, checkout and cancel an order, and retitle a group, add and remove a member, change what the pages show next. | `GQ7 ...` |
+
 ## WebVoyager (`src/bench/webvoyager.ts`)
 
 WebVoyager is 643 live-web tasks on 15 sites. Its dates are from 2023-24, so
