@@ -37,7 +37,7 @@ describe("WF1 the VM and its ports", () => {
 });
 
 // A scratch VM: /opt/foxbench is a temp dir, and the tools log what they are asked.
-function boot(dir: string, pythonPre = "", aptBody = "true") {
+function boot(dir: string) {
   const bin = join(dir, "bin");
   mkdirSync(bin, { recursive: true });
   if (!existsSync(join(dir, "served"))) serveMapTars(dir);
@@ -71,8 +71,7 @@ src=${dir}/zim/$(echo $url | sed 's,^[a-z]*://,,; s,/.*,,'); [ -e $src ] || exit
 have=$(stat -c %s $out 2>/dev/null || echo 0); n=$(cat ${dir}/zim-cut 2>/dev/null || echo 0)
 [ "$n" -gt 0 ] && { echo $((n-1)) > ${dir}/zim-cut; tail -c +$((have+1)) $src | head -c 20000 >> $out; exit 18; }
 tail -c +$((have+1)) $src >> $out`);
-  for (const name of ["systemctl", "systemd-run", "apt-get"]) tool(name, name === "systemctl" ? '[ "$1" != is-active ]' : name === "apt-get" ? aptBody : "true");
-  tool("python3", `${pythonPre}\n[ "$1" = -m ] && [ "$2" = venv ] && [ "$3" != --help ] && for t in pip webarena-verified; do mkdir -p $3/bin; printf '#!/bin/sh\\necho "$t $*" >> ${dir}/log\\n' | sed "s/\\$t/$t/" > $3/bin/$t; chmod +x $3/bin/$t; done; true`);
+  for (const name of ["systemctl", "systemd-run"]) tool(name, name === "systemctl" ? '[ "$1" != is-active ]' : "true");
   if (!existsSync(join(dir, "zim"))) serveZim(dir, { "archive.org": BYTES });
   // The ZIM is 95 GB: the script runs against a small one, whose size and md5 replace the pinned ones.
   const zim = existsSync(join(dir, "zim", "archive.org")) ? readFileSync(join(dir, "zim", "archive.org")) : Buffer.alloc(0);
@@ -87,10 +86,15 @@ tail -c +$((have+1)) $src >> $out`);
 describe("WF2 WF3 the startup script", () => {
   const dir = mkdtempSync(join(tmpdir(), "fbn-wf-"));
   afterAll(() => rmSync(dir, { recursive: true, force: true }));
-  it("is valid sh, pins the package and runs every image at 0.1.0", () => {
+  it("is valid sh, has no dead upstream CLI step and runs every image at 0.1.0", () => {
     const syntax = spawnSync("sh", ["-n", "-c", env.startup]);
     expect(syntax.status).toBe(0);
-    expect(env.startup).toContain(`webarena-verified==${WAV_VERSION}`);
+    // Nothing in the script uses upstream's CLI (the ZIM and the map are fetched with curl), so it installs no python3-venv, venv or package.
+    expect(env.startup).not.toMatch(/python3-venv|wav-venv|pip install|webarena-verified==|webarena-verified env/);
+    // Every curl is quiet (-sS), as the serial console takes its progress meter otherwise.
+    const curls = env.startup.match(/\bcurl -\S+/g)!;
+    expect(curls.length).toBeGreaterThan(0);
+    expect(curls.every((c) => /^curl -\w*s\w*S|^curl -\w*S\w*s/.test(c))).toBe(true);
     // Wikipedia has no amd64 image: it is built from a digest (WF9), so it has no tag here.
     expect(env.startup.match(/am1n3e\/webarena-verified-[a-z_]+:\S+/g)!.toSorted()).toEqual([...wavSites, ...wavFullSites].filter((s) => s.id !== "wikipedia").map(wavImage).toSorted());
   });
@@ -107,23 +111,10 @@ describe("WF2 WF3 the startup script", () => {
       expect(r.status, `${image}: ${r.stderr}`).toBe(0);
     }
   });
-  it("installs python3-venv when ensurepip is missing, before the venv step", () => {
-    const dir2 = mkdtempSync(join(tmpdir(), "fbn-wf-venv-"));
-    try {
-      const noEnsurepip = boot(dir2, `[ "$1" = -c ] && [ ! -e ${dir2}/venv-installed ] && exit 1`, `[ "$*" = "install -y -q python3-venv" ] && touch ${dir2}/venv-installed; true`);
-      expect(noEnsurepip.status, noEnsurepip.stderr).toBe(0);
-      const at = (re: RegExp) => noEnsurepip.log.findIndex((l) => re.test(l));
-      expect(at(/^apt-get install .*python3-venv/)).toBeGreaterThan(-1);
-      expect(at(/^python3 -m venv .*wav-venv/)).toBeGreaterThan(at(/^apt-get install .*python3-venv/));
-    } finally { rmSync(dir2, { recursive: true, force: true }); }
-  });
-  it("starts the core sites and the reset service first, then sets up each data site once", () => {
+  it("starts the core sites and the reset service first, then fetches the data", () => {
     const first = boot(dir);
     expect(first.status, first.stderr).toBe(0);
     const at = (re: RegExp) => first.log.findIndex((l) => re.test(l));
-    const setup = first.log.filter((l) => l.startsWith("webarena-verified env setup init"));
-    expect(setup).toEqual([]);
-    expect(first.log).toContain(`pip install -q webarena-verified==${WAV_VERSION}`);
     const lastCore = Math.max(...wavSites.map((s) => at(new RegExp(`^docker run .*--name wav-${s.id} `))));
     expect(lastCore).toBeGreaterThan(-1);
     expect(at(/^systemd-run /)).toBeGreaterThan(lastCore);
