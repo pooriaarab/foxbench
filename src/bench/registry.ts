@@ -12,7 +12,16 @@ import { waiBenchmark } from "./wai/index.js";
 import { webgamesBenchmark } from "./webgames.js";
 
 const foxbench = foxbenchBenchmark();
-export const benchmarks: Benchmark[] = [foxbench, miniwobBenchmark, agentdojoBenchmark, webgamesBenchmark(), eiaBenchmark(), browsesafeBenchmark(), waiBenchmark()];
+// One entry per line, so two PRs that each add a benchmark do not conflict.
+export const benchmarks: Benchmark[] = [
+  foxbench,
+  miniwobBenchmark,
+  agentdojoBenchmark,
+  webgamesBenchmark(),
+  eiaBenchmark(),
+  browsesafeBenchmark(),
+  waiBenchmark(),
+];
 
 export const benchmarkById = (id: string): Benchmark | undefined => benchmarks.find((b) => b.id === id);
 
