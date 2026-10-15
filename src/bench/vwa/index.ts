@@ -5,6 +5,7 @@
 // Cases start through wavStart like WebArena-Lite's, on the vwa env's three
 // sites. A task that needs Wikipedia (35) fails with a reason: the vwa env does
 // not run it.
+import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { waBenchmark, fetchCached, type WaListTask, type WaOptions } from "../wa/bench.js";
@@ -12,7 +13,7 @@ import type { Replacement } from "../types.js";
 import type { WavSet, WavSite } from "../wav/index.js";
 import { wavSites } from "../wav/index.js";
 import { CLASSIFIEDS_PORT, VWA_COMMIT, VWA_RESET_PORT, VWA_TUNNEL_OFFSET } from "./env.js";
-import { scoreVwa, vwaHelpers, type VwaTask } from "./eval.js";
+import { imageType, scoreVwa, vwaHelpers, type VwaTask } from "./eval.js";
 
 const RAW = `https://raw.githubusercontent.com/web-arena-x/visualwebarena/${VWA_COMMIT}`;
 const DIR = `visualwebarena-${VWA_COMMIT.slice(0, 12)}`;
@@ -26,17 +27,26 @@ export const vwaWavSites: WavSite[] = [
 ];
 const SET: WavSet = { name: "vwa", offset: VWA_TUNNEL_OFFSET, sites: vwaWavSites, optional: [], resetPort: VWA_RESET_PORT, elsewhere: "its Wikipedia comes with wav-full" };
 
-/** An input image of a task: fetched once into the cache, whole or not at all (like fetchCached, but bytes). */
-async function inputImage(cacheDir: string, path: string): Promise<Buffer> {
-  const file = join(cacheDir, DIR, "images", path);
+/** A file's bytes: fetched once into the cache, whole or not at all (like fetchCached, but binary). */
+export async function fetchBytes(cacheDir: string, dir: string, name: string, url: string): Promise<Buffer> {
+  const file = join(cacheDir, dir, name);
   if (!existsSync(file)) {
-    const res = await fetch(`${RAW}/${path}`);
-    if (!res.ok) throw new Error(`${RAW}/${path}: ${res.status}`);
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`${url}: ${res.status}`);
     mkdirSync(dirname(file), { recursive: true });
     writeFileSync(`${file}.${process.pid}`, Buffer.from(await res.arrayBuffer()));
     renameSync(`${file}.${process.pid}`, file);
   }
   return readFileSync(file);
+}
+
+/** The files a task gives the agent, served at `/foxbench-input/<n>.<ext>`: paths in the VWA repo at the pinned commit, or URLs. */
+export async function inputImages(cacheDir: string, refs: string | string[] | undefined, dir = DIR, repo = RAW): Promise<Replacement[]> {
+  return Promise.all([refs ?? []].flat().map(async (ref, i): Promise<Replacement> => {
+    const body = await fetchBytes(cacheDir, dir, /^https?:/.test(ref) ? `images/${createHash("sha1").update(ref).digest("hex")}` : `images/${ref}`, /^https?:/.test(ref) ? ref : `${repo}/${ref}`);
+    const type = imageType(body) ?? "image/png";
+    return { path: `/foxbench-input/${i}.${type.slice(6)}`, type, body };
+  }));
 }
 
 export const vwaBenchmark = (options: WaOptions = {}) => waBenchmark({
@@ -50,17 +60,14 @@ export const vwaBenchmark = (options: WaOptions = {}) => waBenchmark({
     const read = async ([site, base]: (typeof FILES)[number]) => {
       const file = site === "classifieds" ? classifieds : await fetchCached(ctx, DIR, `test_${site}.raw.json`, `${RAW}/config_files/vwa/test_${site}.raw.json`);
       return (JSON.parse(readFileSync(file, "utf8")) as (VwaTask & WaListTask & { image?: string | string[]; overall_difficulty: string })[]).map((t): WaListTask => ({
-        ...t, task_id: base + t.task_id, tags: [`overall:${t.overall_difficulty}`, ...([t.image ?? []].flat().length ? ["image-input"] : [])],
+        ...t, task_id: base + Number(t.task_id), tags: [`overall:${t.overall_difficulty}`, ...([t.image ?? []].flat().length ? ["image-input"] : [])],
         // A reference image that is a path is in the repo at the pinned commit.
         eval: JSON.parse(JSON.stringify(t.eval).replace(/"eval_fuzzy_image_match":"([^"]*)"/g, (_m, refs: string) => `"eval_fuzzy_image_match":"${refs.split(" |OR| ").map((r) => (/^(https?:|__)/.test(r) ? r : `${RAW}/${r}`)).join(" |OR| ")}"`)),
       }));
     };
     return (await Promise.all(FILES.map(read))).flat();
   },
-  async attach(ctx, task) {
-    const images = (task as WaListTask & { image?: string | string[] }).image;
-    return Promise.all([images ?? []].flat().map(async (path, i): Promise<Replacement> => ({ path: `/foxbench-input/${i}${path.slice(path.lastIndexOf("."))}`, type: "image/png", body: await inputImage(ctx.cacheDir, path) })));
-  },
+  attach: (ctx, task) => inputImages(ctx.cacheDir, (task as WaListTask & { image?: string | string[] }).image),
   score: scoreVwa,
   helpers: vwaHelpers,
   // VWA's paper reports GPT-4 and BLIP-2 judged numbers; none is pinned here, so no baseline row claims a Claude-judged comparison.

@@ -19,7 +19,7 @@ export const choreBenchmark = (options: WaOptions = {}) => waBenchmark({
   source: { url: `${RAW}/test_webchore.raw.json`, dir: DIR },
   async tasks(ctx, file) {
     const small = new Set((readFileSync(await fetchCached(ctx, DIR, "small_set_ids.txt", `${RAW}/small_set_ids.txt`), "utf8").match(/\d+/g) ?? []).map(Number));
-    return (JSON.parse(readFileSync(file, "utf8")) as ChoreTask[]).map((t) => ({ ...t, tags: [t.type_main, `obs:${t.required_obs}`, ...(small.has(t.task_id) ? ["small"] : [])] }));
+    return (JSON.parse(readFileSync(file, "utf8")) as ChoreTask[]).map((t) => ({ ...t, tags: [t.type_main, `obs:${t.required_obs}`, ...(small.has(Number(t.task_id)) ? ["small"] : [])] }));
   },
   score: scoreChore,
   // Published scores: BrowserGym and AgentOccam on the full 532 tasks. Their fuzzy cases were judged by GPT-4o; foxbench's use Claude.
