@@ -623,6 +623,17 @@ booking, cancelling, flights, baggage, passengers and certificates. Lists
 | T19 | A page view writes, or the change forms start empty, so an agent that changes one flight drops the others. | Each page view is at most one read call. The change forms start from the reservation's flights, cabin and passengers. | `T19 ...` |
 | T20 | A blank row becomes an empty passenger or flight, or a number arrives as text, so tau2 sees other arguments than its gold ones. | Rows whose first field is blank are left out. Bags and amounts are numbers. | `T20 ...` |
 
+`tau2-airline` is the same benchmark on the airline desk (`airline.ts`). Its
+reward basis is the database and what the agent must tell the customer; it
+has no NL assertions in the basis, so code alone scores it. The tests are in
+`tests/tau2-airline-bench.test.ts`.
+
+| # | Failure mode | Wanted behaviour | Test |
+|---|---|---|---|
+| T21 | The airline verdict is not tau2's. | tau2's `evaluate_simulation` scores it as for retail. The gold actions through the pages, with the facts to tell said in the chat, pass all 50 tasks. | `T21 ...` |
+| T22 | An agent that does nothing passes. | As tau2's scorer does, `noop` passes the 23 tasks whose gold changes nothing and needs nothing said (many airline tasks test a refusal). Every other task fails. A wrong agent fails with a database reason. | `T22 ...` |
+| T23 | An airline case calls an LLM judge, or the quick list is not tau2's test split. | Every airline case is programmatic and never calls the judge. `quick` is tau2's 20 test-split tasks. | `T23 ...` |
+
 ### The task loader
 
 | # | Failure mode | Wanted behaviour | Test |
