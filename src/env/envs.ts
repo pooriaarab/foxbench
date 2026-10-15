@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { SUITECRM_TUNNEL, suitecrmStartup } from "../bench/suitecrm/index.js";
 import { RESET_PORT as MYPC_RESET_PORT, TUNNEL_OFFSET as MYPC_OFFSET, mypcApps, mypcbenchStartup } from "../bench/mypcbench/env.js";
 import { RESET_PORT, TUNNEL_OFFSET, wavSites, wavStartup } from "../bench/wav/index.js";
-import { TUNNEL_OFFSET as WEBMALL_OFFSET, webmallScript, webmallSites, webmallStartup, WEBMALL_REF } from "../bench/webmall/env.js";
+import { TUNNEL_OFFSET as WEBMALL_OFFSET, webmallScript, webmallSites, webmallKey, webmallStartup, WEBMALL_REF } from "../bench/webmall/env.js";
 
 export interface CloudEnv {
   name: string;
@@ -70,9 +70,10 @@ systemd-run --unit=foxbench-smoke python3 -m http.server 8080 --directory /srv/f
     machineType: "e2-standard-4",
     diskGb: 40,
     ports: webmallSites.map((s) => ({ remote: s.port + WEBMALL_OFFSET, local: s.port + WEBMALL_OFFSET })),
-    startup: webmallStartup(),
+    // A getter: the key file is made when a VM is made, not when the CLI starts.
+    get startup() { return webmallStartup(webmallKey()); },
     bootMinutes: 300,
-    local: (cacheDir) => webmallScript({ bind: "127.0.0.1", dir: join(cacheDir, `webmall-${WEBMALL_REF.slice(0, 12)}`) }),
+    local: (cacheDir) => webmallScript({ bind: "127.0.0.1", dir: join(cacheDir, `webmall-${WEBMALL_REF.slice(0, 12)}`), key: webmallKey() }),
   },
   {
     // MyPCBench: the QEMU/KVM desktop image (5 GB compressed, 12 GB unpacked) with 17 apps. Upstream

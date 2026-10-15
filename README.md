@@ -467,6 +467,10 @@ the 3.6 GB take about 4 hours. `up` waits up to 5 hours for the tunnel. Pass
 the restore finishes. Local mode with the backups in the cache starts in under
 2 minutes.
 
+`up` also writes a small foxbench plugin into each shop, for the carts, orders
+and reset that the judge needs. Its key is `FOXBENCH_WEBMALL_KEY`, or a random
+one kept in `~/.foxbench/env/webmall.key`.
+
 ### The extension
 
 `extension/` is a small extension for people who want to try the tasks by
