@@ -301,3 +301,82 @@ describe("V17 only tunnels are stopped", () => {
     }
   });
 });
+
+// V19-V23: a zone out of VMs. test-zone-a is the requested zone; the region test-zone has a, b and c (listed out of order).
+const zones = { FAKE_GCLOUD_ZONES: "test-zone-c,test-zone-a,test-zone-b" };
+const createZones = () => calls().filter((c) => c.argv.includes("create")).map((c) => c.argv.find((a) => a.startsWith("--zone="))!.slice(7));
+const stateZone = () => JSON.parse(readFileSync(join(home, ".foxbench/env/smoke.json"), "utf8")).zone;
+
+describe("V19 a zone out of VMs", () => {
+  it.each(["ZONE_RESOURCE_POOL_EXHAUSTED", "ZONE_RESOURCE_POOL_EXHAUSTED_WITH_DETAILS", "does not have enough resources available"])("moves to the next zone on %s", async (msg) => {
+    await fresh({ ...zones, FAKE_GCLOUD_EXHAUSTED: "test-zone-a", FAKE_GCLOUD_EXHAUSTED_MSG: msg });
+    const r = up("--no-spot");
+    expect(r.status).toBe(0);
+    expect(createZones()).toEqual(["test-zone-a", "test-zone-b"]);
+    expect(r.stdout + r.stderr).toMatch(/test-zone-a.*exhausted/);
+    expect(r.stdout).toMatch(/up on foxbench-smoke-\w+ in test-zone-b/);
+  });
+  it("tries the zones in name order, and each once", async () => {
+    await fresh({ ...zones, FAKE_GCLOUD_EXHAUSTED: "test-zone-a,test-zone-b" });
+    expect(up().status).toBe(0);
+    expect(createZones()).toEqual(["test-zone-a", "test-zone-b", "test-zone-c"]);
+  });
+  it("does not list zones when the first zone works", async () => {
+    await fresh(zones);
+    expect(up().status).toBe(0);
+    expect(calls().some((c) => c.argv.includes("zones"))).toBe(false);
+  });
+  it("lists the zones of the requested zone's region", async () => {
+    await fresh({ ...zones, FAKE_GCLOUD_EXHAUSTED: "test-zone-a" });
+    up();
+    expect(calls().find((c) => c.argv.includes("zones"))!.argv).toContain("--filter=region:test-zone");
+  });
+});
+
+describe("V20 the state keeps the zone that made the VM", () => {
+  it("records it, and the tunnel uses it", async () => {
+    await fresh({ ...zones, FAKE_GCLOUD_EXHAUSTED: "test-zone-a" });
+    expect(up().status).toBe(0);
+    expect(stateZone()).toBe("test-zone-b");
+    expect(calls().find((c) => c.argv.includes("start-iap-tunnel"))!.argv).toContain("--zone=test-zone-b");
+  });
+});
+
+describe("V21 another create error stops at once", () => {
+  it("makes one create call and shows gcloud's text", async () => {
+    await fresh({ ...zones, FAKE_GCLOUD_FAIL: "create" });
+    const r = up();
+    expect(r.status).toBe(1);
+    expect(r.stderr).toContain("SPOT_CPUS");
+    expect(createZones()).toEqual(["test-zone-a"]);
+    expect(existsSync(join(home, ".foxbench/env/smoke.json"))).toBe(false);
+  });
+});
+
+describe("V22 --zones", () => {
+  it("tries exactly the given zones in order, with short names from --zone's region, and never lists", async () => {
+    await fresh({ ...zones, FAKE_GCLOUD_EXHAUSTED: "test-zone-c" });
+    expect(up("--zones", "c,test-zone-b").status).toBe(0);
+    expect(createZones()).toEqual(["test-zone-c", "test-zone-b"]);
+    expect(calls().some((c) => c.argv.includes("zones"))).toBe(false);
+    expect(stateZone()).toBe("test-zone-b");
+  });
+});
+
+describe("V23 every zone out of VMs", () => {
+  it("stops, names the zones and suggests Spot for a standard VM", async () => {
+    await fresh({ ...zones, FAKE_GCLOUD_EXHAUSTED: "test-zone-a,test-zone-b,test-zone-c" });
+    const r = up("--no-spot");
+    expect(r.status).toBe(1);
+    expect(createZones()).toHaveLength(3);
+    expect(r.stderr).toMatch(/test-zone-a, test-zone-b, test-zone-c/);
+    expect(r.stderr).toMatch(/Spot.*--no-spot/);
+    expect(existsSync(join(home, ".foxbench/env/smoke.json"))).toBe(false);
+  });
+  it("does not suggest Spot to a Spot run", async () => {
+    await fresh({ ...zones, FAKE_GCLOUD_EXHAUSTED: "test-zone-a,test-zone-b,test-zone-c" });
+    const r = up();
+    expect(r.status).toBe(1);
+    expect(r.stderr).not.toContain("--no-spot");
+  });
+});
