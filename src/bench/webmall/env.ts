@@ -5,6 +5,11 @@
 // with our own override (pinned images, our own volume names, the proxy's URLs).
 // The same script is the VM's startup script and the local-Docker mode.
 
+import { randomBytes } from "node:crypto";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { homedir } from "node:os";
+import { dirname, join } from "node:path";
+
 export const WEBMALL_REPO = "wbsg-uni-mannheim/WebMall";
 /** The commit of 2026-08-03. */
 export const WEBMALL_REF = "2697d35cdfcfedcf1ade89b7ad86722db8daa8a7";
@@ -40,13 +45,53 @@ export const webmallSites: WebmallSite[] = [
 
 const shops = webmallSites.filter((s) => s.id !== "frontend");
 
+/** The key of the control plugin: FOXBENCH_WEBMALL_KEY, or a random one made once in ~/.foxbench/env. */
+export function webmallKey(env: NodeJS.ProcessEnv = process.env): string {
+  if (env.FOXBENCH_WEBMALL_KEY) return env.FOXBENCH_WEBMALL_KEY;
+  const file = join(homedir(), ".foxbench", "env", "webmall.key");
+  if (!existsSync(file)) {
+    mkdirSync(dirname(file), { recursive: true });
+    writeFileSync(file, randomBytes(16).toString("hex"), { mode: 0o600 });
+  }
+  return readFileSync(file, "utf8").trim();
+}
+
+/**
+ * foxbench's own WordPress plugin, one file in each shop's mu-plugins: the carts and orders a judge reads
+ * (a page never shows them all), and a reset that deletes both. The restored data holds the authors'
+ * old carts and orders, so every case starts with the reset.
+ */
+const controlPlugin = (key: string) => `<?php
+add_action('rest_api_init', function () {
+  $auth = fn($req) => hash_equals('${key}', (string) $req->get_header('x-foxbench-key'));
+  register_rest_route('foxbench/v1', '/state', ['methods' => 'GET', 'permission_callback' => $auth, 'callback' => function () {
+    global $wpdb;
+    $carts = [];
+    foreach ($wpdb->get_col("SELECT session_value FROM {$wpdb->prefix}woocommerce_sessions") as $v) {
+      $session = maybe_unserialize($v);
+      $cart = is_array($session) ? maybe_unserialize($session['cart'] ?? '') : [];
+      foreach (is_array($cart) ? $cart : [] as $item) $carts[] = get_permalink($item['product_id']);
+    }
+    $orders = array_map(fn($o) => ['billing' => $o->get_address('billing'), 'items' => array_values(array_map(fn($i) => get_permalink($i->get_product_id()), $o->get_items()))], wc_get_orders(['limit' => -1]));
+    return ['carts' => $carts, 'orders' => $orders];
+  }]);
+  register_rest_route('foxbench/v1', '/reset', ['methods' => 'POST', 'permission_callback' => $auth, 'callback' => function () {
+    global $wpdb;
+    $wpdb->query("DELETE FROM {$wpdb->prefix}woocommerce_sessions");
+    foreach (wc_get_orders(['limit' => -1]) as $o) $o->delete(true);
+    return ['ok' => true];
+  }]);
+});
+`;
+
 /**
  * The script that brings WebMall up and is safe to run again. `bind` is the
  * address the sites listen on at their port + TUNNEL_OFFSET: 0.0.0.0 on a VM
  * (the IAP tunnel reaches its internal address), 127.0.0.1 on a local host.
  */
-export function webmallScript(opts: { bind: string; dir: string }): string {
-  const { bind, dir } = opts;
+export function webmallScript(opts: { bind: string; dir: string; key: string }): string {
+  const { bind, dir, key } = opts;
+  if (!/^[\w-]+$/.test(key)) throw new Error("The WebMall key may hold only letters, digits, _ and -.");
   const i = WEBMALL_IMAGES;
   const backups = shops.flatMap((s, n) => [`mariadb_data_shop${n + 1}`, `wordpress_data_shop${n + 1}`]);
   const ports = webmallSites.map((s, n) => `${s.id === "frontend" ? "FRONTEND" : `SHOP${n + 1}`}_PORT=${bind}:${s.port + TUNNEL_OFFSET}`);
@@ -101,17 +146,25 @@ if [ ! -f ready ]; then
 else
   dc up -d
 fi
-for port in ${webmallSites.map((s) => s.port).join(" ")}; do
+# The control plugin is written on every run, so its key follows FOXBENCH_WEBMALL_KEY.
+for n in 1 2 3 4; do
+  docker exec -i WebMall_wordpress_shop$n sh -c 'mkdir -p /bitnami/wordpress/wp-content/mu-plugins && cat > /bitnami/wordpress/wp-content/mu-plugins/foxbench-control.php' <<'PHP'
+${controlPlugin(key)}PHP
+done
+# Ready is the shops answering the control route with the key (opcache can serve an older plugin for a minute), and the start page.
+wait_for() {
   tries=0
-  until curl -fs -o /dev/null -H "Host: 127.0.0.1:$port" http://127.0.0.1:$((port + ${TUNNEL_OFFSET})); do
+  until curl -fs -o /dev/null -H "Host: 127.0.0.1:$1" -H "X-Foxbench-Key: ${key}" "http://127.0.0.1:$(($1 + ${TUNNEL_OFFSET}))$2"; do
     tries=$((tries + 1))
-    [ $tries -lt 120 ] || { echo "port $port did not answer" >&2; exit 1; }
+    [ $tries -lt 120 ] || { echo "port $1 did not answer" >&2; exit 1; }
     sleep 5
   done
-done
+}
+for port in ${shops.map((s) => s.port).join(" ")}; do wait_for $port /wp-json/foxbench/v1/state; done
+wait_for ${webmallSites.find((s) => s.id === "frontend")!.port} /
 echo "webmall is up"
 `;
 }
 
 /** The VM's startup script: Docker, then the same script as local mode. */
-export const webmallStartup = (): string => webmallScript({ bind: "0.0.0.0", dir: "/srv/foxbench/webmall" });
+export const webmallStartup = (key: string): string => webmallScript({ bind: "0.0.0.0", dir: "/srv/foxbench/webmall", key });
