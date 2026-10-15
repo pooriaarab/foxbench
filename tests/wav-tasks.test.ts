@@ -9,7 +9,7 @@ import { join } from "node:path";
 import { afterEach, beforeAll, describe, expect, it } from "vitest";
 import { benchContext } from "../src/bench/registry.js";
 import type { Case, Env } from "../src/bench/types.js";
-import { webarenaVerified, wavSites } from "../src/bench/wav/index.js";
+import { webarenaVerified, wavSites, wavStart, type WavEnv } from "../src/bench/wav/index.js";
 import { freeBase } from "./free-base.js";
 
 // Below the ephemeral range, in a band of this file's own.
@@ -130,6 +130,21 @@ describe("WT6 a task on two sites", () => {
     const reddit = `http://127.0.0.1:${at(9999)}`;
     expect(episode.port).toBe(at(8023));
     expect(episode.goal).toContain(`${reddit}/`);
+    expect((await fetch(`${reddit}/forums`)).status).toBe(200);
+    expect(seen[0]).toMatchObject({ host: `127.0.0.1:${at(9999)}`, "x-postmill-auto-login": "MarvelsGrantMan136:test1234" });
+    await episode.close?.();
+    await expect(fetch(`${reddit}/forums`)).rejects.toThrow();
+  });
+});
+
+describe("WT12 a task on more sites than its start URLs name", () => {
+  it("serves each site it uses, and names the unnamed one in the goal", async () => {
+    await fakeGitlab();
+    const seen = await fakeSite(9999);
+    // Start URL: gitlab only; the task also uses reddit.
+    const episode = await wavStart(env as unknown as WavEnv, { id: 1, sites: ["gitlab", "reddit"], startUrls: ["__GITLAB__"], intent: "x" }, (urls) => urls.join(" "));
+    const reddit = `http://127.0.0.1:${at(9999)}`;
+    expect(episode.goal).toBe(`http://127.0.0.1:${at(8023)}/ ${reddit}/`);
     expect((await fetch(`${reddit}/forums`)).status).toBe(200);
     expect(seen[0]).toMatchObject({ host: `127.0.0.1:${at(9999)}`, "x-postmill-auto-login": "MarvelsGrantMan136:test1234" });
     await episode.close?.();
