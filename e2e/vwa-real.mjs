@@ -36,7 +36,8 @@ function goal(caseId) {
 }
 
 let current = "";
-const page = (url) => fetch(url, { redirect: "manual", headers: { accept: "text/html", connection: "close" } });
+// The body is read to the end: the proxy logs a page when its response ends, and the case ends with the agent.
+const page = async (url) => { const res = await fetch(url, { redirect: "manual", headers: { accept: "text/html", connection: "close" } }); await res.arrayBuffer(); };
 const scripted = { name: `${mode} (scripted)`, async runTask({ url }) {
   await page(url);
   const { open, answer } = goal(current);
