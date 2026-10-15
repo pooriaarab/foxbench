@@ -28,9 +28,9 @@ export function writeHelper(cacheDir: string): string {
 }
 
 /** The verifier's verdict. A throw, a timeout or no answer is a fail with the reason (WI6). */
-export function runVerifier(helper: string, appDir: string, verify: string, url: string, env: NodeJS.ProcessEnv, timeoutMs = 30_000): Promise<{ passed: boolean; message: string }> {
+export function runVerifier(python: string, helper: string, appDir: string, verify: string, url: string, env: NodeJS.ProcessEnv, timeoutMs = 30_000): Promise<{ passed: boolean; message: string }> {
   return new Promise((resolve) => {
-    execFile("python3", ["-I", helper, appDir, verify, url], { cwd: join(helper, ".."), env, timeout: timeoutMs, maxBuffer: 1 << 24 }, (error, stdout, stderr) => {
+    execFile(python, ["-I", helper, appDir, verify, url], { cwd: join(helper, ".."), env, timeout: timeoutMs, maxBuffer: 1 << 24 }, (error, stdout, stderr) => {
       const line = stdout.split("\n").findLast((l) => l.startsWith(MARK));
       if (line) return resolve(JSON.parse(line.slice(MARK.length)));
       resolve({ passed: false, message: `verifier gave no answer: ${error ? error.message : stderr.slice(-200)}` });

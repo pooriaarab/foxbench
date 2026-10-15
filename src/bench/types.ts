@@ -3,6 +3,7 @@
 // only this interface; each benchmark brings its own cases and its own judge.
 import type { TaskOutput } from "../adapter.js";
 import type { Judge, JudgeResult } from "./judge.js";
+import type { UserChannel } from "./user.js";
 
 /** What every benchmark call gets: where the cache is, which Firefox, the environment. */
 export interface BenchContext {
@@ -13,6 +14,8 @@ export interface BenchContext {
   env: NodeJS.ProcessEnv;
   /** The LLM judges of this run, by name, for cases marked `judge: "llm"`. The first decides. */
   judges?: Judge[];
+  /** The model that plays the user where a benchmark has one (--user-model). benchContext() sets the default. */
+  userModel?: string;
 }
 
 /** One case of a benchmark. Ids are stable across versions, so boards stay comparable. */
@@ -41,6 +44,8 @@ export interface Episode {
   headers?: Record<string, string>;
   /** The port the agent sees, so a site keeps its origin across cases (R6). The default is a free port. */
   port?: number;
+  /** The person who gave the goal, served as a chat at /user/ (src/bench/user.ts). */
+  userChannel?: UserChannel;
   /** Stops what this case started, for example its own server, after the judge. */
   close?(): Promise<void>;
 }
@@ -113,6 +118,8 @@ export interface Benchmark {
   scoring: "programmatic" | "llm" | "mixed";
   /** The detector this benchmark scores, with its version. When set, no agent runs: judge() alone scores each case, and the board reports precision, recall and F1. */
   detector?: string;
+  /** The licence forbids showing the benchmark's text: boards keep case ids and verdicts only, with no agent log. */
+  redact?: boolean;
   /** Preflight. A skip carries the reason that goes in the board. */
   check(ctx: BenchContext): Promise<Readiness>;
   /** The cases of a subset. */

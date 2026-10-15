@@ -7,6 +7,7 @@ import { describe, expect, it } from "vitest";
 import { noopAdapter, type Adapter } from "../src/adapter.js";
 import { benchContext, benchmarkById, benchmarks, readiness, resolveSuites } from "../src/bench/registry.js";
 import type { Benchmark, SubsetName, Verdict } from "../src/bench/types.js";
+import { trainTasks } from "../src/gym/tasks.js";
 import { tasks, tasksIn } from "../src/tasks.js";
 import { referenceAdapter } from "./reference.js";
 
@@ -63,7 +64,9 @@ describe("B2 full is the scored suites only", () => {
     const ctx = benchContext();
     expect((await foxbench.load(ctx, "full")).map((c) => c.id)).toEqual(tasksIn("all").map((t) => t.id));
     expect((await foxbench.load(ctx, "tag:core")).map((c) => c.id)).toEqual(tasksIn("core").map((t) => t.id));
-    expect(await foxbench.load(ctx, "tag:train")).toEqual(tasks.filter((t) => (t.suite as string) === "train").map((t) => expect.objectContaining({ id: t.id })));
+    expect((await foxbench.load(ctx, "tag:train")).map((c) => c.id)).toEqual(trainTasks.map((t) => t.id));
+    expect((await foxbench.load(ctx, "full")).filter((c) => c.tags.includes("train"))).toEqual([]);
+    expect((await foxbench.load(ctx, "tag:hard")).filter((c) => c.tags.includes("train"))).toEqual([]);
   });
 });
 

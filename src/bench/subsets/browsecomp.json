@@ -1,0 +1,25 @@
+{
+  "how": "20 of the 1266 rows, evenly spaced: row floor(i * 1266 / 20) for i in 0..19",
+  "quick": [
+    "browsecomp-0000",
+    "browsecomp-0063",
+    "browsecomp-0126",
+    "browsecomp-0189",
+    "browsecomp-0253",
+    "browsecomp-0316",
+    "browsecomp-0379",
+    "browsecomp-0443",
+    "browsecomp-0506",
+    "browsecomp-0569",
+    "browsecomp-0633",
+    "browsecomp-0696",
+    "browsecomp-0759",
+    "browsecomp-0822",
+    "browsecomp-0886",
+    "browsecomp-0949",
+    "browsecomp-1012",
+    "browsecomp-1076",
+    "browsecomp-1139",
+    "browsecomp-1202"
+  ]
+}

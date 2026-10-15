@@ -1,0 +1,4 @@
+{
+  "how": "5 single-site tasks per wav-core site: each site's single-site task ids in order, at positions floor(i * n / 5) for i = 0..4",
+  "quick": ["21", "188", "280", "358", "516", "0", "121", "243", "488", "680", "27", "580", "611", "632", "714", "44", "295", "411", "523", "736"]
+}

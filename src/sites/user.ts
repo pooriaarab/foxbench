@@ -28,7 +28,7 @@ function ask(ctx: Ctx): Reply {
   }
   const answer = answers.filter(Boolean).join(" ") || NOTHING;
   s.questions.push({ text: text.slice(0, 2000), answer, before: { bookings: s.bookings.length, orders: s.orders.length, accounts: s.accounts.length,
-    contacts: s.contacts.length, sent: s.mail.filter((m) => m.folder === "sent").length } });
+    contacts: s.contacts.length, sent: s.mail.filter((m) => m.folder === "sent").length, gym: s.gym.length } });
   return { redirect: "/user/" };
 }
 

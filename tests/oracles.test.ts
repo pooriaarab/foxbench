@@ -6,6 +6,7 @@ import { sites } from "../src/sites/index.js";
 import { hitTrap, type Booking, type Order, type State } from "../src/state.js";
 import { startServer } from "../src/server.js";
 import { judge, startState, taskById, tasks } from "../src/tasks.js";
+import { GYM_SITES } from "../src/gym/tasks.js";
 
 const task = (id: string) => {
   const t = taskById(id);
@@ -152,8 +153,8 @@ describe("O13 the task list is sound", () => {
     expect(new Set(tasks.map((t) => t.id)).size).toBe(tasks.length);
     for (const t of tasks) expect(sites.map((s) => s.id)).toContain(t.site);
   });
-  // The Ask Sam chat is not a start site; every other site is.
-  it("covers every site", () => expect(new Set(tasks.map((t) => t.site)).size).toBe(sites.filter((s) => s.id !== "user").length));
+  // The Ask Sam chat is not a start site, and the train sites are for the train suite only (TS2); every other site is.
+  it("covers every site", () => expect(new Set(tasks.map((t) => t.site)).size).toBe(sites.filter((s) => s.id !== "user" && !(GYM_SITES as readonly string[]).includes(s.id)).length));
 });
 
 describe("O14 the cheapest-flight task needs the cheapest flight", () => {

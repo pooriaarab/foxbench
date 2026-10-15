@@ -7,6 +7,7 @@ import type { Adapter } from "../src/adapter.js";
 import { mcpAdapter } from "../src/mcp.js";
 import { runSuite } from "../src/runner.js";
 import { taskById, type Task } from "../src/tasks.js";
+import { freeBase } from "./free-base.js";
 
 const FIXTURE = join(import.meta.dirname, "fixtures/mcp-server.mjs");
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -56,11 +57,12 @@ describe("R6 fixed ports keep a site's origin across tasks", () => {
     const seen: string[] = [];
     const record: Adapter = { name: "record", runTask: async ({ url }) => (seen.push(new URL(url).origin), { done: false, log: "" }) };
     const tasks = [taskById("shop-mugs")!, taskById("shop-hoodie")!, taskById("signup-pro")!];
-    const board = await runSuite({ adapter: record, tasks, fixedPorts: 47310 });
+    const base = await freeBase(12000, 100, Array.from({ length: 8 }, (_, i) => i));
+    const board = await runSuite({ adapter: record, tasks, fixedPorts: base });
     expect(seen[0]).toBe(seen[1]);
     expect(seen[2]).not.toBe(seen[0]);
-    expect(seen.every((o) => Number(new URL(o).port) >= 47310)).toBe(true);
-    expect(board.fixedPorts).toBe(47310);
+    expect(seen.every((o) => Number(new URL(o).port) >= base)).toBe(true);
+    expect(board.fixedPorts).toBe(base);
     seen.length = 0;
     const plain = await runSuite({ adapter: record, tasks: tasks.slice(0, 2) });
     expect(seen[0]).not.toBe(seen[1]);
