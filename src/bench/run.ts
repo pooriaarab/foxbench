@@ -38,6 +38,8 @@ export interface TaskResult {
   egress: { requests: number; bytes: number };
   /** Questions to the user, where the benchmark has a user to ask. */
   asks: number;
+  /** Who played the user: "scripted", "llm:<model>", or null for no user (Q8). */
+  user: string | null;
   /** What the agent reported about itself, or null. Never used in the score. */
   agentMetrics: AgentMetrics | null;
   /** Each LLM judge's verdict, when judges scored the case. */
@@ -97,6 +99,8 @@ export interface BenchRunOptions {
   timeoutMs?: number;
   /** How long the agent gets to stop after the episode ended. */
   graceMs?: number;
+  /** The model that plays the user where a benchmark has one. */
+  userModel?: string;
   onResult?: (result: TaskResult) => void;
   /** The LLM judges, for cases marked `judge: "llm"`. */
   judges?: Judge[];
@@ -130,7 +134,9 @@ async function play(adapter: Adapter, episode: Episode, url: string, timeoutMs: 
   try {
     const work = adapter.runTask({ url, goal: episode.goal });
     const limit = new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error(`timed out after ${timeoutMs} ms`)), timeoutMs); });
-    const ended = episode.ended ? episode.ended.then(() => "ended" as const) : new Promise<never>(() => {});
+    // The benchmark or the user may end the episode (Q5).
+    const ends = [episode.ended, episode.userChannel?.ended].filter((p) => p !== undefined);
+    const ended = ends.length ? Promise.race(ends).then(() => "ended" as const) : new Promise<never>(() => {});
     const first = await Promise.race([work, limit, ended]);
     if (first === "ended") {
       endedEarly = true;
@@ -164,11 +170,14 @@ async function runCase(bench: Benchmark, env: Env, item: Case, options: BenchRun
       ran.ms = Date.now() - started;
     } else {
       // The agent gets the proxy's URL, never the site's own (P1).
-      proxy = await startProxy(episode.url, { ...(episode.headers ? { headers: episode.headers } : {}), ...(episode.port ? { port: episode.port } : {}) });
+      proxy = await startProxy(episode.url, { ...(episode.headers ? { headers: episode.headers } : {}), ...(episode.port ? { port: episode.port } : {}), ...(episode.userChannel ? { user: episode.userChannel } : {}) });
       const start = new URL(episode.url);
       ran = await play(options.adapter, episode, proxy.origin + start.pathname + start.search, options.timeoutMs ?? 600_000, options.graceMs ?? 30_000);
       verdict = await bench.judge(env, episode, ran.output, { requests: proxy.trace });
     }
+    // A case where the user could not answer is not a sample of the agent (Q7).
+    const failed = episode.userChannel?.error;
+    if (failed) verdict = { ...verdict, success: false, reasons: [`harness: the simulated user failed: ${failed}`, ...verdict.reasons] };
   } catch (error) {
     verdict = { success: false, attack: null, reasons: [`harness: ${message(error)}`], judgedBy: "programmatic" };
   }
@@ -184,14 +193,14 @@ async function runCase(bench: Benchmark, env: Env, item: Case, options: BenchRun
     success: verdict.success, attack: verdict.attack, secure: verdict.success && verdict.attack !== "followed", reasons: verdict.reasons, ms: ran.ms,
     done: Boolean(ran.output.done), adapterError: ran.adapterError, endedEarly: ran.endedEarly, log: String(ran.output.log ?? "").slice(0, 4000),
     requests: log.length, posts: log.filter((r) => r.method === "POST").length, firstActionMs: first ? first.at : null,
-    egress: { requests: egress.length, bytes: egress.reduce((n, r) => n + r.bytes, 0) }, asks: verdict.asks ?? 0, agentMetrics: parseMetrics(ran.output.metrics),
+    egress: { requests: egress.length, bytes: egress.reduce((n, r) => n + r.bytes, 0) }, asks: verdict.asks ?? (episode?.userChannel?.turns.filter((t) => t.from === "agent").length ?? 0), user: episode?.userChannel?.by ?? null, agentMetrics: parseMetrics(ran.output.metrics),
     ...(verdict.judges ? { judges: verdict.judges } : {}),
   };
 }
 
 /** Runs each case of each ready benchmark once, one after another, and returns the scoreboard. */
 export async function runBenchmarks(options: BenchRunOptions): Promise<Scoreboard> {
-  const ctx = benchContext(options.judges ? { judges: options.judges } : {});
+  const ctx = benchContext({ ...(options.judges ? { judges: options.judges } : {}), ...(options.userModel ? { userModel: options.userModel } : {}) });
   const results: TaskResult[] = [];
   const skipped: Scoreboard["skipped"] = [];
   try {
@@ -228,7 +237,8 @@ export async function runBenchmarks(options: BenchRunOptions): Promise<Scoreboar
     await options.adapter.close?.();
   }
   const detectors = detectorScores(results, options.runs.map((r) => r.benchmark));
-  return { ...scoreboard(options.adapter.name, results, skipped), ...(Object.keys(detectors).length ? { detectors } : {}), speed: speedBoard(results), fingerprint: fingerprint({ ...(ctx.firefox ? { firefox: ctx.firefox } : {}), env: ctx.env, judges: ctx.judges ?? [] }) };
+  return { ...scoreboard(options.adapter.name, results, skipped), ...(Object.keys(detectors).length ? { detectors } : {}), speed: speedBoard(results), fingerprint: fingerprint({ ...(ctx.firefox ? { firefox: ctx.firefox } : {}), env: ctx.env, judges: ctx.judges ?? [],
+    users: [...new Set(results.flatMap((r) => (r.user?.startsWith("llm:") ? [r.user] : [])))] }) };
 }
 
 function byJudge(results: TaskResult[]): Scoreboard["judges"] {
