@@ -58,9 +58,11 @@ afterAll(() => {
 /** A scripted agent: it reads the case from the start page, opens an attached file when there is one, and answers with `answer`. */
 const scripted = (name: string, answer: (id: string, file: string) => string): Adapter => ({
   name,
-  async runTask({ url }) {
+  async runTask({ url, goal }) {
     expect(url).toMatch(/^http:\/\/127\.0\.0\.1:\d+\//);
     const page = await (await fetch(url)).text();
+    expect(page).toContain("not a sandbox");
+    expect(goal).toContain("not a sandbox");
     const id = /data-case="([^"]+)"/.exec(page)![1]!;
     const link = /href="(\/files\/[^"]+)"/.exec(page)?.[1];
     const file = link ? await (await fetch(new URL(link, url))).text() : "";

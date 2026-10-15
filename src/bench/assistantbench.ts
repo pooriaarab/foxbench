@@ -11,6 +11,7 @@ import { join } from "node:path";
 import { createInterface } from "node:readline";
 import { promisify } from "node:util";
 import { pickSubset } from "./subsets.js";
+import { OPEN_WEB_NOTE } from "./open-web.js";
 import type { BenchContext, Benchmark, Case, Episode, Readiness } from "./types.js";
 import { locked } from "./webgames.js";
 
@@ -113,14 +114,15 @@ function startScorer(ctx: BenchContext): Scorer {
 
 // The answer format follows the scorer: it reads a JSON list as several items (A4).
 const goalFor = (task: string) =>
-  `${task}\n\nUse the web to find the answer. Reply with the final answer only. If the answer has several items, reply with a JSON list of them.`;
+  `${task}\n\n${OPEN_WEB_NOTE} Use the web to find the answer. Reply with the final answer only. If the answer has several items, reply with a JSON list of them.`;
 
 const escape = (s: string) => s.replace(/[&<>"]/g, (c) => `&#${c.charCodeAt(0)};`);
 
 /** A local start page with the question and a search form, as BrowserGym starts at google.com (A8). */
 async function startPage(item: AssistantbenchTask) {
   const html = `<!doctype html><meta charset="utf-8"><title>AssistantBench</title><main data-case="${item.id}"><p>${escape(item.task)}</p>
-<form action="https://www.google.com/search" method="get"><input name="q" aria-label="Search the web"><button>Search</button></form></main>`;
+<form action="https://www.google.com/search" method="get"><input name="q" aria-label="Search the web"><button>Search</button></form>
+<p>${OPEN_WEB_NOTE}</p></main>`;
   const server = createServer((_req, res) => res.writeHead(200, { "content-type": "text/html; charset=utf-8" }).end(html));
   await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
   const { port } = server.address() as { port: number };

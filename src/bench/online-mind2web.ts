@@ -11,6 +11,7 @@ import { join } from "node:path";
 import type { Judge } from "./judge.js";
 import { judgeWith } from "./judge.js";
 import { pickSubset } from "./subsets.js";
+import { siteNote } from "./open-web.js";
 import type { BenchContext, Benchmark, Case, Episode, Readiness, Trace } from "./types.js";
 import { locked } from "./webgames.js";
 
@@ -79,7 +80,8 @@ const escape = (s: string) => s.replace(/[&<>"]/g, (c) => `&#${c.charCodeAt(0)};
 /** A local start page with the task and a link to its site (M2W7). */
 async function startPage(t: Om2wTask) {
   const html = `<!doctype html><meta charset="utf-8"><title>Online-Mind2Web</title><main data-case="${escape(t.task_id)}"><p>${escape(describe(t))}</p>
-<p>Start at <a href="${escape(t.website)}">${escape(t.website)}</a>.</p></main>`;
+<p>Start at <a href="${escape(t.website)}">${escape(t.website)}</a>.</p>
+<p>${escape(siteNote(t.website))}</p></main>`;
   const server = createServer((_req, res) => res.writeHead(200, { "content-type": "text/html; charset=utf-8" }).end(html));
   await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
   const { port } = server.address() as { port: number };
@@ -118,7 +120,7 @@ export const onlineMind2webBenchmark = (): Benchmark => {
       const task = tasks.find((t) => t.task_id === item.id);
       if (!task) throw new Error(`online-mind2web has no case ${item.id}`);
       const page = await startPage(task);
-      const episode: Episode = { url: page.url, goal: `${describe(task)}\n\nDo this on ${task.website}. When you are done, reply with what you found or did.`, startPath: "/", close: page.close };
+      const episode: Episode = { url: page.url, goal: `${describe(task)}\n\nDo this on ${task.website}. ${siteNote(task.website)} When you are done, reply with what you found or did.`, startPath: "/", close: page.close };
       started.set(episode, task);
       return episode;
     },

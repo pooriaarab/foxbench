@@ -9,6 +9,7 @@
 import { evidence, GRADE, parseGrades, rawFile, rawReady, startPage } from "./odysseys.js";
 import { judgeWith, type Judge } from "./judge.js";
 import { pickSubset } from "./subsets.js";
+import { OPEN_WEB_NOTE } from "./open-web.js";
 import type { BenchContext, Benchmark, Case, Episode } from "./types.js";
 
 /** The `OSU-NLP-Group/Mind2Web-2` commit of 2026-02-18 (MIT). */
@@ -55,7 +56,7 @@ export const mind2web2Benchmark = (): Benchmark => {
       const task = tasks.find((t) => t.id === item.id);
       if (!task) throw new Error(`mind2web2 has no case ${item.id}`);
       const page = await startPage(task.id, task.text);
-      const episode: Episode = { url: page.url, goal: `${task.text}\n\nYou may start anywhere on the web. Give the source link for every claim in your answer.`, startPath: "/", close: page.close };
+      const episode: Episode = { url: page.url, goal: `${task.text}\n\n${OPEN_WEB_NOTE} Give the source link for every claim in your answer.`, startPath: "/", close: page.close };
       started.set(episode, task);
       return episode;
     },
