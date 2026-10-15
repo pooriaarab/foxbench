@@ -308,7 +308,27 @@ const moreStay: Task[] = [
   }),
 ];
 
+// Two sites in one task: a mail gives the trip, StayNest books it; or StayNest books, Postbox mails the reference.
+const crossSite: Task[] = [
+  ...([["p9", "Hana Mori", "kyoto", "2026-11-18", 3], ["p10", "Chris Doyle", "montreal", "2026-12-03", 2]] as const).map(([mailId, from, city, checkin, nights], i) => {
+    const h = cheapestIn(inCity(city).filter((x) => x.refundable), "standard", checkin, nights);
+    const want = { hotel: h.id, room: "standard", checkin, nights: String(nights), guests: "1", breakfast: "no", arrival: "after 18:00" };
+    TRAIN_POSTS.set(`cross-mail-stay-${i + 1}`, [stayPosts(want)]);
+    return { id: `cross-mail-stay-${i + 1}`, suite: "train", tier: "hard", site: "postbox", path: "/",
+      goal: `${from} emailed me about a trip (mail ${mailId === "p9" ? "\"Team trip\"" : "\"Workshop travel\""}). On StayNest (/stay/), book the cheapest hotel with free cancellation in the trip's city, Standard room, 1 guest, for the dates in the mail. We arrive after 18:00. ${SAM}`,
+      check: all(oneRecord("stay", "booking", { ...want, ...GUEST }), mailsSent(0)) } satisfies Task;
+  }),
+  ...([["lis-1", "2026-11-25", 2, "ravi.patel@brightline.example"], ["den-2", "2027-01-12", 1, "maya.chen@brightline.example"]] as const).map(([id, checkin, nights, to], i) => {
+    const h = HOTELS.find((x) => x.id === id)!;
+    const want = { hotel: id, room: "standard", checkin, nights: String(nights), guests: "1", breakfast: "no", arrival: "after 18:00" };
+    TRAIN_POSTS.set(`cross-stay-mail-${i + 1}`, [stayPosts(want), ["/postbox/compose", { to, subject: "My hotel", body: "My booking is SN-4001." }]]);
+    return { id: `cross-stay-mail-${i + 1}`, suite: "train", tier: "hard", site: "stay", path: "/",
+      goal: `On StayNest, book a Standard room at ${h.name} in ${CITIES[h.city]} for 1 guest, check-in ${spoken(checkin)}, ${nightsText(nights)}, no breakfast. We arrive after 18:00. ${SAM} Then, in Postbox (/postbox/), send ${to} a new email with the subject "My hotel" that gives the booking reference.`,
+      check: all(oneRecord("stay", "booking", { ...want, ...GUEST }), mailsSent(1, { to, subject: "My hotel", word: /SN-4001/ })) } satisfies Task;
+  }),
+];
+
 /** Every train task, in suite order. */
-export const trainTasks: Task[] = [...stayTasks, ...moreStay, ...bankTasks, ...clinicTasks, ...deskTasks, ...mailTasks];
+export const trainTasks: Task[] = [...stayTasks, ...moreStay, ...bankTasks, ...clinicTasks, ...deskTasks, ...mailTasks, ...crossSite];
 /** The sites that only the train suite uses (TS2). */
 export const GYM_SITES = ["stay", "bank", "clinic", "desk", "postbox"] as const;

@@ -18,6 +18,8 @@ export const MAILS = [
   { id: "p6", from: "ravi.patel@brightline.example", fromName: "Ravi Patel", subject: "Lunch on Friday?", date: "2026-10-13", body: "Hey Sam, lunch on Friday at noon? The new ramen place on King Street.\nRavi" },
   { id: "p7", from: "billing@printhouse.example", fromName: "PrintHouse Billing", subject: "Invoice INV-30418 is due", date: "2026-10-09", body: "Invoice INV-30418 for 500 event flyers, $240.00, is due on October 20." },
   { id: "p8", from: "lena.fischer@brightline.example", fromName: "Lena Fischer", subject: "Room booking for the review", date: "2026-10-13", body: "I booked room 4B for the review. The door code is 4417.\nLena" },
+  { id: "p9", from: "hana.mori@brightline.example", fromName: "Hana Mori", subject: "Team trip", date: "2026-10-13", body: "Hi all,\nOur team trip is in Kyoto this year. Please book your own hotel: check in on November 18, 2026 and stay 3 nights.\nHana" },
+  { id: "p10", from: "chris.doyle@brightline.example", fromName: "Chris Doyle", subject: "Workshop travel", date: "2026-10-12", body: "Sam, the design workshop is in Montreal. Book a room from December 3, 2026 for 2 nights, please.\nChris" },
 ];
 export const ME = "sam.park@example.com";
 
