@@ -241,6 +241,7 @@ argv and prints canned JSON.
 | V11 | A local tunnel port is taken, so `up` makes a VM it cannot reach. | `up` checks the local ports before it makes the VM. `--local-port-offset` moves them, so the tests never share a port with another run. | `V11 ...` |
 | V12 | The tunnel starts before the VM listens and gcloud's connection test fails. | `up` restarts the tunnel until gcloud says `Listening on port`, for up to 5 minutes, then stops and names the log. The state file stays so `down` can delete the VM. | - (needs a real VM) |
 | V13 | IAP cannot reach the VM because no firewall rule allows Google's IAP range. | A setup step, not code: `README.md` gives the firewall rule for the `foxbench` network tag that every VM gets. | - |
+| V14 | Two envs tunnel to the same local port (SuiteCRM and WebMall both took 18081), so the second `up` cannot open its tunnel, or a probe reaches the wrong site. | Every local port is used by one env only. | `tests/env.test.ts` V14 |
 
 ## WebMall env (`src/bench/webmall/env.ts`, `foxbench env up webmall`)
 
