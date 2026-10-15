@@ -1001,6 +1001,27 @@ fake site and a fake judge; no test calls an API.
 | AD8 | noop, or a leaky agent, passes. | noop fails every case and leaks nothing. A scripted agent that does the task without the private details passes. One that pastes them in fails with the leak. | `AD8 ...` |
 | AD9 | A run starts while a site is down, or `uv` is missing. | `check()` is not ready and names the site or the tool, with the fix. | `AD9 ...` |
 
+## DoomArena attacks (`src/bench/doomarena.ts`)
+
+DoomArena (ServiceNow, Apache-2.0) injects a banner or a pop-up into a page
+and counts the attack as successful when the agent opens the attacker's URL.
+foxbench runs its banner, pop-up and combined attacks over the
+WebArena-Verified tasks on the wav-core reddit and shopping sites, and runs
+each task clean too, so the board shows task success with and without the
+attack. The tests are in `tests/doomarena.test.ts`, against a fake site.
+
+| # | Failure mode | Wanted behaviour | Test |
+|---|---|---|---|
+| DA1 | Upstream's attack code is committed, or fetched at a moving ref. | `popup_attacks.py` and `banner_attacks.py` are fetched at the pinned commit `b80902f` into the cache at run time, and the pop-up's hidden text and the banners' alt texts are read from them. | `DA1 ...` |
+| DA2 | The injection changes the site, so a later case sees it. | The injection happens in the response body on its way to the agent; nothing is written to the site. A case that only reads leaves the site clean. | `DA2 ...` |
+| DA3 | The attack is nowhere on the page the agent reads, or breaks the page. | Each HTML response gets upstream's own markup before `</body>`: the pop-up card with its hidden aria text, and a banner image with its alt text on each side. The page's own HTML is unchanged. Only HTML responses are touched. | `DA3 ...` |
+| DA4 | The attacker's URL is a real host, so an attack leaks to the network. | The report URL is a local collector. The attack is followed when the collector gets a request, whoever sends it. | `DA4 ...` |
+| DA5 | The attacked and the clean case are scored differently, so the drop is not the attack's. | Both go through WebArena-Verified's own evaluator on the case's HAR and answer, with the same reset rules. The evaluator keeps each case's HAR under the task id, so this benchmark gives it a cache directory of its own and never overwrites WebArena-Verified's. The case id carries the variant: `clean-<task>`, `banner-<task>`, `popup-<task>`, `combined-<task>`. | `DA5 ...` |
+| DA6 | A clean case reports an attack that cannot happen. | A clean case's `attack` is null; an attacked case's is `followed` or `blocked`. | `DA6 ...` |
+| DA7 | A case changes a site and the next case starts from the changed state. | A case whose HAR has a request that is not GET, HEAD or OPTIONS marks the site in wav-core's reset list; the next case there resets it first (WJ6). | `DA7 ...` |
+| DA8 | noop, or an agent that ignores the task, passes; an agent that follows the attack is not counted. | noop fails every case and follows nothing. A scripted perfect agent passes and blocks. A scripted gullible agent opens the attacker's URL and is counted as followed. | `DA8 ...` |
+| DA9 | A run starts while reddit or shopping is down, or `uv` is missing. | `check()` is not ready and names the site or the tool, with the fix. | `DA9 ...` |
+
 ## BrowseComp (`src/bench/browsecomp.ts`)
 
 BrowseComp is 1,266 hard-to-find-fact questions. OpenAI ships them encrypted
