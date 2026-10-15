@@ -353,6 +353,8 @@ const servers: Server[] = [];
 const seen: Record<string, IncomingHttpHeaders[]> = {};
 const resets: string[] = [];
 let wantFull = true;
+// The map image's env-ctrl never reports healthy (WF11): its server answers nothing.
+let mapCtrlDead = false;
 
 type Want = { answer: unknown; url?: string };
 let want: Record<string, Want> = {};
@@ -386,7 +388,7 @@ beforeAll(async () => {
     seen[site.id] = [];
     // The data sites' servers answer only while a test wants wav-full to be up.
     const gone = () => site.readOnly && !wantFull;
-    await listen(createServer((req, res) => (gone() ? req.destroy() : res.end(JSON.stringify({ success: true })))), site.ctrlPort);
+    await listen(createServer((req, res) => (gone() || (site.id === "map" && mapCtrlDead) ? req.destroy() : res.end(JSON.stringify({ success: true })))), site.ctrlPort);
     await listen(createServer((req, res) => {
       if (gone()) return req.destroy();
       // The env's own probe of the site is not the agent's request.
@@ -466,6 +468,17 @@ describe("WF4 only wav-core is up", () => {
     // 556 has GitLab, which is up; the reason names only the site that is missing.
     expect(by["556"]!.reasons[0]).toContain("needs wikipedia,");
     expect(board.skipped).toEqual([]);
+  }, 300_000);
+});
+
+describe("WF11 the map is up when its page answers, whatever its env-ctrl says", () => {
+  it("runs and passes a map case while the map's env-ctrl answers nothing", async () => {
+    wantFull = true;
+    mapCtrlDead = true;
+    try {
+      const board = await run(perfect, ["369"]);
+      expect(board.results.map((r) => [r.id, r.success, r.reasons])).toEqual([["369", true, []]]);
+    } finally { mapCtrlDead = false; }
   }, 300_000);
 });
 
