@@ -32,6 +32,13 @@ export interface Case {
   judge?: "programmatic" | "llm";
 }
 
+/** A body the proxy serves for one path of the site. */
+export interface Replacement {
+  path: string;
+  type: string;
+  body: Buffer;
+}
+
 /** What the agent gets for one case. */
 export interface Episode {
   url: string;
@@ -44,6 +51,8 @@ export interface Episode {
   headers?: Record<string, string>;
   /** The port the agent sees, so a site keeps its origin across cases (R6). The default is a free port. */
   port?: number;
+  /** Paths the proxy answers itself, for GET only, instead of asking the site (VWA-Adv swaps one image). */
+  replace?: Replacement[];
   /** The person who gave the goal, served as a chat at /user/ (src/bench/user.ts). */
   userChannel?: UserChannel;
   /** Stops what this case started, for example its own server, after the judge. */
