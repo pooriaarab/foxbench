@@ -13,8 +13,9 @@ DOCS = {
     "supervisor": [("show_account_passwords", "GET", []), ("complete_task", "POST", [("answer", "string", False)])],
     "notes": [
         ("login", "POST", [("username", "string", True), ("password", "string", True)]),
-        ("add_note", "POST", [("access_token", "string", True), ("title", "string", True), ("pinned", "boolean", False), ("tags", "list[string]", False), ("stars", "integer", False)]),
-        ("show_notes", "GET", [("access_token", "string", True)]),
+        ("add_note", "POST", [("access_token", "string", True), ("title", "string", True), ("body", "string", False), ("pinned", "boolean", False), ("tags", "list[string]", False), ("stars", "integer", False)]),
+        ("show_notes", "GET", [("access_token", "string", True), ("page_index", "integer", False), ("page_limit", "integer", False)]),
+        ("show_note", "GET", [("access_token", "string", True), ("note_id", "integer", True)]),
     ],
 }
 state = {"world": None}
@@ -50,7 +51,10 @@ class Api:
                 w.notes.append({k: v for k, v in args.items() if k != "access_token"})
                 ModelHashHandler.data[w.output_db_home_path_in_memory]["notes"] = len(w.notes)
                 return {"message": "Note added.", "note_id": len(w.notes), "score": 4.0}
-            return w.notes
+            if api == "show_note":
+                return w.notes[args["note_id"] - 1] if 0 < args["note_id"] <= len(w.notes) else fail(404, "No such note")
+            size = args.get("page_limit")
+            return w.notes if size is None else w.notes[args.get("page_index", 0) * size:][:size]
         return call
 
 class AppWorld:
