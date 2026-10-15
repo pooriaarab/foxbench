@@ -40,15 +40,14 @@ export interface WavScore {
   messages: string[];
 }
 
-/** Writes the HAR and the answer next to each other in the cache, then asks upstream's evaluator. */
-export async function judgeCase(ctx: BenchContext, taskId: number, entries: HarEntry[], answer: string | undefined, urls: Record<string, string>): Promise<WavScore> {
-  const dir = join(wavDir(ctx), "har");
+/** Writes the HAR and the answer next to each other in `dir`, the run's own, then asks upstream's evaluator. */
+export async function judgeCase(ctx: BenchContext, dir: string, taskId: number, entries: HarEntry[], answer: string | undefined, urls: Record<string, string>): Promise<WavScore> {
   mkdirSync(dir, { recursive: true });
   const har = join(dir, `${taskId}.har`);
   const said = join(dir, `${taskId}.answer`);
   writeFileSync(har, JSON.stringify({ log: { version: "1.2", creator: { name: "foxbench", version: "0" }, entries } }));
   if (answer !== undefined) writeFileSync(said, answer);
-  const bridge = join(wavDir(ctx), "judge_bridge.py");
+  const bridge = join(dir, "judge_bridge.py");
   writeFileSync(bridge, BRIDGE);
   const args = ["run", "-q", "--isolated", "--no-project", "--python", "3.12", "--with", `webarena-verified==${WAV_VERSION}`, "python", "-I", bridge,
     String(taskId), har, answer === undefined ? join(dir, "none") : said, JSON.stringify(urls)];
