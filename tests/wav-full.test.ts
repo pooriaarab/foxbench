@@ -42,8 +42,22 @@ function boot(dir: string, pythonPre = "", aptBody = "true") {
   mkdirSync(bin, { recursive: true });
   if (!existsSync(join(dir, "served"))) serveMapTars(dir);
   const tool = (name: string, body: string) => { writeFileSync(join(bin, name), `#!/bin/sh\necho "${name} $*" >> ${dir}/log\n${body}\n`); chmodSync(join(bin, name), 0o755); };
-  tool("docker", `case "$1" in inspect) [ -e ${dir}/has-$2 ];; run) shift; while [ "$1" != --name ]; do shift; done; touch ${dir}/has-$2;;
-    volume) case "$2" in create) mkdir -p ${dir}/vol/$3/_data;; inspect) echo ${dir}/vol/$5/_data;; esac;; esac`);
+  // Containers and images are marker files: `run` records the container and its image (the last argument), pull and build make an image, and
+  // `image inspect` reports the arch in arch-<image> (amd64 unless a test says otherwise).
+  tool("docker", `m() { echo "$1" | tr '/:@' '___'; }
+last() { for a; do l=$a; done; echo $l; }
+case "$1" in
+  inspect) if [ "$2" = -f ]; then cat ${dir}/image-of-$4; else [ -e ${dir}/image-of-$2 ]; fi;;
+  run) shift; while [ "$1" != --name ]; do shift; done; last "$@" > ${dir}/image-of-$2;;
+  pull) touch ${dir}/img-$(m $(last "$@"));;
+  build) while [ "$1" != -t ]; do shift; done; touch ${dir}/img-$(m $2); cp $3/Dockerfile ${dir}/Dockerfile;;
+  create) echo cid;;
+  cp) mkdir -p $3;;
+  rm) ;;
+  image) [ -e ${dir}/img-$(m $5) ] || exit 1; cat ${dir}/arch-$(m $5) 2>/dev/null || echo amd64;;
+  volume) case "$2" in create) mkdir -p ${dir}/vol/$3/_data;; inspect) echo ${dir}/vol/$5/_data;; esac;;
+esac`);
+  tool("uname", "echo x86_64");
   // curl serves ${dir}/served/<name>; a count in curl-cut makes that many calls end early, as a dropped connection does (curl exit 18).
   tool("curl", `for a; do url=$a; done; f=${dir}/served/$(basename $url); [ -e $f ] || exit 22
 n=$(cat ${dir}/curl-cut 2>/dev/null || echo 0)
@@ -65,7 +79,8 @@ describe("WF2 WF3 the startup script", () => {
     const syntax = spawnSync("sh", ["-n", "-c", env.startup]);
     expect(syntax.status).toBe(0);
     expect(env.startup).toContain(`webarena-verified==${WAV_VERSION}`);
-    expect(env.startup.match(/am1n3e\/webarena-verified-[a-z_]+:\S+/g)!.toSorted()).toEqual([...wavSites, ...wavFullSites].map(wavImage).toSorted());
+    // Wikipedia has no amd64 image: it is built from a digest (WF9), so it has no tag here.
+    expect(env.startup.match(/am1n3e\/webarena-verified-[a-z_]+:\S+/g)!.toSorted()).toEqual([...wavSites, ...wavFullSites].filter((s) => s.id !== "wikipedia").map(wavImage).toSorted());
   });
   it("takes every image name from one table, at the tags Docker Hub has", () => {
     expect([...wavSites, ...wavFullSites].map(wavImage).toSorted()).toEqual([
@@ -172,6 +187,62 @@ describe("WF8 the map's archives are never kept on the disk", () => {
     // 187.4 GB of archives (124.8 + 41.3 + 21.3), 95.2 GB of ZIM and 91 GB of images, each as measured: 374 GB.
     expect(env.diskGb).toBeGreaterThanOrEqual(Math.ceil(374 * 1.25));
     expect(env.diskType).toBe("pd-ssd");
+  });
+});
+
+describe("WF9 every image runs on the VM's architecture", () => {
+  const fresh = () => mkdtempSync(join(tmpdir(), "fbn-wf9-"));
+  it("pulls each image for the VM's platform and runs it", () => {
+    const dir = fresh();
+    try {
+      const r = boot(dir);
+      expect(r.status, r.stderr).toBe(0);
+      for (const s of [...wavSites, wavFullSites[1]!]) expect(r.log, s.id).toContain(`docker pull -q --platform linux/amd64 ${wavImage(s)}`);
+      const runs = r.log.filter((l) => l.startsWith("docker run "));
+      expect(runs).toHaveLength(6);
+      expect(runs.every((l) => l.includes("--platform linux/amd64"))).toBe(true);
+    } finally { rmSync(dir, { recursive: true, force: true }); }
+  });
+  it("builds Wikipedia for amd64 from its arm64-only image, as upstream publishes no other", () => {
+    const dir = fresh();
+    try {
+      const r = boot(dir);
+      expect(r.status, r.stderr).toBe(0);
+      // The only Wikipedia image, :1.0.0 and :latest, is one linux/arm64 manifest; its files are Python and shell, and kiwix-serve comes from the amd64 base.
+      expect(r.log.some((l) => /^docker pull -q --platform linux\/arm64 am1n3e\/webarena-verified-wikipedia@sha256:[0-9a-f]{64}$/.test(l))).toBe(true);
+      const dockerfile = readFileSync(join(dir, "Dockerfile"), "utf8");
+      expect(dockerfile).toMatch(/^FROM ghcr\.io\/kiwix\/kiwix-serve@sha256:[0-9a-f]{64}$/m);
+      expect(dockerfile).toContain('ENTRYPOINT ["/entrypoint.sh"]');
+      expect(readFileSync(join(dir, "image-of-wav-wikipedia"), "utf8").trim()).toBe("foxbench-wikipedia:1.0.0");
+    } finally { rmSync(dir, { recursive: true, force: true }); }
+  });
+  it("stops the boot with one clear line when a pulled image is for another architecture", () => {
+    const dir = fresh();
+    try {
+      writeFileSync(join(dir, "arch-am1n3e_webarena-verified-reddit_0.1.0"), "arm64\n");
+      const r = boot(dir);
+      expect(r.status).not.toBe(0);
+      expect(r.stderr).toMatch(/^foxbench: BOOT FAILED: image am1n3e\/webarena-verified-reddit:0\.1\.0 is linux\/arm64 but this VM is linux\/amd64$/m);
+      expect(r.log.some((l) => l.includes("--name wav-gitlab "))).toBe(false);
+    } finally { rmSync(dir, { recursive: true, force: true }); }
+  });
+  it("checks a container that exists from an earlier boot too", () => {
+    const dir = fresh();
+    try {
+      expect(boot(dir).status).toBe(0);
+      writeFileSync(join(dir, "arch-foxbench-wikipedia_1.0.0"), "arm64\n");
+      const r = boot(dir);
+      expect(r.status).not.toBe(0);
+      expect(r.stderr).toMatch(/BOOT FAILED: image foxbench-wikipedia:1\.0\.0 is linux\/arm64 but this VM is linux\/amd64/);
+    } finally { rmSync(dir, { recursive: true, force: true }); }
+  });
+  it("has the images the build needs, at the registries, when there is network", (t) => {
+    if (!online) return t.skip("no network");
+    for (const image of env.startup.match(/(?:am1n3e\/webarena-verified-wikipedia|ghcr\.io\/kiwix\/kiwix-serve)@sha256:[0-9a-f]{64}/g)!) {
+      const r = spawnSync("docker", ["manifest", "inspect", image], { encoding: "utf8", timeout: 60_000 });
+      if (/toomanyrequests|429/.test(r.stderr)) return t.skip("Docker Hub rate limit");
+      expect(r.status, `${image}: ${r.stderr}`).toBe(0);
+    }
   });
 });
 
