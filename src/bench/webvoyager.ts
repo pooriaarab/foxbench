@@ -11,6 +11,7 @@ import { createServer } from "node:http";
 import { join } from "node:path";
 import { judgeWith, type Judge } from "./judge.js";
 import { pickSubset } from "./subsets.js";
+import { siteNote } from "./open-web.js";
 import type { BenchContext, Benchmark, Case, Episode, Readiness, Trace } from "./types.js";
 import { locked } from "./webgames.js";
 
@@ -152,7 +153,8 @@ const parse = (reply: string) => {
 /** A local start page with the task and a link to its site (WVY6). */
 async function startPage(t: Wv) {
   const html = `<!doctype html><meta charset="utf-8"><title>WebVoyager</title><main data-case="${escape(t.id)}"><p>${escape(t.goal)}</p>
-<p>Start at <a href="${escape(t.web)}">${escape(t.web)}</a>.</p></main>`;
+<p>Start at <a href="${escape(t.web)}">${escape(t.web)}</a>.</p>
+<p>${escape(siteNote(t.web))}</p></main>`;
   const server = createServer((_req, res) => res.writeHead(200, { "content-type": "text/html; charset=utf-8" }).end(html));
   await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
   const { port } = server.address() as { port: number };
@@ -190,7 +192,7 @@ export const webvoyagerBenchmark = (o: { now?: () => Date } = {}): Benchmark => 
       const task = tasks.find((t) => t.id === item.id);
       if (!task) throw new Error(`webvoyager has no case ${item.id}`);
       const page = await startPage(task);
-      const episode: Episode = { url: page.url, goal: `${task.goal}\n\nDo this on ${task.web}. When you are done, reply with your answer.`, startPath: "/", close: page.close };
+      const episode: Episode = { url: page.url, goal: `${task.goal}\n\nDo this on ${task.web}. ${siteNote(task.web)} When you are done, reply with your answer.`, startPath: "/", close: page.close };
       started.set(episode, task);
       return episode;
     },

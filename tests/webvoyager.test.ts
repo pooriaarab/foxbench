@@ -75,6 +75,8 @@ const scripted = (name: string, answer: (id: string) => string): Adapter => ({
     const page = await (await fetch(url)).text();
     const id = /data-case="([^"]+)"/.exec(page)![1]!;
     goals.push(goal);
+    expect(page).toContain("is allowed");
+    expect(goal).toContain("is allowed");
     expect(goal).toContain(/href="([^"]+)"/.exec(page)![1]!.replace(/&#47;/g, "/"));
     return { done: true, log: "searched the site", answer: answer(id) };
   },

@@ -60,6 +60,8 @@ const scripted = (name: string, answer: (id: string) => string): Adapter => ({
   async runTask({ url, goal }) {
     const page = await (await fetch(url)).text();
     const id = /data-case="([^"]+)"/.exec(page)![1]!;
+    expect(page).toContain("is allowed");
+    expect(goal).toContain("is allowed");
     expect(goal).toContain(ROWS.find((r) => r.task_id === id)!.website);
     return { done: true, log: "clicked Search, read the result", answer: answer(id) };
   },

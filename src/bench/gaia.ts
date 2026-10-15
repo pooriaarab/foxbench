@@ -11,6 +11,7 @@ import { basename, join } from "node:path";
 import { asyncBufferFromFile, parquetReadObjects } from "hyparquet";
 import { compressors } from "hyparquet-compressors";
 import { pickSubset } from "./subsets.js";
+import { OPEN_WEB_NOTE } from "./open-web.js";
 import type { BenchContext, Benchmark, Case, Episode, Readiness } from "./types.js";
 import { locked } from "./webgames.js";
 
@@ -104,7 +105,8 @@ async function startPage(ctx: BenchContext, task: GaiaTask) {
   }
   const html = `<!doctype html><meta charset="utf-8"><title>GAIA</title><main data-case="${escape(task.task_id)}"><p>${escape(task.Question)}</p>
 ${name ? `<p>Attached file: <a href="/files/${encodeURIComponent(name)}">${escape(name)}</a></p>` : ""}
-<form action="https://www.google.com/search" method="get"><input name="q" aria-label="Search the web"><button>Search</button></form></main>`;
+<form action="https://www.google.com/search" method="get"><input name="q" aria-label="Search the web"><button>Search</button></form>
+<p>${OPEN_WEB_NOTE}</p></main>`;
   const server = createServer((req, res) => {
     if (name && req.url === `/files/${encodeURIComponent(name)}`) return void res.writeHead(200, { "content-type": "application/octet-stream" }).end(readFileSync(file));
     res.writeHead(200, { "content-type": "text/html; charset=utf-8" }).end(html);
@@ -152,7 +154,7 @@ export const gaiaBenchmark = (): Benchmark => {
       const task = tasks.find((t) => t.task_id === item.id);
       if (!task || !context) throw new Error(`gaia has no case ${item.id}`);
       const page = await startPage(context, task);
-      const episode: Episode = { url: page.url, goal: `${task.Question}\n\nUse the web, and the attached file when there is one. Reply with the final answer only.`, startPath: "/", close: page.close };
+      const episode: Episode = { url: page.url, goal: `${task.Question}\n\n${OPEN_WEB_NOTE} Use the web, and the attached file when there is one. Reply with the final answer only.`, startPath: "/", close: page.close };
       golds.set(episode, task["Final answer"]);
       return episode;
     },

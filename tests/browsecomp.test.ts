@@ -60,6 +60,8 @@ const scripted = (name: string, answer: (row: (typeof ROWS)[number]) => string):
     const page = await (await fetch(url)).text();
     const row = ROWS.find((r) => goal.includes(r.problem))!;
     expect(page).toContain(row.problem);
+    expect(page).toContain("not a sandbox");
+    expect(goal).toContain("not a sandbox");
     expect(goal).toContain("Exact Answer:");
     return { done: true, log: `looked up ${row.problem}`, answer: answer(row) };
   },

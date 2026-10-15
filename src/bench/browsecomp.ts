@@ -14,6 +14,7 @@ import { join } from "node:path";
 import { mask, passagePatterns, secretPatterns } from "./mask.js";
 import { judgeWith, type Judge } from "./judge.js";
 import { pickSubset } from "./subsets.js";
+import { OPEN_WEB_NOTE } from "./open-web.js";
 import type { BenchContext, Benchmark, Case, Episode, Readiness } from "./types.js";
 import { locked } from "./webgames.js";
 
@@ -65,7 +66,8 @@ const escape = (s: string) => s.replace(/[&<>"]/g, (c) => `&#${c.charCodeAt(0)};
 /** A local start page with the question and a search form. */
 async function startPage(id: string, question: string) {
   const html = `<!doctype html><meta charset="utf-8"><title>BrowseComp</title><main data-case="${escape(id)}"><p>${escape(question)}</p>
-<form action="https://www.google.com/search" method="get"><input name="q" aria-label="Search the web"><button>Search</button></form></main>`;
+<form action="https://www.google.com/search" method="get"><input name="q" aria-label="Search the web"><button>Search</button></form>
+<p>${OPEN_WEB_NOTE}</p></main>`;
   const server = createServer((_req, res) => res.writeHead(200, { "content-type": "text/html; charset=utf-8" }).end(html));
   await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
   const { port } = server.address() as { port: number };
@@ -134,7 +136,7 @@ export const browsecompBenchmark = (o: { sha256?: string } = {}): Benchmark => {
       const row = rows.find((r) => r.id === item.id);
       if (!row) throw new Error(`browsecomp has no case ${item.id}`);
       const page = await startPage(row.id, row.problem);
-      const episode: Episode = { url: page.url, goal: `${row.problem}\n\nWhen you are done, reply in this format:\nExplanation: <your reasoning>\nExact Answer: <your succinct final answer>\nConfidence: <0% to 100%>`, startPath: "/", close: page.close };
+      const episode: Episode = { url: page.url, goal: `${row.problem}\n\n${OPEN_WEB_NOTE} When you are done, reply in this format:\nExplanation: <your reasoning>\nExact Answer: <your succinct final answer>\nConfidence: <0% to 100%>`, startPath: "/", close: page.close };
       started.set(episode, row);
       return episode;
     },
