@@ -27,6 +27,7 @@ import { deepshopBenchmark } from "./deepshop.js";
 import { webtailbenchBenchmark } from "./webtailbench.js";
 import { webvoyagerBenchmark } from "./webvoyager.js";
 import { webgamesBenchmark } from "./webgames.js";
+import { agentdamBenchmark } from "./agentdam.js";
 import { mypcbenchBenchmark } from "./mypcbench/index.js";
 import { redteamcuaBenchmark } from "./redteamcua.js";
 import { waspBenchmark } from "./wasp/index.js";
@@ -67,6 +68,7 @@ export const benchmarks: Benchmark[] = [
   waspBenchmark(),
   stwabBenchmark(),
   webmallBenchmark(),
+  agentdamBenchmark(),
 ];
 
 export const benchmarkById = (id: string): Benchmark | undefined => benchmarks.find((b) => b.id === id);
