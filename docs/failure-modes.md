@@ -1056,8 +1056,10 @@ need the Wikipedia site that wav-full runs, not this env. The tests are in
 | VW5 | A case changes a site and the next case starts from the change. | `POST /reset/shopping` and `/reset/reddit` recreate the container from its image; `/reset/classifieds` posts the token to the site's own reset. | `VW5 ...` |
 | VW6 | The reset service accepts any path or method, or a failed reset answers 200. | Only `POST /reset/<site>` for a known site resets; anything else is 404 or 405 and changes nothing. A failed reset is 500 with the reason. | `VW6 ...` |
 | VW7 | The env tunnels a port nothing serves, or two ports collide with wav-core's local ports. | One site table gives the tunnel ports, the `-p` mappings and the reset service's port; the local ports are not wav-core's. | `VW7 ...` |
-| VW8 | The VM is too small for the images (about 45 GB pulled for shopping and reddit) and boot fails halfway. | n2-standard-8 and a 100 GB disk. | `VW8 ...` |
+| VW8 | The VM is too small for the images (Classifieds is 72 GB pulled and 155 GB unpacked, shopping and reddit 45 GB pulled) and the pull hangs on a full disk. | n2-standard-8 and a 500 GB disk: the Classifieds image alone is 72 GB pulled and 155 GB unpacked, and a full 100 GB disk hung its pull. | `VW8 ...` |
 | VW9 | The Classifieds data loads twice or not at all on a reboot. | The data loads when the DB container is first made (MySQL's init folder); a reboot only starts the containers. | `VW9 ...` |
+| VW10 | The init folder is root-only (the token step's `umask 077` leaked into the unpack), so the MySQL user cannot read it, its entrypoint loops on "Permission denied" and the data never loads. | The folder is 755 and its files 644 after the unpack. | `VW10 ...` |
+| VW11 | A `docker pull` hangs for the whole boot, and `up` waits the full tunnel time to say nothing. | Each pull is limited to 45 minutes and tried twice; a pull that outlasts that exits non-zero with the image, the time and "giving up" on stderr. | `VW11 ...` |
 
 ## AMO release build and listed submission (`scripts/amo-listing.mjs`)
 

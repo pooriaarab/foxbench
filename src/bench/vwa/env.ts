@@ -17,6 +17,10 @@ export const CLASSIFIEDS_ZIP = "https://archive.org/download/classifieds_docker_
 export const CLASSIFIEDS_ZIP_SHA1 = "b351be6468feeeb0b9b261dfc0ad9e8c2966d718";
 // Digests read on 2026-10-15 from the registry for jykoh/classifieds:latest and mysql:8.1, the tags of upstream's compose file.
 export const CLASSIFIEDS_IMAGE = "docker.io/jykoh/classifieds@sha256:a2a794da92f62a8d7ffd02314e4fab40ba6c7fc08f568371608f88f0ef605e43";
+/** One `docker pull` may run this long. The Classifieds image is one 73 GB layer (71.6 GiB compressed), so a pull is slow, and it must not hang the boot. */
+export const PULL_TIMEOUT_SECONDS = 2700;
+/** A timed-out pull is tried again; Docker keeps the layers it finished. */
+export const PULL_ATTEMPTS = 2;
 export const MYSQL_IMAGE = "docker.io/library/mysql@sha256:f61944ff3f2961363a4d22913b2ac581523273679d7e14dd26e8db8c9f571a7e";
 
 /** The WebArena-Verified sites VWA uses, as wav-core runs them. */
@@ -40,19 +44,33 @@ D=\${FOXBENCH_DIR:-/opt/foxbench}
 mkdir -p "$D"
 command -v docker >/dev/null || { apt-get update -q && DEBIAN_FRONTEND=noninteractive apt-get install -y -q docker.io; }
 systemctl enable --now docker
+# A pull that outlasts its time fails with the reason, instead of hanging the boot.
+pull() {
+  n=1
+  while :; do
+    rc=0
+    timeout -k 30 \${PULL_TIMEOUT:-${PULL_TIMEOUT_SECONDS}} docker pull -q "$1" >/dev/null || rc=$?
+    [ $rc -eq 0 ] && return
+    if [ $rc -eq 124 ]; then echo "vwa: docker pull $1 timed out after \${PULL_TIMEOUT:-${PULL_TIMEOUT_SECONDS}}s (attempt $n of ${PULL_ATTEMPTS})" >&2
+    else echo "vwa: docker pull $1 failed with status $rc (attempt $n of ${PULL_ATTEMPTS})" >&2; fi
+    [ $n -ge ${PULL_ATTEMPTS} ] && { echo "vwa: giving up on $1; the site it serves will not start" >&2; exit 1; }
+    n=$((n + 1))
+  done
+}
 run() {
   name=$1 image=$2
   shift 2
   if docker inspect "$name" >/dev/null 2>&1; then docker start "$name"; return; fi
-  docker pull -q "$image"
+  pull "$image"
   docker run -d --name "$name" --restart unless-stopped "$@" "$image"
 }
 ${sites.join("\n")}
 docker network inspect vwa >/dev/null 2>&1 || docker network create vwa
 # The reset token is this VM's own; upstream's is public in its zip.
-[ -f "$D/classifieds.token" ] || { umask 077; od -An -N16 -tx1 /dev/urandom | tr -d ' \\n' > "$D/classifieds.token"; }
+[ -f "$D/classifieds.token" ] || ( umask 077; od -An -N16 -tx1 /dev/urandom | tr -d ' \\n' > "$D/classifieds.token" )
 if ! docker inspect vwa-classifieds-db >/dev/null 2>&1; then
-  # MySQL loads the files of its init folder when its container is first made.
+  # MySQL loads the files of its init folder when its container is first made, so the folder holds the data file alone: the zip's
+  # classifieds_restore.sql (deletes rows of tables that do not exist yet) and init_db.sh (loads the data a second time) abort the init.
   curl -fsSL -o "$D/classifieds.zip" ${CLASSIFIEDS_ZIP}
   echo "${CLASSIFIEDS_ZIP_SHA1}  $D/classifieds.zip" | sha1sum -c -
   python3 - "$D/classifieds.zip" "$D/classifieds-init" <<'PY'
@@ -61,9 +79,12 @@ zf = zipfile.ZipFile(sys.argv[1])
 os.makedirs(sys.argv[2], exist_ok=True)
 for item in zf.infolist():
     parts = item.filename.split("/")
-    if len(parts) == 3 and parts[1] == "mysql" and parts[2]:
+    if len(parts) == 3 and parts[1] == "mysql" and parts[2] == "osclass_craigslist.sql":
         open(os.path.join(sys.argv[2], parts[2]), "wb").write(zf.read(item))
 PY
+  # The mysql user (uid 999), not root, reads this folder: root-only modes made its entrypoint loop on "Permission denied".
+  chmod 755 "$D/classifieds-init"
+  chmod 644 "$D"/classifieds-init/*
 fi
 run vwa-classifieds-db ${MYSQL_IMAGE} --network vwa --network-alias db -e MYSQL_ROOT_PASSWORD=password -e MYSQL_DATABASE=osclass -v "$D/classifieds-init:/docker-entrypoint-initdb.d"
 run vwa-classifieds ${CLASSIFIEDS_IMAGE} --network vwa -p ${CLASSIFIEDS_PORT}:${CLASSIFIEDS_PORT} -e CLASSIFIEDS=http://127.0.0.1:${CLASSIFIEDS_PORT}/ -e RESET_TOKEN="$(cat "$D/classifieds.token")"

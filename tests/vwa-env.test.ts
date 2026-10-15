@@ -2,13 +2,13 @@
 // startup script and the reset service run for real, with fake `docker`,
 // `curl`, `sha1sum` and `systemctl` programs first on PATH that record what they were asked.
 import { spawn, spawnSync } from "node:child_process";
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { createServer as http, type Server } from "node:http";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { vwaResetService } from "../src/bench/vwa/env.js";
+import { PULL_ATTEMPTS, PULL_TIMEOUT_SECONDS, vwaResetService } from "../src/bench/vwa/env.js";
 import { cloudEnvs } from "../src/env/envs.js";
 
 const env = cloudEnvs.find((e) => e.name === "vwa")!;
@@ -28,6 +28,7 @@ function fakes(sha = "match") {
 case "$1" in
   inspect) grep -qx "$2" ${dir}/exists 2>/dev/null; exit $? ;;
   network) [ "$2" = inspect ] && exit 1; exit 0 ;;
+  pull) [ -f ${dir}/slowpull ] && exec sleep 30 ;;
   run) echo "$*" | sed -n 's/.*--name \\([^ ]*\\).*/\\1/p' >> ${dir}/exists ;;
 esac
 exit 0`);
@@ -37,6 +38,7 @@ while [ $# -gt 0 ]; do
 z = zipfile.ZipFile(sys.argv[1], "w")
 z.writestr("classifieds_docker_compose/docker-compose.yml", "services: {}")
 z.writestr("classifieds_docker_compose/mysql/init_db.sh", "echo init")
+z.writestr("classifieds_docker_compose/mysql/classifieds_restore.sql", "DELETE FROM oc_t_item;")
 z.writestr("classifieds_docker_compose/mysql/osclass_craigslist.sql", "-- data --")' "$2"; fi
   shift
 done`);
@@ -46,9 +48,9 @@ done`);
   return { dir, bin, log, lines: () => (existsSync(log) ? readFileSync(log, "utf8").trim().split("\n") : []) };
 }
 
-function boot(f: ReturnType<typeof fakes>) {
+function boot(f: ReturnType<typeof fakes>, extra: Record<string, string> = {}) {
   const state = join(f.dir, "state");
-  const r = spawnSync("sh", ["-c", env.startup], { encoding: "utf8", env: { ...process.env, PATH: `${f.bin}:${process.env.PATH}`, FOXBENCH_DIR: state } });
+  const r = spawnSync("sh", ["-c", env.startup], { encoding: "utf8", env: { ...process.env, PATH: `${f.bin}:${process.env.PATH}`, FOXBENCH_DIR: state, ...extra } });
   return { status: r.status, stderr: r.stderr, state };
 }
 
@@ -195,10 +197,46 @@ describe("VW7 one port table", () => {
   });
 });
 
+describe("VW10 the init folder is readable by the mysql user", () => {
+  it("leaves the folder 755 and its files 644, even though the token step set umask 077", () => {
+    const f = fakes();
+    const b = boot(f);
+    expect(b.status).toBe(0);
+    const dir = join(b.state, "classifieds-init");
+    expect(statSync(dir).mode & 0o777).toBe(0o755);
+    expect(statSync(join(dir, "osclass_craigslist.sql")).mode & 0o777).toBe(0o644);
+  });
+
+  it("holds the data file alone: the zip's restore script and init_db.sh abort MySQL's init on an empty database", () => {
+    const b = boot(fakes());
+    expect(readdirSync(join(b.state, "classifieds-init"))).toEqual(["osclass_craigslist.sql"]);
+  });
+});
+
+describe("VW11 a pull that outlasts its time fails with the reason", () => {
+  it("stops a hung pull, tries again, then exits non-zero naming the image and the time", () => {
+    const f = fakes();
+    writeFileSync(join(f.dir, "slowpull"), "");
+    const started = Date.now();
+    const b = boot(f, { PULL_TIMEOUT: "1" });
+    expect(Date.now() - started).toBeLessThan(20_000);
+    expect(b.status).not.toBe(0);
+    expect(b.stderr).toContain("docker pull am1n3e/webarena-verified-shopping");
+    expect(b.stderr).toMatch(/timed out after 1s \(attempt 1 of 2\)/);
+    expect(b.stderr).toMatch(/timed out after 1s \(attempt 2 of 2\)/);
+    expect(b.stderr).toContain("giving up");
+    expect(f.lines().filter((l) => l.startsWith("docker run"))).toEqual([]);
+  });
+
+  it("never lets the default wait outlast the boot", () => {
+    expect(PULL_TIMEOUT_SECONDS * PULL_ATTEMPTS / 60).toBeLessThan(env.bootMinutes);
+  });
+});
+
 describe("VW8 the VM size", () => {
-  it("is n2-standard-8 with a 100 GB disk", () => {
+  it("is n2-standard-8 with a 500 GB disk", () => {
     expect(env.machineType).toBe("n2-standard-8");
-    expect(env.diskGb).toBe(100);
+    expect(env.diskGb).toBe(500);
   });
 });
 
