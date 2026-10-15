@@ -19,6 +19,8 @@ export interface TaskResult {
   tier: string | null;
   trap: boolean;
   success: boolean;
+  /** Partial credit from the benchmark's scorer, where it has one. */
+  score?: number;
   attack: "followed" | "blocked" | null;
   secure: boolean;
   reasons: string[];
@@ -67,8 +69,8 @@ export interface Scoreboard {
   utilityUnderAttack: number;
   /** Tasks and passes per suite. */
   suites: Record<string, { tasks: number; passed: number }>;
-  /** Tasks and passes per benchmark. */
-  benchmarks: Record<string, { tasks: number; passed: number }>;
+  /** Tasks and passes per benchmark, and the mean partial credit where the benchmark gives one. */
+  benchmarks: Record<string, { tasks: number; passed: number; meanScore?: number }>;
   /** Benchmarks that could not run here, and why. */
   skipped: { benchmark: string; reason: string; fix?: string }[];
   medianRequests: number;
@@ -113,12 +115,17 @@ export interface BenchRunOptions {
   judges?: Judge[];
 }
 
-function countBy(results: TaskResult[], key: "suite" | "benchmark"): Record<string, { tasks: number; passed: number }> {
-  const out: Record<string, { tasks: number; passed: number }> = {};
+function countBy(results: TaskResult[], key: "suite" | "benchmark"): Record<string, { tasks: number; passed: number; meanScore?: number }> {
+  const out: Record<string, { tasks: number; passed: number; meanScore?: number }> = {};
   for (const r of results) {
     const s = (out[r[key]] ??= { tasks: 0, passed: 0 });
     s.tasks += 1;
     if (r.success) s.passed += 1;
+  }
+  // A case with no score counts as 0 in a benchmark that gives scores.
+  if (key === "benchmark") for (const [id, s] of Object.entries(out)) {
+    const scored = results.filter((r) => r.benchmark === id);
+    if (scored.some((r) => r.score !== undefined)) s.meanScore = scored.reduce((n, r) => n + (r.score ?? 0), 0) / s.tasks;
   }
   return out;
 }
@@ -197,7 +204,7 @@ async function runCase(bench: Benchmark, env: Env, item: Case, options: BenchRun
   const egress = trace.filter((r) => r.egress);
   return {
     id: item.id, benchmark: bench.id, suite: item.suite ?? bench.id, tier: item.tier ?? null, trap: Boolean(item.trap),
-    success: verdict.success, attack: verdict.attack, secure: verdict.success && verdict.attack !== "followed", reasons: verdict.reasons, ms: ran.ms,
+    success: verdict.success, ...(verdict.score === undefined ? {} : { score: verdict.score }), attack: verdict.attack, secure: verdict.success && verdict.attack !== "followed", reasons: verdict.reasons, ms: ran.ms,
     done: Boolean(ran.output.done), adapterError: ran.adapterError, endedEarly: ran.endedEarly, log: String(ran.output.log ?? "").slice(0, 4000),
     requests: log.length, posts: log.filter((r) => r.method === "POST").length, firstActionMs: first ? first.at : null,
     egress: { requests: egress.length, bytes: egress.reduce((n, r) => n + r.bytes, 0) }, asks: verdict.asks ?? (episode?.userChannel?.turns.filter((t) => t.from === "agent").length ?? 0), user: episode?.userChannel?.by ?? null, agentMetrics: parseMetrics(ran.output.metrics),

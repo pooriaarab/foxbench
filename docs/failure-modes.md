@@ -599,6 +599,27 @@ benchmark whose scripted agent passes a fixed pattern of trials.
 | K5 | Two trials of a case share one row, so a reader cannot tell them apart. | Each result names its trial (0 to n - 1). | `K5 ...` |
 | K6 | `--trials 0`, a fraction or text runs nothing, or runs once and exits 0. | Exit 2 and say what `--trials` takes. Without the flag, each case runs once and the board has no pass^k. | `K6 ...` |
 
+## AssistantBench (`src/bench/assistantbench.ts`)
+
+AssistantBench's dev split is 33 open-web questions. The agent starts on a
+local start page and works on the live web; its answer is scored by
+AssistantBench's own `question_scorer`, fetched from BrowserGym at a pinned
+commit and run through `uv`. The tests are in `tests/assistantbench.test.ts`
+and run the real upstream scorer on the real dev answers.
+
+| # | Failure mode | Wanted behaviour | Test |
+|---|---|---|---|
+| A1 | The dataset or the scorer moves upstream, so a score is for data or code nobody pinned. | The dataset file is fetched at a pinned revision and the scorer at a pinned BrowserGym commit, into the cache; the cache's `HEAD` must equal the pin. Nothing fetched is committed. | `A1 ...` |
+| A2 | The case list is wrong: not 33 cases, ids that change between versions, or a lost difficulty. | 33 cases with upstream's `id`, unique, tier `medium` or `hard` from upstream's difficulty. | `A2 ...` |
+| A3 | An agent that does nothing, or says "done", passes. | The scorer reads only the answer; `noop` and a liar pass 0 cases. | `A3 ...` |
+| A4 | A correct answer fails on its format: a list answer as lines, a JSON answer, a number with a unit. | The goal asks for a JSON list when there are several items. A scripted perfect agent that follows the goal passes all 33 with the upstream scorer. | `A4 ...` |
+| A5 | A wrong answer passes, or partial credit counts as a pass. | A wrong answer fails every case. A near-miss number gets its partial credit in `score` and fails; the board shows the mean score, which is the number HAL publishes. | `A5 ...` |
+| A6 | The scorer runs from inside the fetched tree, so a file planted there runs as foxbench. | The helper script lives in a directory foxbench owns in the cache and runs with `uv run --isolated` and `python -I`; it only imports the evaluator package by path. | `A6 ...` |
+| A7 | `check()` says ready when `uv` or `git` is missing, and every case fails in the judge. | `check()` is not ready, with a fix. | `A7 ...` |
+| A8 | The start page names the site's own address, so the agent goes around the recording proxy. | The agent gets the proxy's URL of a local start page with the question and a search form; the goal names no address. | `A8 ...` |
+| A9 | Live sites change, so a pass today is a fail next month. | A known limit of live-web benchmarks (plan 6.1 rule 4): the board's date is the run date; compare only with runs from the same week. | - |
+| A10 | A scorer process per case loads numpy and scipy each time, so a run, and CI next to other tests, slows down until other tests time out. | One scorer process per run, started in `up` and closed in `down`; a scorer error on one answer scores that answer 0 with the error's name and the process goes on. | `A4 ...` (33 cases in seconds) |
+
 ## AMO release build and listed submission (`scripts/amo-listing.mjs`)
 
 `pnpm check:amo` reads `dist-ext/`, which is what `release.yml` signs. Each

@@ -3,6 +3,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { SUITES } from "../tasks.js";
 import { agentdojoBenchmark } from "./agentdojo/index.js";
+import { assistantbenchBenchmark } from "./assistantbench.js";
 import { eiaBenchmark } from "./eia.js";
 import { browsesafeBenchmark } from "./browsesafe.js";
 import { slackBenchmark } from "./agentdojo/slack.js";
@@ -26,6 +27,7 @@ export const benchmarks: Benchmark[] = [
   browsesafeBenchmark(),
   waiBenchmark(),
   webarenaVerified(),
+  assistantbenchBenchmark(),
 ];
 
 export const benchmarkById = (id: string): Benchmark | undefined => benchmarks.find((b) => b.id === id);
