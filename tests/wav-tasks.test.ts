@@ -1,9 +1,10 @@
 // Tests for the WebArena-Verified task failure modes in docs/failure-modes.md
-// (WT1-WT10). They load the real task list through uv, then start real cases
+// (WT1-WT11). They load the real task list through uv, then start real cases
 // against fake sites on the tunnel ports, moved by an offset so a local
 // Docker run of the real containers does not clash.
 import { readFileSync } from "node:fs";
 import { createServer, type Server } from "node:http";
+import { createServer as createTcp } from "node:net";
 import { join } from "node:path";
 import { afterEach, beforeAll, describe, expect, it } from "vitest";
 import { benchContext } from "../src/bench/registry.js";
@@ -13,7 +14,11 @@ import { freeBase } from "./free-base.js";
 
 // Below the ephemeral range, in a band of this file's own.
 const OFFSET = await freeBase(13500, 1000, [...wavSites.flatMap((s) => [s.port, s.ctrlPort]), 8870]);
-const bench = webarenaVerified({ offset: OFFSET });
+// The sites' own ports (the proxies', which also appear in each Host header and
+// start URL) move too, so no file holds 7770, 7780, 8023 or 9999 (WT11).
+const PORT_OFFSET = await freeBase(14600, 1000, wavSites.map((s) => s.port));
+const at = (port: number) => port + PORT_OFFSET;
+const bench = webarenaVerified({ offset: OFFSET, portOffset: PORT_OFFSET });
 const ctx = benchContext();
 let all: Case[] = [];
 let env: Env = {};
@@ -48,8 +53,8 @@ async function fakeGitlab() {
     }
     const form = new URLSearchParams(body);
     const ok = req.method === "POST" && req.headers.cookie === "_gitlab_session=anon" && form.get("authenticity_token") === "tok+en/="
-      && form.get("user[login]") === "byteblaze" && form.get("user[password]") === "hello1234" && req.headers.host === "127.0.0.1:8023";
-    res.writeHead(ok ? 302 : 422, ok ? { location: "http://127.0.0.1:8023/", "set-cookie": "_gitlab_session=signed-in; path=/; HttpOnly" } : {}).end();
+      && form.get("user[login]") === "byteblaze" && form.get("user[password]") === "hello1234" && req.headers.host === `127.0.0.1:${at(8023)}`;
+    res.writeHead(ok ? 302 : 422, ok ? { location: `http://127.0.0.1:${at(8023)}/`, "set-cookie": "_gitlab_session=signed-in; path=/; HttpOnly" } : {}).end();
   });
   servers.push(server);
   await new Promise<void>((r) => server.listen(8023 + OFFSET, "127.0.0.1", r));
@@ -87,14 +92,14 @@ describe("WT4 the start URL and the base URL", () => {
     const seen = await fakeSite(7780);
     const admin = await bench.start(env, byId("0"));
     // shopping_admin's site URL is upstream's http://<host>:7780/admin.
-    expect(admin).toMatchObject({ startPath: "/admin/", port: 7780, headers: { host: "127.0.0.1:7780" } });
+    expect(admin).toMatchObject({ startPath: "/admin/", port: at(7780), headers: { host: `127.0.0.1:${at(7780)}` } });
     expect(new URL(admin.url).pathname).toBe("/admin/");
     expect((await fetch(admin.url, { headers: { "x-probe": "1" } })).status).toBe(200);
     expect(seen).toContainEqual(expect.objectContaining({ "x-probe": "1" }));
     const shop = await bench.start(env, byId("21"));
     expect(new URL(shop.url).pathname).toMatch(/^\/6s-wireless-headphones-.*\.html$/);
     expect(shop.startPath).toBe(new URL(shop.url).pathname);
-    expect(shop.port).toBe(7770);
+    expect(shop.port).toBe(at(7770));
     expect(shop.url).not.toContain("__");
     await Promise.all([admin.close?.(), shop.close?.()]);
   });
@@ -112,7 +117,7 @@ describe("WT5 logged in, with no password in sight", () => {
   it("signs in to GitLab and sends the session cookie", async () => {
     await fakeGitlab();
     const gitlab = await bench.start(env, byId("44"));
-    expect(gitlab.headers).toMatchObject({ host: "127.0.0.1:8023", cookie: "_gitlab_session=signed-in" });
+    expect(gitlab.headers).toMatchObject({ host: `127.0.0.1:${at(8023)}`, cookie: "_gitlab_session=signed-in" });
     expect(gitlab.goal).not.toContain("_gitlab_session");
   });
 });
@@ -122,12 +127,13 @@ describe("WT6 a task on two sites", () => {
     await fakeGitlab();
     const seen = await fakeSite(9999);
     const episode = await bench.start(env, byId("552"));
-    expect(episode.port).toBe(8023);
-    expect(episode.goal).toContain("http://127.0.0.1:9999/");
-    expect((await fetch("http://127.0.0.1:9999/forums")).status).toBe(200);
-    expect(seen[0]).toMatchObject({ host: "127.0.0.1:9999", "x-postmill-auto-login": "MarvelsGrantMan136:test1234" });
+    const reddit = `http://127.0.0.1:${at(9999)}`;
+    expect(episode.port).toBe(at(8023));
+    expect(episode.goal).toContain(`${reddit}/`);
+    expect((await fetch(`${reddit}/forums`)).status).toBe(200);
+    expect(seen[0]).toMatchObject({ host: `127.0.0.1:${at(9999)}`, "x-postmill-auto-login": "MarvelsGrantMan136:test1234" });
     await episode.close?.();
-    await expect(fetch("http://127.0.0.1:9999/forums")).rejects.toThrow();
+    await expect(fetch(`${reddit}/forums`)).rejects.toThrow();
   });
 });
 
@@ -136,7 +142,7 @@ describe("WT10 upstream's prompt", () => {
     const admin = await bench.start(env, byId("0"));
     expect(admin.goal).toContain("You are an autonomous web agent");
     expect(admin.goal).toContain("- **Task Objective:** `Get the top-1 best-selling product name(s) in 2022`");
-    expect(admin.goal).toContain("  - http://127.0.0.1:7780/admin/\n");
+    expect(admin.goal).toContain(`  - http://127.0.0.1:${at(7780)}/admin/\n`);
     expect(admin.goal).toContain('"task_type": "RETRIEVE|MUTATE|NAVIGATE"');
     expect(admin.goal).not.toMatch(/\{\{|\{%/);
     await fakeGitlab();
@@ -144,8 +150,24 @@ describe("WT10 upstream's prompt", () => {
     const both = await bench.start(env, byId("552"));
     expect(both.goal).toContain("### GitLab");
     expect(both.goal).toContain("### Discussion Forum");
-    expect(both.goal).toMatch(/ {2}- http:\/\/127\.0\.0\.1:8023\/\S*\n {2}- http:\/\/127\.0\.0\.1:9999\//);
+    expect(both.goal).toMatch(new RegExp(` {2}- http://127\\.0\\.0\\.1:${at(8023)}/\\S*\\n {2}- http://127\\.0\\.0\\.1:${at(9999)}/`));
     await both.close?.();
+  });
+});
+
+describe("WT11 a busy site port", () => {
+  it("fails start at once and names the port and the serial rule", async () => {
+    await fakeGitlab();
+    await fakeSite(9999);
+    const holder = createTcp();
+    await new Promise<void>((r) => holder.listen(at(9999), "127.0.0.1", r));
+    try {
+      const began = Date.now();
+      await expect(bench.start(env, byId("552"))).rejects.toThrow(new RegExp(`port ${at(9999)} is in use.*serially or on separate hosts`));
+      expect(Date.now() - began).toBeLessThan(30_000);
+    } finally {
+      await new Promise((r) => holder.close(r));
+    }
   });
 });
 

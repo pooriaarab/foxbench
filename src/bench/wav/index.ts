@@ -94,10 +94,10 @@ class Reset(http.server.BaseHTTPRequestHandler):
 http.server.ThreadingHTTPServer(("0.0.0.0", ${RESET_PORT}), Reset).serve_forever()
 `;
 
-/** Each site's URL and env-ctrl URL on the tunnel, or on FOXBENCH_WAV_HOST. */
-export function wavUrls(env: NodeJS.ProcessEnv, offset = TUNNEL_OFFSET) {
+/** Each site's URL and env-ctrl URL on the tunnel, or on FOXBENCH_WAV_HOST, and `port`, where its proxy listens. */
+export function wavUrls(env: NodeJS.ProcessEnv, offset = TUNNEL_OFFSET, portOffset = 0) {
   const host = env.FOXBENCH_WAV_HOST || "127.0.0.1";
-  return wavSites.map((s) => ({ site: s, url: `http://${host}:${s.port + offset}`, ctrl: `http://${host}:${s.ctrlPort + offset}`, reset: `http://${host}:${RESET_PORT + offset}/reset/${s.id}` }));
+  return wavSites.map((s) => ({ site: s, port: s.port + portOffset, url: `http://${host}:${s.port + offset}`, ctrl: `http://${host}:${s.ctrlPort + offset}`, reset: `http://${host}:${RESET_PORT + offset}/reset/${s.id}` }));
 }
 
 export type SiteUrl = ReturnType<typeof wavUrls>[number];
@@ -135,7 +135,7 @@ async function gitlabSession(u: SiteUrl, host: string): Promise<string> {
 
 /** What the proxy adds on each request to a site: its own Host, so links stay on the proxy port, and the login (P3). */
 export async function siteHeaders(u: SiteUrl): Promise<Record<string, string>> {
-  const host = `127.0.0.1:${u.site.port}`;
+  const host = `127.0.0.1:${u.port}`;
   const { header, user, password } = u.site.login;
   return { host, ...(header ? { [header]: `${user}:${password}` } : { cookie: await gitlabSession(u, host) }) };
 }
@@ -158,7 +158,6 @@ export async function probe(url: string, ctrl: string, health: string): Promise<
   }
 }
 
-/** `offset` moves the tunnel ports, for tests. */
 interface WavEnv {
   ctx: BenchContext;
   sites: SiteUrl[];
@@ -188,8 +187,8 @@ export async function reset(u: SiteUrl, waitMs: number): Promise<void> {
 /** The file of the sites to reset before their next case, per host and tunnel offset (WJ6). */
 export const wavDirtyFile = (ctx: BenchContext, offset = TUNNEL_OFFSET) => join(wavDir(ctx), `dirty-${ctx.env.FOXBENCH_WAV_HOST || "127.0.0.1"}-${offset}.json`);
 
-/** `offset` moves the tunnel ports and `resetWaitMs` shortens the wait for a reset, for tests. */
-export const webarenaVerified = (options: { offset?: number; resetWaitMs?: number } = {}): Benchmark => ({
+/** For tests: `offset` moves the tunnel ports, `portOffset` the sites' own (the proxies') ports, and `resetWaitMs` shortens the wait for a reset. */
+export const webarenaVerified = (options: { offset?: number; portOffset?: number; resetWaitMs?: number } = {}): Benchmark => ({
   id: "webarena-verified",
   title: "WebArena-Verified",
   upstream: { repo: "https://github.com/ServiceNow/webarena-verified", ref: "v1.2.3", paper: "https://openreview.net/forum?id=94tlGxmqkN" },
@@ -200,7 +199,7 @@ export const webarenaVerified = (options: { offset?: number; resetWaitMs?: numbe
   async check(ctx: BenchContext): Promise<Readiness> {
     const noUv = uvMissing(ctx);
     if (noUv) return { ready: false, reason: `the task list needs uv: ${noUv}`, fix: "install uv (https://docs.astral.sh/uv/) or set FOXBENCH_UV" };
-    const urls = wavUrls(ctx.env, options.offset);
+    const urls = wavUrls(ctx.env, options.offset, options.portOffset);
     const down = (await Promise.all(urls.map(async (u) => ({ id: u.site.id, why: await probe(u.url, u.ctrl, u.site.health) })))).filter((d) => d.why);
     if (!down.length) return { ready: true };
     return { ready: false, reason: down.map((d) => `${d.id}: ${d.why}`).join("; "),
@@ -215,7 +214,7 @@ export const webarenaVerified = (options: { offset?: number; resetWaitMs?: numbe
     const { tasks } = await loadTasks(ctx);
     const dirtyFile = wavDirtyFile(ctx, options.offset);
     const dirty = new Set<string>(existsSync(dirtyFile) ? JSON.parse(readFileSync(dirtyFile, "utf8")) : []);
-    const env: WavEnv = { ctx, sites: wavUrls(ctx.env, options.offset), tasks: new Map(tasks.map((t) => [String(t.id), t])), prompts: await loadPrompts(ctx, tasks), dirty, dirtyFile };
+    const env: WavEnv = { ctx, sites: wavUrls(ctx.env, options.offset, options.portOffset), tasks: new Map(tasks.map((t) => [String(t.id), t])), prompts: await loadPrompts(ctx, tasks), dirty, dirtyFile };
     return env as unknown as Env;
   },
   async start(env, item) {
@@ -242,15 +241,15 @@ export const webarenaVerified = (options: { offset?: number; resetWaitMs?: numbe
     const proxies: RecordingProxy[] = [];
     const stop = () => Promise.all([...proxies.map((p) => p.close()), ...hars.map((h) => h.har.close())]);
     try {
-      for (const u of [first, ...others]) hars.push({ site: u.site.id, har: await startHar(u.url, `http://127.0.0.1:${u.site.port}`) });
-      for (const [i, u] of others.entries()) proxies.push(await startProxy(hars[i + 1]!.har.origin, { port: u.site.port, headers: headers[i + 1]! }));
+      for (const u of [first, ...others]) hars.push({ site: u.site.id, har: await startHar(u.url, `http://127.0.0.1:${u.port}`) });
+      for (const [i, u] of others.entries()) proxies.push(await startProxy(hars[i + 1]!.har.origin, { port: u.port, headers: headers[i + 1]! }));
     } catch (error) {
       await stop();
       throw error;
     }
-    const startUrls = starts.map((s) => `http://127.0.0.1:${site(s.site).site.port}${s.path}`);
+    const startUrls = starts.map((s) => `http://127.0.0.1:${site(s.site).port}${s.path}`);
     const episode: Episode = {
-      url: hars[0]!.har.origin + starts[0]!.path, startPath: starts[0]!.path, port: first.site.port, headers: headers[0]!,
+      url: hars[0]!.har.origin + starts[0]!.path, startPath: starts[0]!.path, port: first.port, headers: headers[0]!,
       goal: fillPrompt(prompts.get(promptName(task))!, task.intent, startUrls),
       close: async () => { await stop(); },
     };
@@ -265,7 +264,7 @@ export const webarenaVerified = (options: { offset?: number; resetWaitMs?: numbe
     for (const { site, har } of run.hars) if (har.entries.some((e) => !READS.includes(e.request.method))) dirty.add(site);
     saveDirty(wav);
     const entries = run.hars.flatMap((h) => h.har.entries).toSorted((a, b) => a.startedDateTime.localeCompare(b.startedDateTime));
-    const urls = Object.fromEntries(sites.map((u) => [`__${u.site.id.toUpperCase()}__`, `http://127.0.0.1:${u.site.port}${u.site.base ?? ""}`]));
+    const urls = Object.fromEntries(sites.map((u) => [`__${u.site.id.toUpperCase()}__`, `http://127.0.0.1:${u.port}${u.site.base ?? ""}`]));
     const score = await judgeCase(ctx, run.task.id, entries, output.answer, urls);
     const success = score.status === "success";
     return { success, score: score.score, attack: null, judgedBy: "programmatic",

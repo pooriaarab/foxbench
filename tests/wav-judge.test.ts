@@ -42,7 +42,10 @@ for t in tasks:
 json.dump(out, sys.stdout)`;
   return JSON.parse(execFileSync(ctx.env.FOXBENCH_UV || "uv", ["run", "-q", "--isolated", "--no-project", "--python", "3.12", "--with", `webarena-verified==${WAV_VERSION}`, "python", "-I", "-c", code, IDS.join(",")], { encoding: "utf8" }));
 }
-const SITE_URL: Record<string, string> = { __SHOPPING__: "http://127.0.0.1:7770", __SHOPPING_ADMIN__: "http://127.0.0.1:7780/admin", __REDDIT__: "http://127.0.0.1:9999", __GITLAB__: "http://127.0.0.1:8023" };
+// The sites' own ports (the proxies') move too, so no file holds 9999 or 8023 (WT11).
+const PORT_OFFSET = await freeBase(15700, 1000, wavSites.map((s) => s.port));
+const at = (port: number) => port + PORT_OFFSET;
+const SITE_URL: Record<string, string> = { __SHOPPING__: `http://127.0.0.1:${at(7770)}`, __SHOPPING_ADMIN__: `http://127.0.0.1:${at(7780)}/admin`, __REDDIT__: `http://127.0.0.1:${at(9999)}`, __GITLAB__: `http://127.0.0.1:${at(8023)}` };
 const render = (url: string) => url.replace(/^__[A-Z_]+__/, (m) => SITE_URL[m]!);
 
 async function listen(server: Server, port: number) {
@@ -62,9 +65,9 @@ beforeAll(async () => {
       for await (const _ of req);
       if (site.id === "gitlab" && req.url === "/users/sign_in") {
         if (req.method === "GET") return res.writeHead(200, { "set-cookie": "_gitlab_session=anon" }).end('<input name="authenticity_token" value="t">');
-        return res.writeHead(302, { location: "http://127.0.0.1:8023/", "set-cookie": "_gitlab_session=in" }).end();
+        return res.writeHead(302, { location: `http://127.0.0.1:${at(8023)}/`, "set-cookie": "_gitlab_session=in" }).end();
       }
-      if (req.method === "POST") return res.writeHead(302, { location: `http://127.0.0.1:${site.port}/f/sci_fi`, "set-cookie": "flash=done; path=/" }).end();
+      if (req.method === "POST") return res.writeHead(302, { location: `http://127.0.0.1:${at(site.port)}/f/sci_fi`, "set-cookie": "flash=done; path=/" }).end();
       res.writeHead(200, { "content-type": req.url?.startsWith("/api") ? "application/json" : "text/html" }).end(req.url?.startsWith("/api") ? '{"ok":true}' : "<p>a page</p>");
     }), site.port);
   }
@@ -96,7 +99,7 @@ const wrong = scripted("wrong", async (id) => {
   const w = want[id]!;
   if (w.method === "POST") await perform({ ...w, post: { ...w.post, "forum[name]": "not_sci_fi" } });
   // A read-only case gets a stray post, so the next case on its site must reset (WJ6).
-  if (id === "27") await page("http://127.0.0.1:9999/submit", { method: "POST", body: "title=spam" });
+  if (id === "27") await page(`http://127.0.0.1:${at(9999)}/submit`, { method: "POST", body: "title=spam" });
   const answer = w.answer as { retrieved_data: unknown };
   return { done: true, log: "", answer: JSON.stringify({ ...answer, retrieved_data: answer.retrieved_data ? ["something else"] : null }) };
 });
@@ -105,7 +108,7 @@ const run = (adapter: Adapter, ids = IDS, opts = {}, keep = false) => {
   if (!keep) rmSync(join(wavDir(ctx), `dirty-127.0.0.1-${OFFSET}.json`), { force: true });
   return runOnce(adapter, ids, opts);
 };
-const runOnce = (adapter: Adapter, ids: string[], opts: object) => runBenchmarks({ adapter, runs: [{ benchmark: webarenaVerified({ offset: OFFSET, ...opts }), subset: "full" }], ids, timeoutMs: 60_000 });
+const runOnce = (adapter: Adapter, ids: string[], opts: object) => runBenchmarks({ adapter, runs: [{ benchmark: webarenaVerified({ offset: OFFSET, portOffset: PORT_OFFSET, ...opts }), subset: "full" }], ids, timeoutMs: 60_000 });
 const har = (id: string) => JSON.parse(readFileSync(join(wavDir(ctx), "har", `${id}.har`), "utf8")).log.entries as { request: Record<string, unknown> & { url: string; method: string; headers: { name: string; value: string }[] }; response: Record<string, unknown> }[];
 
 describe("WJ1 WJ4 upstream's evaluator decides", () => {
@@ -134,12 +137,12 @@ describe("WJ2 WJ3 the HAR", () => {
   it("holds the URL the agent saw, the headers, the post data and the redirect, with no login", async () => {
     await run(perfect, ["44", "580"]);
     const nav = har("44").find((e) => e.request.url.includes("/dashboard/todos"))!;
-    expect(nav.request).toMatchObject({ method: "GET", url: "http://127.0.0.1:8023/dashboard/todos" });
+    expect(nav.request).toMatchObject({ method: "GET", url: `http://127.0.0.1:${at(8023)}/dashboard/todos` });
     expect(nav.request.headers).toContainEqual({ name: "accept", value: "text/html,application/xhtml+xml" });
     const post = har("580").find((e) => e.request.method === "POST")!;
-    expect(post.request).toMatchObject({ url: "http://127.0.0.1:9999/create_forum", postData: { mimeType: "application/x-www-form-urlencoded" } });
+    expect(post.request).toMatchObject({ url: `http://127.0.0.1:${at(9999)}/create_forum`, postData: { mimeType: "application/x-www-form-urlencoded" } });
     expect(String((post.request.postData as { text: string }).text)).toContain("forum%5Bname%5D=sci_fi");
-    expect(post.response).toMatchObject({ status: 302, redirectURL: "http://127.0.0.1:9999/f/sci_fi" });
+    expect(post.response).toMatchObject({ status: 302, redirectURL: `http://127.0.0.1:${at(9999)}/f/sci_fi` });
     expect(post.response.cookies).toContainEqual(expect.objectContaining({ name: "flash", value: "done" }));
     for (const id of ["44", "580"]) for (const e of har(id)) expect(e.request.headers.map((h) => h.name)).not.toEqual(expect.arrayContaining(["cookie"]));
     expect(readFileSync(join(wavDir(ctx), "har", "580.har"), "utf8")).not.toMatch(/auto-login|test1234|_gitlab_session/i);
@@ -179,7 +182,7 @@ describe("WJ7 a reset that never ends", () => {
     siteDown = "";
     const stuck = scripted("stuck", async (id) => {
       if (id === "27") {
-        await page("http://127.0.0.1:9999/submit", { method: "POST", body: "title=spam" });
+        await page(`http://127.0.0.1:${at(9999)}/submit`, { method: "POST", body: "title=spam" });
         siteDown = "reddit";
       }
       return { done: true, log: "" };
