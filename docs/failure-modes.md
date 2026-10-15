@@ -760,6 +760,29 @@ use a fake Hugging Face endpoint and fake judges.
 | M2W6 | A judge reply without a verdict counts as a pass or crashes the run. | The case fails with a `judge:` reason (J5). | `M2W6 ...` |
 | M2W7 | The agent starts somewhere else than the task's site. | The start page links the task's website and the goal names it. | `M2W7 ...` |
 
+## The WebArena evaluators (`src/bench/wa/eval.ts`, `src/bench/wa/page.ts`)
+
+WebArena-Lite and WebChoreArena score a case with WebArena's own evaluators:
+`string_match`, `url_match` and `program_html`, multiplied. Upstream's code needs
+Playwright Chromium and a GPT-4 judge, so foxbench ports the logic from
+`VAB-WebArena-Lite/new/evaluators.py` at `9055fc2` (Apache-2.0, fetched at run
+time, never committed). The fuzzy cases use the configured Claude judge.
+`tests/wa-eval.test.ts` runs the evaluators on scripted answers and pages with a
+fake judge; `e2e/wa-judge.mjs` runs the judge browser on a real Firefox.
+
+| # | Failure mode | Wanted behaviour | Test |
+|---|---|---|---|
+| WE1 | `must_include` matches inside another word ("0" in "10 items"), or quotes and case change the result. | Both sides lose one pair of outer quotes and their case. A one-word reference must be a whole token (a `/` also splits a token); a longer one is a substring. | `WE1 ...` |
+| WE2 | An `\|OR\|` alternative is read as one string, or one missing `must_include` entry still passes. | Every `must_include` entry must hold; each holds if any of its ` \|OR\| ` alternatives does. `exact_match` compares the cleaned strings. | `WE2 ...` |
+| WE3 | A `fuzzy_match` is decided by code, or by a judge that is not named in the board. | The case is `llm`. Every configured judge is asked; the first decides; "incorrect" and "partially correct" fail. With no judge, the case fails with `judge: no judge`. | `WE3 ...` |
+| WE4 | An unachievable task (`fuzzy_match: "N/A"`) needs a judge for a plain "N/A", or accepts any reason. | An answer of exactly N/A passes without a judge. Another answer goes to the judges with the task and `string_note`, and passes on "same". | `WE4 ...` |
+| WE5 | `url_match` fails on a trailing slash or `localhost`, or `GOLD in PRED` is read as exact. | Both URLs lose a trailing slash and `localhost` becomes `127.0.0.1`. `EXACT` matches any ` \|OR\| ` URL; `GOLD in PRED` matches when a reference is inside the final URL. An unknown rule, or no final URL, fails. | `WE5 ...` |
+| WE6 | `program_html` reads the agent's claim, or a locator that throws counts as a pass. | Each target is opened in the judge browser (`last` is the final URL), the JS locator runs there (an empty locator reads the page HTML), and `required_contents` are checked on the result. A locator that throws, or no page, gives an empty string and fails. | `WE6 ...` |
+| WE7 | A `func:` URL or locator runs code foxbench does not know. | `reddit_get_post_url` and `gitlab_get_project_memeber_role` are ported; a helper the caller passes is run; any other name fails the case with its name. `__last_url__` is the final URL. | `WE7 ...` |
+| WE8 | One failing evaluator is outvoted by the others. | The score is the product over `eval_types`: one failing target or answer fails the case. | `WE8 ...` |
+| WE9 | An approach the port does not know (`required_values`, `must_exclude`, `one_of`) is skipped, and the case passes. | The case fails with `harness: unsupported ...` and the approach's name. | `WE9 ...` |
+| WE10 | The judge browser is the agent's, or stays open, or needs a built extension. | It is its own headless Firefox with a stub extension written into the cache, closed after the case. `noop` opens nothing and scores 0 on every kind. | `WE10 ...` |
+
 ## AMO release build and listed submission (`scripts/amo-listing.mjs`)
 
 `pnpm check:amo` reads `dist-ext/`, which is what `release.yml` signs. Each
