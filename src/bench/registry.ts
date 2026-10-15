@@ -32,6 +32,7 @@ export const benchmarks: Benchmark[] = [
   webarenaVerified(),
   assistantbenchBenchmark(),
   tau2Benchmark("retail"),
+  tau2Benchmark("airline"),
 ];
 
 export const benchmarkById = (id: string): Benchmark | undefined => benchmarks.find((b) => b.id === id);
