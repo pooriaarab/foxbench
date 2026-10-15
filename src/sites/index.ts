@@ -6,6 +6,7 @@ import { desk } from "../gym/desk.js";
 import { inkwell } from "../gym/inkwell.js";
 import { lumen } from "../gym/lumen.js";
 import { juniper } from "../gym/juniper.js";
+import { northline } from "../gym/northline.js";
 import { stay } from "../gym/stay.js";
 import { flights } from "./flights.js";
 import { mail } from "./mail.js";
@@ -14,4 +15,4 @@ import { signupSite } from "./signup.js";
 import { user } from "./user.js";
 
 /** The scored sites first, then the train-suite sites (TS2). */
-export const sites: Site[] = [flights, signupSite, mail, shop, user, stay, bank, clinic, desk, inkwell, lumen, juniper];
+export const sites: Site[] = [flights, signupSite, mail, shop, user, stay, bank, clinic, desk, inkwell, lumen, juniper, northline];
