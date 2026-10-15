@@ -13,6 +13,7 @@ import tau2Retail from "./subsets/tau2-retail.json" with { type: "json" };
 import webarenaVerified from "./subsets/webarena-verified.json" with { type: "json" };
 import webgames from "./subsets/webgames.json" with { type: "json" };
 import webtailbench from "./subsets/webtailbench.json" with { type: "json" };
+import webvoyager from "./subsets/webvoyager.json" with { type: "json" };
 import type { Case, SubsetName } from "./types.js";
 
 export type SubsetLists = Record<string, { quick?: string[]; published?: string[] }>;
@@ -29,6 +30,7 @@ const LISTS: SubsetLists = {
   odysseys,
   webtailbench,
   deepshop,
+  webvoyager,
 };
 
 /** The cases of a subset, from a benchmark's full list. Throws when a list names a case the benchmark lacks (L5). */
