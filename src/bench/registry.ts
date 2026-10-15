@@ -21,6 +21,8 @@ import { webarenaVerified } from "./wav/index.js";
 import { waiBenchmark } from "./wai/index.js";
 import { mind2web2Benchmark } from "./mind2web2.js";
 import { odysseysBenchmark } from "./odysseys.js";
+import { deepshopBenchmark } from "./deepshop.js";
+import { webtailbenchBenchmark } from "./webtailbench.js";
 import { webgamesBenchmark } from "./webgames.js";
 
 const foxbench = foxbenchBenchmark();
@@ -45,6 +47,8 @@ export const benchmarks: Benchmark[] = [
   browsecompBenchmark(),
   odysseysBenchmark(),
   mind2web2Benchmark(),
+  webtailbenchBenchmark(),
+  deepshopBenchmark(),
 ];
 
 export const benchmarkById = (id: string): Benchmark | undefined => benchmarks.find((b) => b.id === id);
