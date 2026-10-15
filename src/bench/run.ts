@@ -184,7 +184,7 @@ async function runCase(bench: Benchmark, env: Env, item: Case, options: BenchRun
       ran.ms = Date.now() - started;
     } else {
       // The agent gets the proxy's URL, never the site's own (P1).
-      proxy = await startProxy(episode.url, { ...(episode.headers ? { headers: episode.headers } : {}), ...(episode.port ? { port: episode.port } : {}), ...(episode.userChannel ? { user: episode.userChannel } : {}) });
+      proxy = await startProxy(episode.url, { ...(episode.headers ? { headers: episode.headers } : {}), ...(episode.port ? { port: episode.port } : {}), ...(episode.userChannel ? { user: episode.userChannel } : {}), ...(episode.replace ? { replace: episode.replace } : {}) });
       const start = new URL(episode.url);
       ran = await play(options.adapter, episode, proxy.origin + start.pathname + start.search, options.timeoutMs ?? 600_000, options.graceMs ?? 30_000);
       verdict = await bench.judge(env, episode, ran.output, { requests: proxy.trace });

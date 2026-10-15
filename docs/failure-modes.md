@@ -216,6 +216,8 @@ tests are in `tests/proxy.test.ts`.
 | P4 | A request to another host through the proxy is not seen, so a cloud agent shows 0 egress. | An absolute URL or a CONNECT to any other host is logged as egress with its host and bytes, and forwarded or tunnelled, never decrypted. The board sums egress per case. | `P4 ...` |
 | P5 | The proxy stays up after the case, so a late request reaches the next case (R1), or a fixed port changes per case (R6). | The loop closes the proxy after the judge. With `Episode.port`, the proxy listens on that port, so a site keeps its origin. | `P5 ...` |
 | P6 | `Episode.port` is held by another process, and the case hangs or shows a bare `listen EADDRINUSE`. | `startProxy` rejects at once with `port <n> is in use` and the reason it needs that port. It never retries or waits. The loop turns it into a `harness:` reason for that case. | `P6 ...` |
+| P7 | A benchmark that swaps one image for another (VWA-Adv) has to change the site's data, so the swap outlasts the case or hits another case. | `Episode.replace` lists paths that the proxy answers itself with a type and bytes, for GET only; the site is never asked, and nothing is stored. Every other request is forwarded unchanged. | `P7 ...` |
+| P8 | A served replacement is missing from the trace, or is served for another host, so the metrics undercount or an agent's request to its model gets an image. | A replacement is logged like any request (status 200, its bytes and type). It is never served for egress. | `P8 ...` |
 
 ## Cloud environments (`foxbench env`, `src/env/`)
 
