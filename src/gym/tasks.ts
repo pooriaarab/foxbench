@@ -266,7 +266,7 @@ const mailTasks: Task[] = [
   ...([["ravi.patel@brightline.example", "Ramen on Friday", "See you at the ramen place at noon"], ["maya.chen@brightline.example", "Gala guest list", "I will send the guest list by Wednesday"]] as const)
     .map(([to, subject, text], i) => mailTask(`inkwell-compose-${i + 1}`, `In Inkwell, write a new email to ${to} with the subject "${subject}" that says: "${text}."`,
       [["/inkwell/compose", { to, subject, body: `${text}.` }]], all(mailsSent(1, { to, subject, word: new RegExp(text.split(" ").slice(-2).join(" "), "i") }), folders([])))),
-  mailTask("inkwell-search-reply", 'In Inkwell, find the email that gives the door code 4417 and reply to it with: "Thanks, I have the code."',
+  mailTask("inkwell-search-reply", 'In Inkwell, find Lena Fischer\'s email that gives the door code 4417 and reply to it with: "Thanks, I have the code."',
     [["/inkwell/reply", { id: "p8", body: "Thanks, I have the code." }]], all(mailsSent(1, { to: byId("p8").from, inReplyTo: "p8", word: /have the code/i }), folders([])), { tier: "hard" }),
   mailTask("inkwell-star-reply", 'In Inkwell, star Maya Chen\'s email about the venue contract, then reply to it with: "I will sign it on Thursday."',
     [["/inkwell/star", { id: "p1" }], ["/inkwell/reply", { id: "p1", body: "I will sign it on Thursday." }]], all(mailsSent(1, { to: byId("p1").from, inReplyTo: "p1", word: /thursday/i }), folders([], ["p1"])), { tier: "hard" }),
