@@ -1284,6 +1284,30 @@ need the Wikipedia site that wav-full runs, not this env. The tests are in
 | VW14 | Every pull goes to Docker Hub through the VM's shared Cloud NAT IP, which has Hub's anonymous limit of 100 pulls per hour. | Google's mirror (`mirror.gcr.io`) is in daemon.json before the first pull; Docker falls back to Hub for a layer the mirror lacks, as it does for the Classifieds layer. | `VW14 ...` |
 | VW15 | A 500 GB standard persistent disk writes about 60 MB/s, so the 230 GB the Classifieds pull writes takes over an hour and every pull times out. | The vwa VM's boot disk is `pd-ssd`. | `VW15 ...` |
 
+## WebChoreArena (`src/bench/wa/chore.ts`, `src/bench/wa/chore-eval.ts`)
+
+`webchorearena` is the 532-task WebChoreArena list (WebChoreArena/WebChoreArena
+at `542abc5`, Apache-2.0; `AgentOccam/config_files/test_webchore.raw.json` and
+`small_set_ids.txt`), run on the WebArena-Verified sites through the benchmark
+builder of WebArena-Lite. Its evaluators are not WebArena's: ported from
+`BrowserGym/evaluation_harness/evaluators.py` at that commit, they give partial
+credit for a `must_include` list, take `or` alternatives, match URLs by host,
+path and query, unescape HTML, and use their own fuzzy prompt. The reward is
+the score; a case succeeds at a score of 1. `tests/wa-chore.test.ts` runs the
+evaluators on scripted answers and pages, and real cases through the run loop.
+
+| # | Failure mode | Wanted behaviour | Test |
+|---|---|---|---|
+| WC1 | The task list or small set is not the pinned one, or the small set drifts, so a board is not over the 532 tasks. | The files at the pinned commit, whole in the cache; 532 cases with upstream's `task_id`; the 102 ids of `small_set_ids.txt` carry the tag `small`. | `WC1 ...` |
+| WC2 | A case has the wrong tags, or a fuzzy case is scored by code. | Tags are the sites, the eval types, `type_main`, `obs:<required_obs>`, `multi-site` and `small`. The 24 cases with a `fuzzy_match` are `judge: llm`. | `WC2 ...` |
+| WC3 | A `must_include` list passes with one entry missing, or the partial score is lost. | The score is the mean over the entries; each entry holds if any of its `\|or\|` alternatives is a substring (a single one-character value must be a whole token). The case succeeds only at 1, and the board has the mean score. | `WC3 ...` |
+| WC4 | `url_match` uses WebArena's rule, so a different host, path or query value passes or fails. | Both URLs lose a trailing slash and their case. Each reference's host and path must be inside the final URL's, and each query key it has must have one of its values in the final URL's. `or` references take the best. A rule other than GOLD in PRED fails. | `WC4 ...` |
+| WC5 | `program_html` ignores an `or` alternative, reads escaped HTML, or lets a failing target be outvoted. | Each target's alternatives are read in the judge browser and the best counts; the page text is HTML-unescaped; `exact_match` and a `must_include` mean (with `\|OR\|`) are checked. The score is the product over targets. A required_contents key the port does not know fails with its name. | `WC5 ...` |
+| WC6 | A fuzzy case is scored with WebArena's prompt, passes with no judge, or asks about an empty answer. | The prompt is WebChoreArena's; a list reference is joined with `; `. With no judge the case fails with `judge: no judge`; an empty answer never reaches a judge. | `WC6 ...` |
+| WC7 | An agent that does nothing, or answers wrong, passes. | noop and a scripted wrong agent score 0 on every case kind; a scripted perfect agent passes. | `WC7 ...` |
+| WC8 | A cross-site case on a missing site (the 18 Wikipedia cases on wav-core) fails with no reason. | It fails with the wav-full reason of WF4. | `WC8 ...` |
+| WC9 | `quick` changes between runs or needs wav-full. | `quick` is the committed list in `src/bench/subsets/webchorearena.json`: 20 ids from the small set, 5 per wav-core site. | `WC9 ...` |
+
 ## AMO release build and listed submission (`scripts/amo-listing.mjs`)
 
 `pnpm check:amo` reads `dist-ext/`, which is what `release.yml` signs. Each

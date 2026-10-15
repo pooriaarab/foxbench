@@ -44,6 +44,8 @@ export interface WaFacts {
 }
 export interface WaScore {
   success: boolean;
+  /** A partial score, for evaluators that give one (WebChoreArena); `success` is a score of 1. */
+  score?: number;
   reasons: string[];
   /** A fuzzy match ran, so the case is `llm`. */
   llm: boolean;
@@ -75,24 +77,24 @@ const fuzzyAsk = (pred: string, ref: string, question: string) => ({
   system: "You are a helpful assistant",
   prompt: `Help a teacher to grade the answer of a student given a question. Keep in mind that the student may use different phrasing or wording to answer the question. The goal is to evaluate whether the answer is semantically equivalent to the reference answer.\nquestion: ${question}\nreference answer: ${ref}\nall the string 'N/A' that you see is a special sequence that means 'not achievable'\nstudent answer: ${pred}\nConclude the judgement by 'correct', 'incorrect', or 'partially correct'. Only output one of these options, and nothing else.`,
 });
-const uaAsk = (pred: string, ref: string, question: string) => ({
+export const uaAsk = (pred: string, ref: string, question: string) => ({
   system: "You are a helpful assistant",
   prompt: `task: ${question}\nactual unachievable reason: ${ref}\nreported unachievable reason: ${pred}\nThe task described above is inherently unachievable due to the reason specified under 'actual unachievable reason'. An individual previously attempted this task and was unable to complete it. They provided a reason for their failure, which is listed under 'reported unachievable reason'. Your role is to review both the actual and reported reasons. Determine if the reported reason aligns with the actual reason, even if implicitly. If the stated reason is in line with the actual reason, respond with 'same'. Otherwise, respond with 'different'.`,
 });
-const parseFuzzy = (reply: string) => {
+export const parseFuzzy = (reply: string) => {
   const r = reply.toLowerCase();
   if (r.includes("partially correct") || r.includes("incorrect")) return { success: false, reasons: ["the judge says the answer is not correct"] };
   if (!r.includes("correct")) throw new Error(`no verdict in the reply: ${reply.slice(0, 80)}`);
   return { success: true, reasons: [] };
 };
-const parseUa = (reply: string) => {
+export const parseUa = (reply: string) => {
   const r = reply.toLowerCase();
   if (r.includes("different")) return { success: false, reasons: ["the judge says the reason differs from the real one"] };
   if (!r.includes("same")) throw new Error(`no verdict in the reply: ${reply.slice(0, 80)}`);
   return { success: true, reasons: [] };
 };
 
-class Run {
+export class Run {
   reasons: string[] = [];
   results = new Map<string, JudgeResult>();
   llm = false;
@@ -145,7 +147,7 @@ function urlMatch(run: Run) {
 }
 
 /** Upstream's `func:` expressions are Python calls with string arguments; `__page__` is the judge browser. */
-async function callFunc(expr: string, run: Run, page: WaPage | undefined): Promise<string> {
+export async function callFunc(expr: string, helpers: WaFacts["helpers"], page: WaPage | undefined): Promise<string> {
   const m = /^(\w+)\((.*)\)$/s.exec(expr.trim());
   if (!m) throw new Error(`unreadable func ${expr}`);
   const [, name, rest] = m;
@@ -162,7 +164,7 @@ async function callFunc(expr: string, run: Run, page: WaPage | undefined): Promi
     const index = await page!.evaluate(`(() => { const e = document.querySelectorAll("td[data-label='Account'] span.gl-avatar-labeled-sublabel"); for (let i = 0; i < e.length; i++) if (e[i].outerText === ${who}) return i; return -1; })()`);
     return String(await page!.evaluate(`(() => document.querySelectorAll("td.col-max-role span")[${Number(index)}].outerText)()`).catch(() => ""));
   }
-  const helper = run.facts.helpers?.[name!];
+  const helper = helpers?.[name!];
   if (!helper) throw new Error(`unknown helper ${name}`);
   return helper(...helperArgs);
 }
@@ -175,7 +177,7 @@ async function programHtml(run: Run) {
     const what = `program_html ${i + 1}`;
     try {
       if ((target.url === "last" || target.url.includes("__last_url__")) && !facts.finalUrl) { run.fail(`${what}: the agent opened no page`); continue; }
-      const target_url = target.url.startsWith("func:") ? await callFunc(target.url.slice(5).replaceAll("__last_url__", facts.finalUrl!), run, undefined) : target.url;
+      const target_url = target.url.startsWith("func:") ? await callFunc(target.url.slice(5).replaceAll("__last_url__", facts.finalUrl!), facts.helpers, undefined) : target.url;
       const p = await open();
       if (!p) { run.fail(`harness: ${what} needs the judge browser`); continue; }
       await p.goto(target_url === "last" ? facts.finalUrl! : target_url);
@@ -187,7 +189,7 @@ async function programHtml(run: Run) {
         for (const prep of target.prep_actions ?? []) await p.evaluate(`(() => ${prep})()`).catch(() => {});
         // A page or locator that gives nothing reads as an empty string (upstream's "the page is wrong").
         got = String((await p.evaluate(`(() => ${loc})()`).catch(() => "")) || "");
-      } else if (loc.startsWith("func:")) got = await callFunc(loc.slice(5), run, p);
+      } else if (loc.startsWith("func:")) got = await callFunc(loc.slice(5), facts.helpers, p);
       else { run.fail(`harness: unsupported ${what} locator ${loc.slice(0, 40)}`); continue; }
       await run.contents(target.required_contents, got, what);
     } catch (error) {
