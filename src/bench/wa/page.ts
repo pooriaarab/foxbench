@@ -1,6 +1,8 @@
 // The judge browser: the runner's own headless Firefox, never the agent's. It
 // opens the pages program_html reads. create-foxkit drives Firefox and needs an
-// extension, so a stub one is written into the cache. A canonical site URL
+// extension, so a stub one is written into the cache. It always launches
+// locally, whatever FOXKIT_BROWSER says: a remote session would need a
+// Manifest V3 extension and could not reach the judge's 127.0.0.1 proxy (WJB1). A canonical site URL
 // (`http://127.0.0.1:<site port>/...`) is opened on the origin the caller maps
 // it to, such as a proxy that adds the site's login.
 import { mkdirSync, writeFileSync } from "node:fs";
@@ -27,7 +29,7 @@ export function judgeBrowser(ctx: BenchContext, origins: Record<string, string> 
       mkdirSync(extension, { recursive: true });
       writeFileSync(join(extension, "manifest.json"), JSON.stringify({ manifest_version: 2, name: "foxbench judge", version: "1", browser_specific_settings: { gecko: { id: "judge@foxbench.invalid" } } }));
       const { launch } = await import("create-foxkit/e2e");
-      fox ??= await launch({ extension, headless: true, ...(ctx.firefox ? { firefox: ctx.firefox } : {}) });
+      fox ??= await launch({ extension, headless: true, remote: "local", ...(ctx.firefox ? { firefox: ctx.firefox } : {}) });
       const page = await fox.open("about:blank");
       pages.push(page);
       return {

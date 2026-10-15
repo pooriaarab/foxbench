@@ -9,6 +9,8 @@ import { join } from "node:path";
 import { judgeBrowser } from "../dist/bench/wa/page.js";
 import { scoreWa } from "../dist/bench/wa/eval.js";
 
+// WJB1: the agent's browser is remote, the judge's must stay local.
+process.env.FOXKIT_BROWSER = "ichabod";
 const site = createServer((req, res) => {
   const page = req.headers["x-auto-login"] ? '<input id="name" value="Alice"><p>Order saved</p>' : "<p>Please sign in</p>";
   res.writeHead(200, { "content-type": "text/html" }).end(page);

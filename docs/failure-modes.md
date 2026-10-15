@@ -413,6 +413,7 @@ judges them.
 | WJ7 | A reset never ends (GitLab boots for minutes), so the run hangs. | `start` waits up to 10 minutes, then the case fails with a `harness:` reason, and the site stays marked for reset. | `WJ7 ...` |
 | WJ8 | The agent reaches the reset service (it is on a tunnel port too) and resets a site during its case. | A known limit. The reset service has no key. A reset can only remove the agent's own work, and the score reads the trace, not the site. | - |
 | WJ9 | Two runs on one machine, or a run and a test, write and read the same `<cache>/har/<id>.har`. One run's judge reads the other's trace, so a case passes or fails on requests the agent never made. | Each run gets its own HAR directory (a fresh temp directory, removed by `down`; `harDir` sets it for a test). Nothing is written to the shared `<cache>/har`. Each test passes its own `harDir`. | `WJ9 ...` |
+| WJB1 | The agent's browser is remote (`FOXKIT_BROWSER=ichabod`), so the judge browser starts a cloud session too. It fails with `manifest.json is not Manifest V3`, and could not reach the judge's `127.0.0.1` proxy anyway, so WASP, WebArena-Lite, AgentDAM and ST-WebAgentBench get no utility score. | `judgeBrowser` always launches with `remote: "local"`: the judge is the runner's own headless Firefox. | `e2e/wa-judge.mjs` runs with `FOXKIT_BROWSER=ichabod` |
 
 ## SuiteCRM env (`suitecrm`, `src/bench/suitecrm/`)
 
