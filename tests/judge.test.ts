@@ -183,3 +183,20 @@ describe("J5 J7 a judge error fails the case, the run goes on, and the key never
     expect(JSON.stringify(board) + toMarkdown(board) + JSON.stringify(http)).not.toContain(KEY);
   });
 });
+
+describe("J9 images", () => {
+  it("the Claude judge sends each image as a block before the prompt, and the local judge refuses them", async () => {
+    seen.length = 0;
+    reply = () => ({ status: 200, body: message("match") });
+    const claude = claudeJudge({ apiKey: KEY, baseURL: base, maxRetries: 0 });
+    const images = [{ mediaType: "image/png" as const, data: "cG5n" }, { mediaType: "image/jpeg" as const, data: "anBn" }];
+    expect(await claude.ask({ system: "s", prompt: "same?", images })).toBe("match");
+    expect(seen[0]!.body).toMatchObject({ messages: [{ role: "user", content: [
+      { type: "image", source: { type: "base64", media_type: "image/png", data: "cG5n" } },
+      { type: "image", source: { type: "base64", media_type: "image/jpeg", data: "anBn" } },
+      { type: "text", text: "same?" }] }] });
+    seen.length = 0;
+    await expect(localJudge({ url: base }).ask({ system: "s", prompt: "same?", images })).rejects.toThrow("the local judge takes no images");
+    expect(seen).toEqual([]);
+  });
+});

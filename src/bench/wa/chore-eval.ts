@@ -97,7 +97,7 @@ async function programHtml(run: Run, score: { v: number }) {
     for (const alt of [target, ...(target.or ?? [])]) {
       try {
         if ((alt.url === "last" || alt.url.includes("__last_url__")) && !facts.finalUrl) throw new Error(NO_PAGE);
-        const url = alt.url.startsWith("func:") ? await callFunc(alt.url.slice(5).replaceAll("__last_url__", facts.finalUrl!), facts.helpers, undefined) : alt.url;
+        const url = alt.url.startsWith("func:") ? String(await callFunc(alt.url.slice(5).replaceAll("__last_url__", facts.finalUrl!), facts.helpers, undefined)) : alt.url;
         page ??= await facts.page?.();
         if (!page) throw new Error("harness: the judge browser is missing");
         await page.goto(url === "last" ? facts.finalUrl! : url);
@@ -108,7 +108,7 @@ async function programHtml(run: Run, score: { v: number }) {
         else if (loc.startsWith("document.") || loc.startsWith("[...document.")) {
           for (const prep of alt.prep_actions ?? []) await page.evaluate(`(() => ${prep})()`).catch(() => {});
           got = String((await page.evaluate(`(() => ${loc})()`).catch(() => "")) || "");
-        } else if (loc.startsWith("func:")) got = await callFunc(loc.slice(5), facts.helpers, page);
+        } else if (loc.startsWith("func:")) got = String(await callFunc(loc.slice(5), facts.helpers, page));
         else throw new Error(`harness: unsupported locator ${loc.slice(0, 40)}`);
         got = unescape(got);
         const need = alt.required_contents;

@@ -156,8 +156,8 @@ describe("WE8 the product", () => {
 
 describe("WE9 approaches the port does not know", () => {
   it("fails with the name, and never passes", async () => {
-    const r = await scoreWa(task({ reference_answers: { required_values: [">= 3"] } }), facts({ answer: "5" }));
-    expect(r).toMatchObject({ success: false, reasons: ["harness: unsupported string_match approach required_values"] });
+    const r = await scoreWa(task({ reference_answers: { fuzzy_ish: ["x"] } as never }), facts({ answer: "5" }));
+    expect(r).toMatchObject({ success: false, reasons: ["harness: unsupported string_match approach fuzzy_ish"] });
     expect((await scoreWa(task({ eval_types: ["image_match"] }), facts())).success).toBe(false);
   });
 });

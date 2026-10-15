@@ -14,9 +14,17 @@ export interface Judge {
   ask(q: JudgeAsk): Promise<string>;
 }
 
+/** An image the judge looks at: a PNG, JPEG, GIF or WebP, base64 encoded. */
+export interface JudgeImage {
+  mediaType: "image/png" | "image/jpeg" | "image/gif" | "image/webp";
+  data: string;
+}
+
 export interface JudgeAsk {
   system: string;
   prompt: string;
+  /** Shown to the judge before the prompt. Only the Claude judge takes images. */
+  images?: JudgeImage[];
 }
 
 /** One judge's verdict on one case. */
@@ -42,9 +50,10 @@ export function claudeJudge(o: { apiKey: string; model?: string; baseURL?: strin
   const model = o.model ?? DEFAULT_JUDGE_MODEL;
   return {
     name: "claude", model, where: "cloud",
-    async ask({ system, prompt }) {
+    async ask({ system, prompt, images }) {
       try {
-        const res = await client.messages.create({ model, max_tokens: 16_000, system, messages: [{ role: "user", content: prompt }] });
+        const content = images?.length ? [...images.map((i) => ({ type: "image" as const, source: { type: "base64" as const, media_type: i.mediaType, data: i.data } })), { type: "text" as const, text: prompt }] : prompt;
+        const res = await client.messages.create({ model, max_tokens: 16_000, system, messages: [{ role: "user", content }] });
         if (res.stop_reason === "refusal") throw new Error("the model refused to judge");
         return res.content.flatMap((b) => (b.type === "text" ? [b.text] : [])).join("");
       } catch (error) {
@@ -59,7 +68,8 @@ export function localJudge(o: { url: string; model?: string }): Judge {
   const model = o.model ?? "unnamed";
   return {
     name: "local", model, where: "local",
-    async ask({ system, prompt }) {
+    async ask({ system, prompt, images }) {
+      if (images?.length) throw new Error("the local judge takes no images; use the claude judge");
       const res = await fetch(`${o.url.replace(/\/+$/, "")}/v1/chat/completions`, {
         method: "POST", headers: { "content-type": "application/json" }, signal: AbortSignal.timeout(600_000),
         body: JSON.stringify({ model, temperature: 0, messages: [{ role: "system", content: system }, { role: "user", content: prompt }] }),
