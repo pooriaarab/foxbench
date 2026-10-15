@@ -5,6 +5,7 @@
 // forwards to the tunnel on that port plus TUNNEL_OFFSET.
 import { createHmac } from "node:crypto";
 import { request } from "node:http";
+import { dockerMirror } from "../../env/mirror.js";
 
 /** The upstream commit these ports, paths and the cookie secret were read at. */
 export const MYPCBENCH_COMMIT = "937ec49882508223c7ea3f79ead3330c6810feb1";
@@ -69,7 +70,7 @@ if ! { modprobe kvm_intel 2>/dev/null; [ -c /dev/kvm ]; }; then
   exit 1
 fi
 command -v docker >/dev/null || { apt-get update -q && DEBIAN_FRONTEND=noninteractive apt-get install -y -q docker.io python3; }
-systemctl enable --now docker
+${dockerMirror()}
 if docker inspect ${CONTAINER} >/dev/null 2>&1; then
   docker start ${CONTAINER}
 else
