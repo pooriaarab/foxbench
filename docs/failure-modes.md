@@ -1060,6 +1060,7 @@ need the Wikipedia site that wav-full runs, not this env. The tests are in
 | VW9 | The Classifieds data loads twice or not at all on a reboot. | The data loads when the DB container is first made (MySQL's init folder); a reboot only starts the containers. | `VW9 ...` |
 | VW10 | The init folder is root-only (the token step's `umask 077` leaked into the unpack), so the MySQL user cannot read it, its entrypoint loops on "Permission denied" and the data never loads. | The folder is 755 and its files 644 after the unpack. | `VW10 ...` |
 | VW11 | A `docker pull` hangs for the whole boot, and `up` waits the full tunnel time to say nothing. | Each pull is limited to 45 minutes and tried twice; a pull that outlasts that exits non-zero with the image, the time and "giving up" on stderr. | `VW11 ...` |
+| VW12 | A Classifieds reset with a wrong token answers 200 with "Error: Invalid token", and the service reports success. | The service reports success only when the reply says the SQL file executed; any other reply is a 500 with the reply's first words. | `VW12 ...` |
 
 ## AMO release build and listed submission (`scripts/amo-listing.mjs`)
 
