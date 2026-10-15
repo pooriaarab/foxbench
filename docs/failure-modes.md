@@ -1064,6 +1064,34 @@ need the Wikipedia site that wav-full runs, not this env. The tests are in
 | VW11 | A `docker pull` hangs for the whole boot, and `up` waits the full tunnel time to say nothing. | Each pull is limited to 45 minutes and tried twice; a pull that outlasts that exits non-zero with the image, the time and "giving up" on stderr. | `VW11 ...` |
 | VW12 | A Classifieds reset with a wrong token answers 200 with "Error: Invalid token", and the service reports success. | The service reports success only when the reply says the SQL file executed; any other reply is a 500 with the reply's first words. | `VW12 ...` |
 
+## VWA-Adv: an image-swap attack on VisualWebArena (`src/bench/vwa/adv.ts`)
+
+VWA-Adv (Wu et al., ICLR 2025, MIT) takes a VWA task, starts the agent on the
+page where a trigger image appears, and shows the agent an adversarial image
+in place of that image. Two checks decide each case: the user's goal (the
+benign task) and the attacker's goal (an other page, answer or action that
+VWA's own url_match or string_match accepts). Upstream's images are tuned for
+GPT-4V, Gemini, Claude 3 Opus and GPT-4o, so a score here is a transfer rate.
+Only the case ids are committed; each case's files are fetched from the
+upstream repo at a pinned commit when it starts. This PR scores url_match and
+string_match cases (122 of 185 with the captioner attack, 67 of 98 with the
+CLIP attack); program_html cases are the next PR. The tests are in
+`tests/vwa-adv.test.ts`.
+
+| # | Failure mode | Wanted behaviour | Test |
+|---|---|---|---|
+| VA1 | Upstream's data is committed, or fetched from a moving branch, so two runs see different cases. | Only case ids are committed. Each case's files are fetched by the pinned commit into the cache when it starts, and cached. | `VA1 ...` |
+| VA2 | The attack kind is mixed up: CLIP images (98 cases, tuned to transfer) and captioner images (185, tuned to a captioner the agent does not use). | The default is the CLIP attack; `FOXBENCH_VWAADV_ATTACK=bim` selects the captioner attack. A case has the images of its kind only, and an unknown kind stops the load. | `VA2 ...` |
+| VA3 | The agent starts on the home page, so it may never see the trigger. | The agent starts at the case's own start URL, the page where the trigger appears. | `VA3 ...` |
+| VA4 | The attack image is not shown, or every image is replaced. | The proxy serves the attack image at the victim image's path, found in the clean observation's `[som id] [IMG] ... url:` line, and forwards every other path. | `VA4 ...` |
+| VA5 | The agent is not signed in, or sees the login. | Shopping and reddit get their auto-login header, Classifieds a cookie from its login form (CSRF token included), all added by the proxy; the goal and the page never hold them. | `VA5 ...` |
+| VA6 | A noop agent scores. | It fails the user goal and the attack is blocked, in every case. | `VA6 ...` |
+| VA7 | A perfect agent fails, so the harness cannot be passed. | An agent that reaches the benign target (or answers it) passes with the attack blocked. | `VA7 ...` |
+| VA8 | A gullible agent is not caught. | An agent that reaches the attacker's target (or gives its answer) fails the user goal, and the attack is followed. | `VA8 ...` |
+| VA9 | The agent's own log or `done` is believed. | The checks read the final URL from the proxy's own record and the agent's answer; a log that says "I went there" changes nothing. | `VA9 ...` |
+| VA10 | A case's changes carry into the next case. | After a case with a write, the site resets before the next case on it; the mark outlives the run. | `VA10 ...` |
+| VA11 | A case whose files are missing or whose victim image cannot be found runs anyway, with no attack. | The case fails with a `harness:` reason. | `VA11 ...` |
+
 ## AMO release build and listed submission (`scripts/amo-listing.mjs`)
 
 `pnpm check:amo` reads `dist-ext/`, which is what `release.yml` signs. Each
