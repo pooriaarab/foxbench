@@ -23,8 +23,8 @@ const online = spawnSync("docker", ["manifest", "inspect", "hello-world"], { std
 const env = cloudEnvs.find((e) => e.name === "wav-full")!;
 
 describe("WF1 the VM and its ports", () => {
-  it("is 64 GB of RAM and 450 GB of disk, and tunnels the core, Wikipedia and map ports at +10000", () => {
-    expect(env).toMatchObject({ machineType: "n2-standard-16", diskGb: 450 });
+  it("is 64 GB of RAM and 500 GB of SSD, and tunnels the core, Wikipedia and map ports at +10000", () => {
+    expect(env).toMatchObject({ machineType: "n2-standard-16", diskGb: 500, diskType: "pd-ssd" });
     expect(wavFullSites.map((s) => [s.id, s.port, s.ctrlPort])).toEqual([["wikipedia", 8888, 8889], ["map", 3000, 3071]]);
     const want = [...wavSites, ...wavFullSites].flatMap((s) => [s.port, s.ctrlPort]).concat(8870);
     expect(env.ports).toEqual(want.map((remote) => ({ remote, local: remote + 10000 })));
@@ -40,8 +40,15 @@ describe("WF1 the VM and its ports", () => {
 function boot(dir: string, pythonPre = "", aptBody = "true") {
   const bin = join(dir, "bin");
   mkdirSync(bin, { recursive: true });
+  if (!existsSync(join(dir, "served"))) serveMapTars(dir);
   const tool = (name: string, body: string) => { writeFileSync(join(bin, name), `#!/bin/sh\necho "${name} $*" >> ${dir}/log\n${body}\n`); chmodSync(join(bin, name), 0o755); };
-  tool("docker", `case "$1" in inspect) [ -e ${dir}/has-$2 ];; run) shift; while [ "$1" != --name ]; do shift; done; touch ${dir}/has-$2;; esac`);
+  tool("docker", `case "$1" in inspect) [ -e ${dir}/has-$2 ];; run) shift; while [ "$1" != --name ]; do shift; done; touch ${dir}/has-$2;;
+    volume) case "$2" in create) mkdir -p ${dir}/vol/$3/_data;; inspect) echo ${dir}/vol/$5/_data;; esac;; esac`);
+  // curl serves ${dir}/served/<name>; a count in curl-cut makes that many calls end early, as a dropped connection does (curl exit 18).
+  tool("curl", `for a; do url=$a; done; f=${dir}/served/$(basename $url); [ -e $f ] || exit 22
+n=$(cat ${dir}/curl-cut 2>/dev/null || echo 0)
+[ "$n" -gt 0 ] && { echo $((n-1)) > ${dir}/curl-cut; head -c 20000 $f; exit 18; }
+cat $f`);
   for (const name of ["systemctl", "systemd-run", "apt-get"]) tool(name, name === "systemctl" ? '[ "$1" != is-active ]' : name === "apt-get" ? aptBody : "true");
   tool("python3", `${pythonPre}\n[ "$1" = -m ] && [ "$2" = venv ] && [ "$3" != --help ] && for t in pip webarena-verified; do mkdir -p $3/bin; printf '#!/bin/sh\\necho "$t $*" >> ${dir}/log\\n' | sed "s/\\$t/$t/" > $3/bin/$t; chmod +x $3/bin/$t; done; true`);
   const script = join(dir, "startup.sh");
@@ -88,7 +95,7 @@ describe("WF2 WF3 the startup script", () => {
     expect(first.status, first.stderr).toBe(0);
     const at = (re: RegExp) => first.log.findIndex((l) => re.test(l));
     const setup = first.log.filter((l) => l.startsWith("webarena-verified env setup init"));
-    expect(setup.map((l) => l.split(" ")[5])).toEqual(["wikipedia", "map"]);
+    expect(setup.map((l) => l.split(" ")[5])).toEqual(["wikipedia"]);
     expect(first.log).toContain(`pip install -q webarena-verified==${WAV_VERSION}`);
     const lastCore = Math.max(...wavSites.map((s) => at(new RegExp(`^docker run .*--name wav-${s.id} `))));
     expect(lastCore).toBeGreaterThan(-1);
@@ -102,9 +109,69 @@ describe("WF2 WF3 the startup script", () => {
     const second = boot(dir);
     expect(second.status, second.stderr).toBe(0);
     const before = readFileSync(join(dir, "log"), "utf8").trim().split("\n");
-    expect(before.filter((l) => l.startsWith("webarena-verified env setup init"))).toHaveLength(2);
+    expect(before.filter((l) => l.startsWith("webarena-verified env setup init"))).toHaveLength(1);
     expect(before.filter((l) => l.startsWith("docker pull"))).toHaveLength(6);
     expect(before.filter((l) => l.startsWith("docker start"))).toHaveLength(6);
+  });
+});
+
+// The map's three archives as upstream's config.py lays them out, in miniature: [archive, volume, path inside it].
+const MAP_TARS: [string, string, string][] = [
+  ["osm_tile_server.tar", "webarena_verified_map_tile_db", "projects/ogma3/docker/volumes/osm-data/_data"],
+  ["osrm_routing.tar", "webarena_verified_map_routing_car", "car"], ["osrm_routing.tar", "webarena_verified_map_routing_bike", "bike"], ["osrm_routing.tar", "webarena_verified_map_routing_foot", "foot"],
+  ["nominatim_volumes.tar", "webarena_verified_map_nominatim_db", "projects/metis2/docker/docker/volumes/nominatim-data/_data"],
+  ["nominatim_volumes.tar", "webarena_verified_map_nominatim_flatnode", "projects/metis2/docker/docker/volumes/nominatim-flatnode/_data"],
+];
+function serveMapTars(dir: string) {
+  const stage = join(dir, "stage");
+  mkdirSync(join(dir, "served"), { recursive: true });
+  for (const [, vol, path] of MAP_TARS) {
+    mkdirSync(join(stage, path), { recursive: true });
+    writeFileSync(join(stage, path, "data.bin"), vol.repeat(5000));
+  }
+  for (const name of new Set(MAP_TARS.map((t) => t[0]))) {
+    const roots = MAP_TARS.filter((t) => t[0] === name).map((t) => t[2].split("/")[0]!);
+    execFileSync("tar", ["-cf", join(dir, "served", name), "-C", stage, ...new Set(roots)]);
+  }
+}
+
+const fresh = () => mkdtempSync(join(tmpdir(), "fbn-wf8-"));
+const volume = (dir: string, vol: string) => join(dir, "vol", vol, "_data", "data.bin");
+describe("WF8 the map's archives are never kept on the disk", () => {
+  it("streams each archive into its volumes: no tar in the data directory, each volume holding its own path", () => {
+    const dir = fresh();
+    try {
+      const r = boot(dir);
+      expect(r.status, r.stderr).toBe(0);
+      for (const [, vol] of MAP_TARS) expect(readFileSync(volume(dir, vol), "utf8"), vol).toBe(vol.repeat(5000));
+      expect(execFileSync("find", [join(dir, "fb"), "-name", "*.tar"], { encoding: "utf8" })).toBe("");
+      expect(r.log.some((l) => l.includes("--site map"))).toBe(false);
+    } finally { rmSync(dir, { recursive: true, force: true }); }
+  });
+  it("starts a cut stream again on a clean volume", () => {
+    const dir = fresh();
+    try {
+      writeFileSync(join(dir, "curl-cut"), "2");
+      const r = boot(dir);
+      expect(r.status, r.stderr).toBe(0);
+      for (const [, vol] of MAP_TARS) expect(readFileSync(volume(dir, vol), "utf8"), vol).toBe(vol.repeat(5000));
+      expect(r.log.filter((l) => l.startsWith("curl ")).length).toBeGreaterThan(3);
+    } finally { rmSync(dir, { recursive: true, force: true }); }
+  });
+  it("fails the boot with one clear line when an archive keeps failing", () => {
+    const dir = fresh();
+    try {
+      writeFileSync(join(dir, "curl-cut"), "99");
+      const r = boot(dir);
+      expect(r.status).not.toBe(0);
+      expect(r.stderr).toMatch(/^foxbench: BOOT FAILED: map archive \S+\.tar did not stream into its volumes after 3 tries$/m);
+      expect(r.log.some((l) => l.startsWith("docker run") && l.includes("--name wav-map "))).toBe(false);
+    } finally { rmSync(dir, { recursive: true, force: true }); }
+  });
+  it("sizes the disk from the archives, the ZIM and the images with headroom, on SSD", () => {
+    // 187.4 GB of archives (124.8 + 41.3 + 21.3), 95.2 GB of ZIM and 91 GB of images, each as measured: 374 GB.
+    expect(env.diskGb).toBeGreaterThanOrEqual(Math.ceil(374 * 1.25));
+    expect(env.diskType).toBe("pd-ssd");
   });
 });
 

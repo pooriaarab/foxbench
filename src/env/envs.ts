@@ -93,13 +93,17 @@ systemd-run --unit=foxbench-smoke python3 -m http.server 8080 --directory /srv/f
     startup: mypcbenchStartup(),
   },
   {
-    // wav-core plus Wikipedia and the map. The data (ZIM 100 GB, map tiles and routing about 60 GB, plus the
-    // map's extracted volumes) and the 91 GB of core images need about 400 GB; 64 GB of RAM holds the map's
-    // PostgreSQL, renderd and OSRM next to the four core sites.
+    // wav-core plus Wikipedia and the map. Measured data: the map's volumes are the 187.4 GB of its archives
+    // (nominatim 124.8, tiles 41.3, routing 21.3), which stream into them with no archive kept; the ZIM file is
+    // 95.2 GB; the core images take 91 GB. The sum is 374 GB, and 500 GB leaves 126 GB for the OS, the containers'
+    // writes and the logs (the first run, which kept the archives too, filled 450 GB). 64 GB of RAM holds the
+    // map's PostgreSQL, renderd and OSRM next to the four core sites. The extraction writes 187 GB, which a
+    // standard disk (about 60 MB/s at this size) would take over 50 minutes for, so the disk is SSD, as vwa's is.
     name: "wav-full",
     replaces: "wav-core",
     machineType: "n2-standard-16",
-    diskGb: 450,
+    diskGb: 500,
+    diskType: "pd-ssd",
     ports: [...wavSites, ...wavFullSites].flatMap((s) => [s.port, s.ctrlPort]).concat(RESET_PORT).map((remote) => ({ remote, local: remote + TUNNEL_OFFSET })),
     // The core sites boot first (about 60 min); the data download comes after them and took about 4 hours on a
     // real run. `up` waits for the first port, so doctor says which of the two data sites is still missing.
