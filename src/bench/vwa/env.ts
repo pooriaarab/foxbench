@@ -17,10 +17,17 @@ export const CLASSIFIEDS_ZIP = "https://archive.org/download/classifieds_docker_
 export const CLASSIFIEDS_ZIP_SHA1 = "b351be6468feeeb0b9b261dfc0ad9e8c2966d718";
 // Digests read on 2026-10-15 from the registry for jykoh/classifieds:latest and mysql:8.1, the tags of upstream's compose file.
 export const CLASSIFIEDS_IMAGE = "docker.io/jykoh/classifieds@sha256:a2a794da92f62a8d7ffd02314e4fab40ba6c7fc08f568371608f88f0ef605e43";
-/** One `docker pull` may run this long. The Classifieds image is one 73 GB layer (71.6 GiB compressed), so a pull is slow, and it must not hang the boot. */
-export const PULL_TIMEOUT_SECONDS = 2700;
-/** A timed-out pull is tried again; Docker keeps the layers it finished. */
+/**
+ * One `docker pull` may run this long (2 hours). The Classifieds image is one 73 GB layer (71.6 GiB compressed) that unpacks to 155 GB:
+ * at 20 MB/s, which a Cloud NAT VM can see, the download alone is an hour. A pull that moves is allowed this long; one that stops is not (PULL_STALL_SECONDS).
+ */
+export const PULL_TIMEOUT_SECONDS = 7200;
+/** A pull that gets no new bytes on disk for this long (10 minutes) is stopped. */
+export const PULL_STALL_SECONDS = 600;
+/** A stopped pull is tried again; Docker keeps the layers it finished. */
 export const PULL_ATTEMPTS = 2;
+/** Google's Docker Hub mirror: it serves the small images and the MySQL image from Google's network, and Docker falls back to Hub for a layer it lacks. */
+export const DOCKER_MIRROR = "https://mirror.gcr.io";
 export const MYSQL_IMAGE = "docker.io/library/mysql@sha256:f61944ff3f2961363a4d22913b2ac581523273679d7e14dd26e8db8c9f571a7e";
 
 /** The WebArena-Verified sites VWA uses, as wav-core runs them. */
@@ -43,15 +50,43 @@ set -e
 D=\${FOXBENCH_DIR:-/opt/foxbench}
 mkdir -p "$D"
 command -v docker >/dev/null || { apt-get update -q && DEBIAN_FRONTEND=noninteractive apt-get install -y -q docker.io; }
+# Google's mirror first, so the pulls skip Docker Hub's anonymous limit (shared by every VM behind a Cloud NAT IP) where the mirror has the image.
+J=\${DOCKER_DAEMON_JSON:-/etc/docker/daemon.json}
+mkdir -p "$(dirname "$J")"
+printf '{\\n  "registry-mirrors": ["${DOCKER_MIRROR}"]\\n}\\n' > "$D/daemon.json.new"
+changed=1
+cmp -s "$D/daemon.json.new" "$J" 2>/dev/null && changed=0
+if [ $changed -eq 1 ]; then mv "$D/daemon.json.new" "$J"; else rm "$D/daemon.json.new"; fi
 systemctl enable --now docker
-# A pull that outlasts its time fails with the reason, instead of hanging the boot.
+[ $changed -eq 0 ] || systemctl restart docker
+# Bytes the pull has written: a pull that gets no new bytes for PULL_STALL seconds is stopped, one that keeps moving is let run to PULL_TIMEOUT.
+probe() { if [ -n "$PULL_PROBE" ]; then sh -c "$PULL_PROBE"; else df --output=used -B1 /var/lib/docker | tail -1; fi; }
+watch_pull() {
+  docker pull -q "$1" >/dev/null &
+  p=$!
+  start=$(date +%s) mark=$(date +%s) last=$(probe) said=$(date +%s) tick=0
+  while kill -0 $p 2>/dev/null; do
+    sleep 1
+    tick=$((tick + 1))
+    now=$(date +%s)
+    if [ $((now - start)) -ge \${PULL_TIMEOUT:-${PULL_TIMEOUT_SECONDS}} ]; then kill $p; wait $p 2>/dev/null || true; return 124; fi
+    [ $((tick % \${PULL_POLL:-30})) -eq 0 ] || continue
+    cur=$(probe)
+    [ "$cur" = "$last" ] || { last=$cur; mark=$now; }
+    if [ $((now - mark)) -ge \${PULL_STALL:-${PULL_STALL_SECONDS}} ]; then kill $p; wait $p 2>/dev/null || true; return 125; fi
+    [ $((now - said)) -lt 300 ] || { said=$now; echo "vwa: pulling $1: $((now - start))s, $((cur / 1000000000)) GB used on disk" >&2; }
+  done
+  wait $p
+}
+# A pull that stops moving, or outlasts its time, fails with the reason instead of hanging the boot.
 pull() {
   n=1
   while :; do
     rc=0
-    timeout -k 30 \${PULL_TIMEOUT:-${PULL_TIMEOUT_SECONDS}} docker pull -q "$1" >/dev/null || rc=$?
+    watch_pull "$1" || rc=$?
     [ $rc -eq 0 ] && return
     if [ $rc -eq 124 ]; then echo "vwa: docker pull $1 timed out after \${PULL_TIMEOUT:-${PULL_TIMEOUT_SECONDS}}s (attempt $n of ${PULL_ATTEMPTS})" >&2
+    elif [ $rc -eq 125 ]; then echo "vwa: docker pull $1 stalled: no new bytes for \${PULL_STALL:-${PULL_STALL_SECONDS}}s (attempt $n of ${PULL_ATTEMPTS})" >&2
     else echo "vwa: docker pull $1 failed with status $rc (attempt $n of ${PULL_ATTEMPTS})" >&2; fi
     [ $n -ge ${PULL_ATTEMPTS} ] && { echo "vwa: giving up on $1; the site it serves will not start" >&2; exit 1; }
     n=$((n + 1))

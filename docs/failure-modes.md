@@ -1278,8 +1278,11 @@ need the Wikipedia site that wav-full runs, not this env. The tests are in
 | VW8 | The VM is too small for the images (Classifieds is 72 GB pulled and 155 GB unpacked, shopping and reddit 45 GB pulled) and the pull hangs on a full disk. | n2-standard-8 and a 500 GB disk: the Classifieds image alone is 72 GB pulled and 155 GB unpacked, and a full 100 GB disk hung its pull. | `VW8 ...` |
 | VW9 | The Classifieds data loads twice or not at all on a reboot. | The data loads when the DB container is first made (MySQL's init folder); a reboot only starts the containers. | `VW9 ...` |
 | VW10 | The init folder is root-only (the token step's `umask 077` leaked into the unpack), so the MySQL user cannot read it, its entrypoint loops on "Permission denied" and the data never loads. | The folder is 755 and its files 644 after the unpack. | `VW10 ...` |
-| VW11 | A `docker pull` hangs for the whole boot, and `up` waits the full tunnel time to say nothing. | Each pull is limited to 45 minutes and tried twice; a pull that outlasts that exits non-zero with the image, the time and "giving up" on stderr. | `VW11 ...` |
+| VW11 | A `docker pull` hangs for the whole boot, and `up` waits the full tunnel time to say nothing. | Each pull is limited to 2 hours and tried twice; a pull that outlasts that exits non-zero with the image, the time and "giving up" on stderr. | `VW11 ...` |
 | VW12 | A Classifieds reset with a wrong token answers 200 with "Error: Invalid token", and the service reports success. | The service reports success only when the reply says the SQL file executed; any other reply is a 500 with the reply's first words. | `VW12 ...` |
+| VW13 | A slow pull is killed at a fixed time while it still moves, or a stuck pull holds the boot until the time is up. | A pull that gets no new bytes on the boot disk for 10 minutes is stopped as "stalled" (tried twice, then "giving up"); one that keeps moving may run 2 hours. | `VW13 ...` |
+| VW14 | Every pull goes to Docker Hub through the VM's shared Cloud NAT IP, which has Hub's anonymous limit of 100 pulls per hour. | Google's mirror (`mirror.gcr.io`) is in daemon.json before the first pull; Docker falls back to Hub for a layer the mirror lacks, as it does for the Classifieds layer. | `VW14 ...` |
+| VW15 | A 500 GB standard persistent disk writes about 60 MB/s, so the 230 GB the Classifieds pull writes takes over an hour and every pull times out. | The vwa VM's boot disk is `pd-ssd`. | `VW15 ...` |
 
 ## AMO release build and listed submission (`scripts/amo-listing.mjs`)
 
