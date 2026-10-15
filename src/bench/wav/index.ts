@@ -202,11 +202,12 @@ export async function probe(url: string, ctrl: string, health: string): Promise<
   }
 }
 
-interface WavEnv {
+/** What a benchmark on the WebArena sites needs of a task: where it starts, and the sites it uses. */
+export type WavCase = Pick<WavTask, "id" | "sites" | "startUrls" | "intent">;
+/** The sites of a run and their reset marks, shared by every benchmark on them. */
+export interface WavEnv {
   ctx: BenchContext;
   sites: SiteUrl[];
-  tasks: Map<string, WavTask>;
-  prompts: Map<string, string>;
   /** Sites a case sent a request to that may change them; the next case on one resets it first (WJ6). */
   dirty: Set<string>;
   /** The marks live in the cache, per host, so the next run resets too. */
@@ -215,9 +216,13 @@ interface WavEnv {
   harDir: string;
   ownsHarDir: boolean;
 }
+interface VerifiedEnv extends WavEnv {
+  tasks: Map<string, WavTask>;
+  prompts: Map<string, string>;
+}
 const saveDirty = (env: WavEnv) => writeFileSync(env.dirtyFile, JSON.stringify([...env.dirty]));
 /** Each episode's task and HAR recorders, for its judge. */
-const running = new WeakMap<Episode, { task: WavTask; hars: { site: string; har: HarRecorder }[] }>();
+const running = new WeakMap<Episode, { task: WavCase; hars: { site: string; har: HarRecorder }[] }>();
 const READS = ["GET", "HEAD", "OPTIONS"];
 
 /** Recreates a site's container through the env's reset service, then waits for its probe. */
@@ -234,6 +239,89 @@ export async function reset(u: SiteUrl, waitMs: number): Promise<void> {
 /** The file of the sites to reset before their next case, per host and tunnel offset (WJ6). */
 export const wavDirtyFile = (ctx: BenchContext, offset = TUNNEL_OFFSET) => join(wavDir(ctx), `dirty-${ctx.env.FOXBENCH_WAV_HOST || "127.0.0.1"}-${offset}.json`);
 
+/** Ready when wav-core's four sites answer; else which one does not, and the fix. */
+export async function wavReady(ctx: BenchContext, offset?: number, portOffset?: number): Promise<Readiness> {
+  const down = (await Promise.all(wavUrls(ctx.env, offset, portOffset).map(async (u) => ({ id: u.site.id, why: await probe(u.url, u.ctrl, u.site.health) })))).filter((d) => d.why);
+  if (!down.length) return { ready: true };
+  return { ready: false, reason: down.map((d) => `${d.id}: ${d.why}`).join("; "),
+    fix: "foxbench env up wav-core (GitLab takes minutes to boot), or set FOXBENCH_WAV_HOST to a host that runs the wav-core containers" };
+}
+
+/** What a judge browser needs to open a site as the logged-in user: the tunnel URL, the port the agent saw, and the headers. */
+export async function wavLogin(wav: WavEnv, id: string) {
+  const u = wav.sites.find((s) => s.site.id === id);
+  if (!u) throw new Error(`${id} is not up`);
+  return { url: u.url, port: u.port, headers: await siteHeaders(u) };
+}
+
+/** The sites of a run: wav-core's four, and the data sites that answer (WF4). Reset marks come from the cache. */
+export async function wavUp(ctx: BenchContext, options: { offset?: number; portOffset?: number; harDir?: string } = {}): Promise<WavEnv> {
+  const dirtyFile = wavDirtyFile(ctx, options.offset);
+  const dirty = new Set<string>(existsSync(dirtyFile) ? JSON.parse(readFileSync(dirtyFile, "utf8")) : []);
+  const full = wavUrls(ctx.env, options.offset, options.portOffset, wavFullSites);
+  const answering = (await Promise.all(full.map(async (u) => ((await probe(u.url, u.ctrl, u.site.health)) ? null : u)))).filter((u) => u !== null);
+  return { ctx, sites: [...wavUrls(ctx.env, options.offset, options.portOffset), ...answering], dirty, dirtyFile,
+    harDir: options.harDir ?? mkdtempSync(join(tmpdir(), "fbn-wav-har-")), ownsHarDir: !options.harDir };
+}
+
+/** Removes the run's HAR directory when the run made it. */
+export const wavDown = (wav: WavEnv) => { if (wav.ownsHarDir) rmSync(wav.harDir, { recursive: true, force: true }); };
+
+/**
+ * Starts one case on the sites it uses: resets what a case left changed, puts a HAR recorder
+ * and a proxy with the site's login behind each site's port, and hands the agent the first
+ * site. `goal` gets the start URLs on the proxy ports.
+ */
+export async function wavStart(wav: WavEnv, task: WavCase, goal: (startUrls: string[]) => string, resetWaitMs?: number): Promise<Episode> {
+  const { sites, dirty } = wav;
+  const missing = task.sites.filter((id) => !sites.some((u) => u.site.id === id));
+  if (missing.length) throw new Error(`skipped: task ${task.id} needs ${missing.join(" and ")}, which is not up (wav-core runs shopping, shopping_admin, reddit and gitlab); run it on wav-full (foxbench env up wav-full)`);
+  const site = (id: string) => sites.find((u) => u.site.id === id)!;
+  const starts = task.startUrls.map(parseStartUrl).map((s) => ({ ...s, path: (site(s.site).site.base ?? "") + s.path }));
+  const first = site(starts[0]!.site);
+  // The run loop's proxy serves the first site; each other site the task uses gets its own, whether or not a start URL names it.
+  const others = sites.filter((u) => u !== first && (task.sites.includes(u.site.id) || starts.some((s) => s.site === u.site.id)));
+  for (const u of [first, ...others]) {
+    if (!dirty.has(u.site.id)) continue;
+    await reset(u, resetWaitMs ?? 10 * 60_000);
+    dirty.delete(u.site.id);
+    saveDirty(wav);
+  }
+  const headers = await Promise.all([first, ...others].map(siteHeaders));
+  // A HAR recorder sits behind each site's proxy and logs the requests as upstream's evaluator reads them (WJ2).
+  const hars: { site: string; har: HarRecorder }[] = [];
+  const proxies: RecordingProxy[] = [];
+  const stop = () => Promise.all([...proxies.map((p) => p.close()), ...hars.map((h) => h.har.close())]);
+  try {
+    for (const u of [first, ...others]) hars.push({ site: u.site.id, har: await startHar(u.url, `http://127.0.0.1:${u.port}`) });
+    for (const [i, u] of others.entries()) proxies.push(await startProxy(hars[i + 1]!.har.origin, { port: u.port, headers: headers[i + 1]! }));
+  } catch (error) {
+    await stop();
+    throw error;
+  }
+  const unnamed = others.filter((u) => !starts.some((s) => s.site === u.site.id)).map((u) => ({ site: u.site.id, path: `${u.site.base ?? ""}/` }));
+  const startUrls = [...starts, ...unnamed].map((s) => `http://127.0.0.1:${site(s.site).port}${s.path}`);
+  const episode: Episode = {
+    url: hars[0]!.har.origin + starts[0]!.path, startPath: starts[0]!.path, port: first.port, headers: headers[0]!,
+    goal: goal(startUrls),
+    close: async () => { await stop(); },
+  };
+  running.set(episode, { task, hars });
+  return episode;
+}
+
+/** The case's HAR entries in time order, with the reset marks set for the sites it changed. */
+export function wavFinish(wav: WavEnv, episode: Episode) {
+  const { ctx, sites, dirty } = wav;
+  const run = running.get(episode);
+  if (!run) throw new Error("webarena-verified did not start this episode");
+  for (const { site, har } of run.hars) if (!sites.find((u) => u.site.id === site)?.site.readOnly && har.entries.some((e) => !READS.includes(e.request.method))) dirty.add(site);
+  saveDirty(wav);
+  const entries = run.hars.flatMap((h) => h.har.entries).toSorted((a, b) => a.startedDateTime.localeCompare(b.startedDateTime));
+  const urls = Object.fromEntries(sites.map((u) => [`__${u.site.id.toUpperCase()}__`, `http://127.0.0.1:${u.port}${u.site.base ?? ""}`]));
+  return { ctx, entries, task: run.task, urls };
+}
+
 /** For tests: `offset` moves the tunnel ports, `portOffset` the sites' own (the proxies') ports, `resetWaitMs` shortens the wait for a reset, and `harDir` is the test's own HAR directory. */
 export const webarenaVerified = (options: { offset?: number; portOffset?: number; resetWaitMs?: number; harDir?: string } = {}): Benchmark => ({
   id: "webarena-verified",
@@ -246,11 +334,7 @@ export const webarenaVerified = (options: { offset?: number; portOffset?: number
   async check(ctx: BenchContext): Promise<Readiness> {
     const noUv = uvMissing(ctx);
     if (noUv) return { ready: false, reason: `the task list needs uv: ${noUv}`, fix: "install uv (https://docs.astral.sh/uv/) or set FOXBENCH_UV" };
-    const urls = wavUrls(ctx.env, options.offset, options.portOffset);
-    const down = (await Promise.all(urls.map(async (u) => ({ id: u.site.id, why: await probe(u.url, u.ctrl, u.site.health) })))).filter((d) => d.why);
-    if (!down.length) return { ready: true };
-    return { ready: false, reason: down.map((d) => `${d.id}: ${d.why}`).join("; "),
-      fix: "foxbench env up wav-core (GitLab takes minutes to boot), or set FOXBENCH_WAV_HOST to a host that runs the wav-core containers" };
+    return wavReady(ctx, options.offset, options.portOffset);
   },
   async load(ctx, subset) {
     const { tasks, hard } = await loadTasks(ctx);
@@ -259,72 +343,24 @@ export const webarenaVerified = (options: { offset?: number; portOffset?: number
   },
   async up(ctx) {
     const { tasks } = await loadTasks(ctx);
-    const dirtyFile = wavDirtyFile(ctx, options.offset);
-    const dirty = new Set<string>(existsSync(dirtyFile) ? JSON.parse(readFileSync(dirtyFile, "utf8")) : []);
-    // The data sites run only on wav-full: the ones that answer join wav-core's four (WF4).
-    const full = wavUrls(ctx.env, options.offset, options.portOffset, wavFullSites);
-    const answering = (await Promise.all(full.map(async (u) => ((await probe(u.url, u.ctrl, u.site.health)) ? null : u)))).filter((u) => u !== null);
-    const env: WavEnv = { ctx, sites: [...wavUrls(ctx.env, options.offset, options.portOffset), ...answering], tasks: new Map(tasks.map((t) => [String(t.id), t])), prompts: await loadPrompts(ctx, tasks), dirty, dirtyFile,
-      harDir: options.harDir ?? mkdtempSync(join(tmpdir(), "fbn-wav-har-")), ownsHarDir: !options.harDir };
+    const env: VerifiedEnv = { ...(await wavUp(ctx, options)), tasks: new Map(tasks.map((t) => [String(t.id), t])), prompts: await loadPrompts(ctx, tasks) };
     return env as unknown as Env;
   },
   async start(env, item) {
-    const wav = env as unknown as WavEnv;
-    const { sites, tasks, prompts, dirty } = wav;
-    const task = tasks.get(item.id);
+    const wav = env as unknown as VerifiedEnv;
+    const task = wav.tasks.get(item.id);
     if (!task) throw new Error(`webarena-verified has no task ${item.id}`);
-    const missing = task.sites.filter((id) => !sites.some((u) => u.site.id === id));
-    if (missing.length) throw new Error(`skipped: task ${item.id} needs ${missing.join(" and ")}, which is not up (wav-core runs shopping, shopping_admin, reddit and gitlab); run it on wav-full (foxbench env up wav-full)`);
-    const site = (id: string) => sites.find((u) => u.site.id === id)!;
-    const starts = task.startUrls.map(parseStartUrl).map((s) => ({ ...s, path: (site(s.site).site.base ?? "") + s.path }));
-    const first = site(starts[0]!.site);
-    // Every task's start URLs name all its sites. The run loop's proxy serves the first; each other site gets its own.
-    const others = sites.filter((u) => u !== first && starts.some((s) => s.site === u.site.id));
-    for (const u of [first, ...others]) {
-      if (!dirty.has(u.site.id)) continue;
-      await reset(u, options.resetWaitMs ?? 10 * 60_000);
-      dirty.delete(u.site.id);
-      saveDirty(wav);
-    }
-    const headers = await Promise.all([first, ...others].map(siteHeaders));
-    // A HAR recorder sits behind each site's proxy and logs the requests as upstream's evaluator reads them (WJ2).
-    const hars: { site: string; har: HarRecorder }[] = [];
-    const proxies: RecordingProxy[] = [];
-    const stop = () => Promise.all([...proxies.map((p) => p.close()), ...hars.map((h) => h.har.close())]);
-    try {
-      for (const u of [first, ...others]) hars.push({ site: u.site.id, har: await startHar(u.url, `http://127.0.0.1:${u.port}`) });
-      for (const [i, u] of others.entries()) proxies.push(await startProxy(hars[i + 1]!.har.origin, { port: u.port, headers: headers[i + 1]! }));
-    } catch (error) {
-      await stop();
-      throw error;
-    }
-    const startUrls = starts.map((s) => `http://127.0.0.1:${site(s.site).port}${s.path}`);
-    const episode: Episode = {
-      url: hars[0]!.har.origin + starts[0]!.path, startPath: starts[0]!.path, port: first.port, headers: headers[0]!,
-      goal: fillPrompt(prompts.get(promptName(task))!, task.intent, startUrls),
-      close: async () => { await stop(); },
-    };
-    running.set(episode, { task, hars });
-    return episode;
+    return wavStart(wav, task, (urls) => fillPrompt(wav.prompts.get(promptName(task))!, task.intent, urls), options.resetWaitMs);
   },
   async judge(env, episode, output) {
     const wav = env as unknown as WavEnv;
-    const { ctx, sites, dirty } = wav;
-    const run = running.get(episode);
-    if (!run) throw new Error("webarena-verified did not start this episode");
-    for (const { site, har } of run.hars) if (!sites.find((u) => u.site.id === site)?.site.readOnly && har.entries.some((e) => !READS.includes(e.request.method))) dirty.add(site);
-    saveDirty(wav);
-    const entries = run.hars.flatMap((h) => h.har.entries).toSorted((a, b) => a.startedDateTime.localeCompare(b.startedDateTime));
-    const urls = Object.fromEntries(sites.map((u) => [`__${u.site.id.toUpperCase()}__`, `http://127.0.0.1:${u.port}${u.site.base ?? ""}`]));
-    const score = await judgeCase(ctx, wav.harDir, run.task.id, entries, output.answer, urls);
+    const { ctx, entries, task, urls } = wavFinish(wav, episode);
+    const score = await judgeCase(ctx, wav.harDir, task.id, entries, output.answer, urls);
     const success = score.status === "success";
     return { success, score: score.score, attack: null, judgedBy: "programmatic",
       reasons: success ? [] : (score.messages.length ? score.messages : [`upstream's evaluator says ${score.status}`]).slice(0, 5).map((m) => m.slice(0, 400)) };
   },
   // The VM stops only through foxbench env down.
-  down: async (env) => {
-    const { harDir, ownsHarDir } = env as unknown as WavEnv;
-    if (ownsHarDir) rmSync(harDir, { recursive: true, force: true });
-  },
+  down: async (env) => wavDown(env as unknown as WavEnv),
   baselines: [],
 });
