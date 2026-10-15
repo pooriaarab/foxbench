@@ -2,6 +2,7 @@
 // an IAP tunnel on 127.0.0.1. State lives in ~/.foxbench/env/<env>.json.
 import { randomBytes } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
 import { createServer } from "node:net";
 import { homedir } from "node:os";
 import { join } from "node:path";
@@ -40,6 +41,16 @@ function alive(pid: number): boolean {
   }
 }
 
+/** True only for a live `gcloud ... start-iap-tunnel`: a pid in an old state file may belong to another program now. */
+function isTunnel(pid: number): boolean {
+  return pid > 0 && alive(pid) && /start-iap-tunnel/.test(spawnSync("ps", ["-o", "command=", "-p", String(pid)], { encoding: "utf8" }).stdout);
+}
+
+/** Stops the tunnel process groups in `state`, and nothing else. */
+function stopTunnels(state: State | null): void {
+  for (const t of state?.tunnels ?? []) if (isTunnel(t.pid)) process.kill(-t.pid);
+}
+
 function portFree(port: number): Promise<boolean> {
   return new Promise((done) => {
     const server = createServer();
@@ -49,10 +60,11 @@ function portFree(port: number): Promise<boolean> {
 }
 
 /** Restarts the tunnel until gcloud says it listens: its test fails while the VM boots. */
-async function openTunnel(gcp: Gcp, vm: string, port: { remote: number; local: number }, log: string, minutes: number): Promise<number> {
+async function openTunnel(gcp: Gcp, vm: string, port: { remote: number; local: number }, log: string, minutes: number, started: (pid: number) => void): Promise<number> {
   const deadline = Date.now() + minutes * 60_000;
   while (Date.now() < deadline) {
     const pid = startTunnel(gcp, vm, port, log);
+    started(pid);
     while (alive(pid) && Date.now() < deadline) {
       // gcloud binds the local port only once its tunnel test passes. Its "Listening on port"
       // line can stay in its stdout buffer when stdout is a file, so the log is not read.
@@ -70,7 +82,13 @@ async function up(gcp: Gcp, name: string, spot: boolean, maxRun: string, offset:
   if (!found) throw new UsageError(`Unknown env "${name}".`);
   const env = { ...found, ports: found.ports.map((p) => ({ ...p, local: p.local + offset })) };
   if (!/^\d+[smhd]$/.test(maxRun)) throw new UsageError(`--max-run-duration must look like 4h or 90m, not ${maxRun}.`);
-  if (readState(name)) throw new Error(`${name} is up already (${stateFile(name)}). Run foxbench env down ${name} first.`);
+  const old = readState(name);
+  if (old) {
+    if (listVms(gcp, name).length) throw new Error(`${name} is up already (${stateFile(name)}). Run foxbench env down ${name} first.`);
+    // No VM: it was preempted or deleted, and its tunnels from that run may still hold the ports.
+    stopTunnels(old);
+    rmSync(stateFile(name), { force: true });
+  }
   for (const p of env.ports) if (!(await portFree(p.local))) throw new Error(`Local port ${p.local} is in use; ${name} tunnels to it. Free it first.`);
   const vm = `foxbench-${name}-${randomBytes(3).toString("hex")}`;
   createVm(gcp, env, vm, { spot, maxRun });
@@ -80,8 +98,13 @@ async function up(gcp: Gcp, name: string, spot: boolean, maxRun: string, offset:
   writeFileSync(stateFile(name), JSON.stringify(state, null, 2));
   for (const port of env.ports) {
     const log = join(stateDir(), `${name}.${port.local}.log`);
-    state.tunnels.push({ ...port, pid: await openTunnel(gcp, vm, port, log, env.bootMinutes), log });
-    writeFileSync(stateFile(name), JSON.stringify(state, null, 2));
+    // Record each pid when the process starts: if `up` dies while the tunnel opens, `down` still finds it.
+    const tunnel = { ...port, pid: 0, log };
+    state.tunnels.push(tunnel);
+    tunnel.pid = await openTunnel(gcp, vm, port, log, env.bootMinutes, (pid) => {
+      tunnel.pid = pid;
+      writeFileSync(stateFile(name), JSON.stringify(state, null, 2));
+    });
   }
   console.log(`${name} is up on ${vm} (${spot ? "Spot" : "standard"}, deleted after ${maxRun}).`);
   for (const t of state.tunnels) console.log(`  http://127.0.0.1:${t.local} -> ${vm}:${t.remote}`);
@@ -89,7 +112,7 @@ async function up(gcp: Gcp, name: string, spot: boolean, maxRun: string, offset:
 
 function down(gcp: Gcp, name: string): void {
   const state = readState(name);
-  for (const t of state?.tunnels ?? []) if (alive(t.pid)) process.kill(-t.pid);
+  stopTunnels(state);
   const vms = listVms(gcp, name);
   for (const vm of vms) {
     deleteVm(gcp, vm);

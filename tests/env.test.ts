@@ -154,6 +154,7 @@ describe("V9 the tunnel and the state file", () => {
     const pid = state.tunnels[0].pid;
     expect(() => process.kill(pid, 0)).not.toThrow();
     expect(env("status", "smoke").stdout).toMatch(new RegExp(`tunnel smoke 127\\.0\\.0\\.1:${port} -> \\S+:8080 up`));
+    listing([{ name: state.vm, env: "smoke" }]);
     expect(up().status).toBe(1);
     expect(env("down", "smoke").status).toBe(0);
     await expect.poll(() => { try { return process.kill(pid, 0); } catch { return false; } }).toBe(false);
@@ -200,7 +201,8 @@ describe("V14 no two envs share a local port", () => {
   });
 });
 
-const dead = (pid: number) => { try { return !process.kill(pid, 0); } catch { return true; } };
+// A killed child of this test process stays a zombie until reaped, and kill(pid, 0) still finds it.
+const dead = (pid: number) => { const stat = spawnSync("ps", ["-o", "stat=", "-p", String(pid)], { encoding: "utf8" }).stdout.trim(); return !stat || stat.startsWith("Z"); };
 const stateFile = () => join(home, ".foxbench/env/smoke.json");
 function writeState(tunnels: { remote: number; local: number; pid: number; log: string }[]) {
   mkdirSync(join(home, ".foxbench/env"), { recursive: true });
