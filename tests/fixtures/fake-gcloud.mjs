@@ -5,6 +5,7 @@
 // FAKE_GCLOUD_LIST (a JSON file) and a tunnel binds its local port, as gcloud
 // does once its test passes, and stays up until it is killed. With
 // FAKE_GCLOUD_NOBIND=1 a tunnel stays up without binding, as gcloud does while its test fails.
+// FAKE_GCLOUD_SLOWSTOP=<ms> a tunnel holds its port that long after SIGTERM, as a loaded machine does.
 import { appendFileSync, readFileSync } from "node:fs";
 import { createServer } from "node:net";
 
@@ -22,4 +23,6 @@ else if (argv.includes("start-iap-tunnel")) {
   process.stderr.write("Testing if tunnel connection works.\n");
   if (process.env.FAKE_GCLOUD_NOBIND) setInterval(() => {}, 1000);
   else createServer().listen(Number(port), "127.0.0.1");
+  const slow = Number(process.env.FAKE_GCLOUD_SLOWSTOP);
+  if (slow) process.on("SIGTERM", () => setTimeout(() => process.exit(0), slow));
 } else console.log("[]");
