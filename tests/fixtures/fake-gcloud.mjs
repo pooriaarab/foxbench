@@ -3,7 +3,8 @@
 // script it was given) to FAKE_GCLOUD_LOG as one JSON line, then acts:
 // FAKE_GCLOUD_FAIL=<word> fails any call that has that word, `list` prints
 // FAKE_GCLOUD_LIST (a JSON file) and a tunnel binds its local port, as gcloud
-// does once its test passes, and stays up until it is killed.
+// does once its test passes, and stays up until it is killed. With
+// FAKE_GCLOUD_NOBIND=1 a tunnel stays up without binding, as gcloud does while its test fails.
 import { appendFileSync, readFileSync } from "node:fs";
 import { createServer } from "node:net";
 
@@ -19,5 +20,6 @@ if (argv.includes("list")) console.log(process.env.FAKE_GCLOUD_LIST ? readFileSy
 else if (argv.includes("start-iap-tunnel")) {
   const port = argv.find((a) => a.startsWith("--local-host-port="))?.split(":")[1];
   process.stderr.write("Testing if tunnel connection works.\n");
-  createServer().listen(Number(port), "127.0.0.1");
+  if (process.env.FAKE_GCLOUD_NOBIND) setInterval(() => {}, 1000);
+  else createServer().listen(Number(port), "127.0.0.1");
 } else console.log("[]");
