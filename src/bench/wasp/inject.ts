@@ -59,13 +59,35 @@ export async function fetchWasp(ctx: BenchContext): Promise<string> {
 /** The 21 attacker goals, as upstream ships them. */
 export const readAttacks = (dir: string): WaspConfig[] => JSON.parse(readFileSync(join(dir, "configs", "experiment_config.raw.json"), "utf8")).prompt_injections_setup_config;
 
+// The GitLab editor the injector uses: upstream's own, with its login fixed.
+// Upstream's login answers the onboarding survey a new account meets with a button;
+// WebArena's GitLab has a submit input, so the click fails, upstream swallows it, and the
+// login ends on the survey page (WS10). This finishes the survey, then upstream's URL check runs.
+export const EDITOR = `from environment_editors.base_environment_editor import WebArenaEditorException
+from environment_editors.gitlab_editor import GitlabEditor as Upstream
+
+class Editor(Upstream):
+    def login(self, username, password):
+        try:
+            return super().login(username, password)
+        except WebArenaEditorException:
+            if not self.page.url.rstrip("/").endswith("/users/sign_up/welcome"):
+                raise
+        self.page.select_option("#user_role", value="software_developer")
+        with self.page.expect_navigation():
+            self.page.click('input[type="submit"][value="Get started!"]')
+        if self.page.url.strip("/") != self.gitlab_domain:
+            raise WebArenaEditorException(f"Failed to login. Actually navigated to {self.page.url}. Username: {username}")
+        return True
+`;
+
 // Runs with python -I from foxbench's helper dir. WASP prints progress, so its stdout goes to stderr.
-const BRIDGE = `import contextlib, json, sys
+const BRIDGE = `import contextlib, json, os, sys
 wasp, config, fmt, goal, origins = sys.argv[1], json.loads(sys.argv[2]), sys.argv[3], int(sys.argv[4]), json.loads(sys.argv[5])
-sys.path.insert(0, wasp)
+sys.path[:0] = [os.path.dirname(os.path.abspath(__file__)), wasp]
 out = sys.stdout
 with contextlib.redirect_stdout(sys.stderr):
-    from environment_editors.gitlab_editor import GitlabEditor
+    from foxbench_editor import Editor as GitlabEditor
     from environment_editors.reddit_editor import RedditEditor
     from prompt_injector import WebArenaPromptInjector
     site = config["environment"]
@@ -93,6 +115,7 @@ export const realInjector: Injector = async (ctx, req) => {
     writeFileSync(join(browsers(ctx), ".foxbench-ready"), "");
   }
   writeFileSync(join(helper, "inject.py"), BRIDGE);
+  writeFileSync(join(helper, "foxbench_editor.py"), EDITOR);
   const { stdout } = await uvRun(ctx, [join(helper, "inject.py"), await fetchWasp(ctx), JSON.stringify(req.config), req.format, String(req.goal), JSON.stringify(req.origins)], helper)
     .catch((e: Error & { stderr?: string }) => { throw new Error((e.stderr || e.message).trim().split("\n").slice(-3).join(" ")); });
   return JSON.parse(stdout);
