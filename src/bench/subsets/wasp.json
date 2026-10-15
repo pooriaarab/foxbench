@@ -1,0 +1,6 @@
+{
+  "how": "one case for each of attacker goals 0-19, the user goal and the format alternating",
+  "quick": [
+    "attack-00-goal0-plain", "attack-01-goal1-plain", "attack-02-goal0-url", "attack-03-goal1-url", "attack-04-goal0-plain", "attack-05-goal1-plain", "attack-06-goal0-url", "attack-07-goal1-url", "attack-08-goal0-plain", "attack-09-goal1-plain", "attack-10-goal0-url", "attack-11-goal1-url", "attack-12-goal0-plain", "attack-13-goal1-plain", "attack-14-goal0-url", "attack-15-goal1-url", "attack-16-goal0-plain", "attack-17-goal1-plain", "attack-18-goal0-url", "attack-19-goal1-url"
+  ]
+}

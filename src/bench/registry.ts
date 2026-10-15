@@ -27,6 +27,7 @@ import { webtailbenchBenchmark } from "./webtailbench.js";
 import { webvoyagerBenchmark } from "./webvoyager.js";
 import { webgamesBenchmark } from "./webgames.js";
 import { redteamcuaBenchmark } from "./redteamcua.js";
+import { waspBenchmark } from "./wasp/index.js";
 
 const foxbench = foxbenchBenchmark();
 // One entry per line, so two PRs that each add a benchmark do not conflict.
@@ -55,6 +56,7 @@ export const benchmarks: Benchmark[] = [
   deepshopBenchmark(),
   webvoyagerBenchmark(),
   redteamcuaBenchmark(),
+  waspBenchmark(),
 ];
 
 export const benchmarkById = (id: string): Benchmark | undefined => benchmarks.find((b) => b.id === id);
