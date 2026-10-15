@@ -47,7 +47,7 @@ function boot(dir: string, pythonPre = "", aptBody = "true") {
   const script = join(dir, "startup.sh");
   writeFileSync(script, env.startup.replaceAll("/opt/foxbench", join(dir, "fb")));
   mkdirSync(join(dir, "fb"), { recursive: true });
-  const r = spawnSync("sh", [script], { encoding: "utf8", env: { PATH: `${bin}:/usr/bin:/bin` } });
+  const r = spawnSync("sh", [script], { encoding: "utf8", env: { PATH: `${bin}:/usr/bin:/bin`, DOCKER_DAEMON_JSON: join(dir, "daemon.json") } });
   return { status: r.status, stderr: r.stderr, log: existsSync(join(dir, "log")) ? readFileSync(join(dir, "log"), "utf8").trim().split("\n") : [], script };
 }
 
