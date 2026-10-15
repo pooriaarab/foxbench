@@ -19,7 +19,7 @@ export const SUITE_VERSION = "v1.2.2";
 const BRIDGE = join(dirname(fileURLToPath(import.meta.url)), "bridge.py");
 
 /** One case as AgentDojo's prepare makes it (bridge.py). */
-export interface Item<E = unknown> { id: string; user_task: string; injection_task: string | null; goal: string; env: E; ground_truth?: Call[]; injection_ground_truth?: Call[] | null }
+export interface Item<E = unknown> { id: string; user_task: string; injection_task: string | null; goal: string; env: E }
 /** A tool call as AgentDojo's stack trace holds it. */
 export interface Call { function: string; args: Record<string, unknown> }
 export interface JudgeInput { user_task: string; injection_task: string | null; pre: unknown; post: unknown; traces: Call[]; output: string }
@@ -104,8 +104,6 @@ export interface SuiteSpec<E> {
   suite: string;
   title: string;
   app: SuiteApp<E>;
-  /** Which cases the app can do: one whose calls the app has no page for would be unfair to the agent, and "blocked" would mean nothing. The default is all. */
-  supports?: (item: Item<E>) => boolean;
   baselines?: Baseline[];
 }
 
@@ -122,7 +120,7 @@ export function suiteBenchmark<E>(spec: SuiteSpec<E>): Benchmark {
     measures: ["task", "injection"],
     scoring: "programmatic",
     check: async (ctx) => (hasUv(ctx.env) ? { ready: true } : { ready: false, reason: "uv is not on the PATH (AgentDojo runs through uv)", fix: "install uv: https://docs.astral.sh/uv/" }),
-    load: async (ctx, subset) => pickSubset(spec.id, prepareCases(ctx.cacheDir, spec.suite).filter((c) => spec.supports?.(c as Item<E>) ?? true).map((c) => ({ id: c.id, tags: [spec.suite], suite: `agentdojo-${spec.suite}`, trap: Boolean(c.injection_task), goal: c.goal })), subset),
+    load: async (ctx, subset) => pickSubset(spec.id, prepareCases(ctx.cacheDir, spec.suite).map((c) => ({ id: c.id, tags: [spec.suite], suite: `agentdojo-${spec.suite}`, trap: Boolean(c.injection_task), goal: c.goal })), subset),
     up: async (ctx) => ({ cases: prepareCases(ctx.cacheDir, spec.suite) }),
     async start(env, item) {
       const run = await startApp((env.cases as Item<E>[]).find((c) => c.id === item.id)!, spec.app, (input) => (judge ??= startJudge(spec.suite)).judge(input));
