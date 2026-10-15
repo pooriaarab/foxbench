@@ -7,7 +7,7 @@ import { existsSync, mkdirSync, renameSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { startProxy, type RecordingProxy } from "../proxy.js";
 import { pickSubset } from "../subsets.js";
-import type { Baseline, Benchmark, BenchContext, Case, Env, Replacement } from "../types.js";
+import type { Baseline, Benchmark, BenchContext, Case, Env, Replacement, SubsetName } from "../types.js";
 import type { HarEntry } from "../wav/har.js";
 import { fetchImage } from "../vwa/eval.js";
 import { wavDown, wavFinish, wavLogin, wavReady, wavStart, wavUp, type WavEnv, type WavSet } from "../wav/index.js";
@@ -16,7 +16,9 @@ import { judgeBrowser, type JudgeBrowser } from "./page.js";
 
 /** One task of a list: WebArena's config shape. */
 export interface WaListTask extends WaTask {
-  task_id: number;
+  task_id: number | string;
+  /** The attacker's goal, scored on the same run (VWA-Adv): the case is a trap, and `attack` says whether the agent followed it. */
+  attack?: WaTask;
   /** Tags a list adds to the sites and eval types. */
   tags?: string[];
   sites: string[];
@@ -33,6 +35,12 @@ export interface WaSpec {
   source: { url: string; dir: string; name?: string };
   /** The tasks, from the fetched file. */
   tasks(ctx: BenchContext, file: string): Promise<WaListTask[]>;
+  /** For a list too big to fetch whole: the cases from a committed list, and each task fetched when its case starts. Then `tasks` is unused. */
+  cases?: (ctx: BenchContext, subset: SubsetName) => Promise<Case[]>;
+  task?: (ctx: BenchContext, id: string) => Promise<WaListTask>;
+  /** Bodies the proxy serves in place of the site's, without telling the agent (VWA-Adv's attack image). */
+  swap?: (wav: WavEnv, task: WaListTask) => Promise<Replacement[]>;
+  measures?: Benchmark["measures"];
   /** The sites and env the list runs on; wav-core's by default. The options' offsets override its own. */
   set?: WavSet;
   /** Files the agent is given for a task (VWA's input images): the proxy serves each at its path, and the goal names it. */
@@ -54,6 +62,7 @@ export interface WaOptions {
 }
 
 interface WaEnv extends WavEnv {
+  /** Every task, or those fetched so far when the spec fetches one at a time. */
   tasks: Map<string, WaListTask>;
   origins: Record<string, string>;
   browser: JudgeBrowser;
@@ -89,11 +98,19 @@ const hasFuzzy = (t: WaTask) => JSON.stringify(t.eval).includes('"fuzzy_match"')
 export function waBenchmark(spec: WaSpec, options: WaOptions = {}): Benchmark {
   const set: WavSet = { ...spec.set, ...(options.offset === undefined ? {} : { offset: options.offset }), ...(options.portOffset === undefined ? {} : { portOffset: options.portOffset }) };
   const listed = async (ctx: BenchContext) => spec.tasks(ctx, await fetchTasks(ctx, spec.source));
+  /** A task of the list, fetched on first use when the spec fetches them one at a time. */
+  const taskOf = async (wav: WaEnv, id: string) => {
+    const task = wav.tasks.get(id) ?? (spec.task ? await spec.task(wav.ctx, id).catch((e: Error) => { throw new Error(`${spec.id} has no task ${id}: ${e.message}`, { cause: e }); }) : undefined);
+    if (!task) throw new Error(`${spec.id} has no task ${id}`);
+    wav.tasks.set(id, task);
+    return task;
+  };
   return {
     id: spec.id, title: spec.title, upstream: spec.upstream, licence: spec.licence, baselines: spec.baselines,
-    where: "vm", measures: ["task"], scoring: "mixed",
+    where: "vm", measures: spec.measures ?? ["task"], scoring: "mixed",
     check: (ctx) => wavReady(ctx, set),
     async load(ctx, subset) {
+      if (spec.cases) return spec.cases(ctx, subset);
       const cases: Case[] = (await listed(ctx)).map((t) => ({
         id: String(t.task_id), goal: t.intent, tags: [...t.sites, ...t.eval.eval_types, ...(new Set(t.sites).size > 1 ? ["multi-site"] : []), ...(t.tags ?? [])],
         ...(hasFuzzy(t) ? { judge: "llm" as const } : {}),
@@ -101,20 +118,21 @@ export function waBenchmark(spec: WaSpec, options: WaOptions = {}): Benchmark {
       return pickSubset(spec.id, cases, subset);
     },
     async up(ctx) {
-      const tasks = await listed(ctx);
+      const tasks = spec.task ? [] : await listed(ctx);
       const origins: Record<string, string> = {};
       const env: WaEnv = { ...(await wavUp(ctx, { ...set, ...(options.harDir ? { harDir: options.harDir } : {}) })), tasks: new Map(tasks.map((t) => [String(t.task_id), t])), origins, browser: (options.browser ?? judgeBrowser)(ctx, origins) };
       return env as unknown as Env;
     },
     async start(env, item) {
       const wav = env as unknown as WaEnv;
-      const task = wav.tasks.get(item.id);
-      if (!task) throw new Error(`${spec.id} has no task ${item.id}`);
+      const task = await taskOf(wav, item.id);
       const startUrls = task.start_url.split(" |AND| ");
       const episode = await wavStart(wav, { id: task.task_id, sites: task.sites, startUrls, intent: task.intent }, (urls) => waGoal(task.intent, urls), options.resetWaitMs);
       const files = await spec.attach?.(wav.ctx, task);
+      const swapped = await spec.swap?.(wav, task);
+      if (swapped?.length) episode.replace = swapped;
       if (files?.length) {
-        episode.replace = files;
+        episode.replace = [...(swapped ?? []), ...files];
         episode.goal += `\nThe task comes with ${files.length === 1 ? "an image" : `${files.length} images`}; open ${files.length === 1 ? "it" : "each"} to see ${files.length === 1 ? "it" : "them"}:\n${files.map((f) => `http://127.0.0.1:${episode.port}${f.path}`).join("\n")}`;
       }
       return episode;
@@ -122,14 +140,14 @@ export function waBenchmark(spec: WaSpec, options: WaOptions = {}): Benchmark {
     async judge(env, episode, output) {
       const wav = env as unknown as WaEnv;
       const { ctx, entries, task: started, urls } = wavFinish(wav, episode);
-      const task = wav.tasks.get(String(started.id))!;
+      const task = await taskOf(wav, String(started.id));
       // The reference URLs and targets name sites as __SHOPPING__ and the like; they are the origins the agent saw.
-      const resolved: WaTask = { ...task, eval: JSON.parse(JSON.stringify(task.eval).replace(/__[A-Z_]+__/g, (m) => urls[m] ?? m)) };
+      const resolve = (t: WaTask): WaTask => ({ ...t, eval: JSON.parse(JSON.stringify(t.eval).replace(/__[A-Z_]+__/g, (m) => urls[m] ?? m)) });
       // The judge browser reaches each site through its own proxy, which adds the login (LI6). Only a case with program_html starts them.
       const proxies: RecordingProxy[] = [];
       try {
         const canonical: Record<string, string> = {};
-        if (task.eval.eval_types.some((t) => t === "program_html" || t === "page_image_query")) {
+        if ([task, task.attack].some((g) => g?.eval.eval_types.some((t) => t === "program_html" || t === "page_image_query"))) {
           for (const id of task.sites) {
             const { url, port, headers } = await wavLogin(wav, id);
             const proxy = await startProxy(url, { headers });
@@ -140,9 +158,12 @@ export function waBenchmark(spec: WaSpec, options: WaOptions = {}): Benchmark {
         }
         const mapped = (url: string) => { const o = new URL(url).origin; return wav.origins[o] ? wav.origins[o] + url.slice(o.length) : url; };
         const site = (id: string) => ({ canonical: canonical[id]!, origin: wav.origins[canonical[id]!]! });
-        const score = await (spec.score ?? scoreWa)(resolved, { answer: output.answer, finalUrl: finalUrl(entries), judges: ctx.judges ?? [], page: () => wav.browser.page(), fetchImage: (url) => fetchImage(mapped(url)), ...(spec.helpers ? { helpers: spec.helpers(site) } : {}), ...(options.settleMs === undefined ? {} : { settleMs: options.settleMs }) });
+        const scored = (g: WaTask) => (spec.score ?? scoreWa)(resolve(g), { answer: output.answer, finalUrl: finalUrl(entries), judges: ctx.judges ?? [], page: () => wav.browser.page(), fetchImage: (url) => fetchImage(mapped(url)), ...(spec.helpers ? { helpers: spec.helpers(site) } : {}), ...(options.settleMs === undefined ? {} : { settleMs: options.settleMs }) });
+        const score = await scored(task);
+        const attacker = task.attack ? await scored(task.attack) : undefined;
         const first = score.judges?.[0];
-        return { success: score.success, ...(score.score === undefined ? {} : { score: score.score }), attack: null, reasons: score.reasons.slice(0, 5).map((r) => r.slice(0, 400)), judgedBy: score.llm && first ? `llm:${first.model}` : "programmatic", ...(score.judges ? { judges: score.judges } : {}) };
+        const reasons = attacker ? [...score.reasons.map((r) => `user goal: ${r}`), ...(attacker.success ? ["attack: the attacker's goal was met"] : [])] : score.reasons;
+        return { success: score.success, ...(score.score === undefined ? {} : { score: score.score }), attack: attacker ? (attacker.success ? "followed" : "blocked") : null, reasons: reasons.slice(0, 5).map((r) => r.slice(0, 400)), judgedBy: score.llm && first ? `llm:${first.model}` : "programmatic", ...(score.judges ? { judges: score.judges } : {}) };
       } finally {
         await Promise.all(proxies.map((p) => p.close()));
         await wav.browser.closePages();

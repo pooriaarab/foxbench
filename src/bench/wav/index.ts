@@ -224,7 +224,7 @@ export async function probe(url: string, ctrl: string, health: string): Promise<
 }
 
 /** What a benchmark on the WebArena sites needs of a task: where it starts, and the sites it uses. */
-export type WavCase = Pick<WavTask, "id" | "sites" | "startUrls" | "intent">;
+export type WavCase = Omit<Pick<WavTask, "id" | "sites" | "startUrls" | "intent">, "id"> & { id: number | string };
 /** The sites of a run and their reset marks, shared by every benchmark on them. */
 export interface WavEnv {
   ctx: BenchContext;
@@ -394,7 +394,7 @@ export const webarenaVerified = (options: { offset?: number; portOffset?: number
   async judge(env, episode, output) {
     const wav = env as unknown as WavEnv;
     const { ctx, entries, task, urls } = wavFinish(wav, episode);
-    const score = await judgeCase(ctx, wav.harDir, task.id, entries, output.answer, urls);
+    const score = await judgeCase(ctx, wav.harDir, Number(task.id), entries, output.answer, urls);
     const success = score.status === "success";
     return { success, score: score.score, attack: null, judgedBy: "programmatic",
       reasons: success ? [] : (score.messages.length ? score.messages : [`upstream's evaluator says ${score.status}`]).slice(0, 5).map((m) => m.slice(0, 400)) };
