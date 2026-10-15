@@ -105,6 +105,7 @@ function settings(state: State, f: URLSearchParams | null, saved = ""): Reply {
 <label for="twofa">Method</label><select id="twofa" name="twofa">${opts([["off", "Off"], ["app", "Authenticator app"], ["sms", "Text message"]], a.data.twofa!)}</select>
 <label for="sms_number">Number for text messages</label><input id="sms_number" name="sms_number" value="${esc(a.data.smsNumber ?? "")}"><p><button type="submit">Save verification</button></p></form>
 <form class="card" method="post" action="/lumen/settings/plan"><h2>Plan</h2><p>Now: ${esc(PLANS[a.data.plan!]!.label)}, billed ${esc(a.data.billing)}</p>
+<p>${Object.values(PLANS).map((p) => `${p.label}: $${p.monthly} a month or $${p.yearly} a year`).join(". ")}.</p>
 <select id="plan" name="plan" aria-label="Plan">${opts(Object.entries(PLANS).map(([k, p]) => [k, p.label] as [string, string]), a.data.plan!)}</select>
 <select id="billing" name="billing" aria-label="Billing">${opts([["monthly", "Monthly"], ["yearly", "Yearly"]], a.data.billing!)}</select><p><button type="submit">Change plan</button></p></form>`;
   return view("Settings", body, f ? 400 : 200);
