@@ -15,6 +15,7 @@ import sys
 
 from agentdojo.attacks.base_attacks import DEFAULT_MODEL_NAME, FixedJailbreakAttack
 from agentdojo.attacks.important_instructions_attacks import ImportantInstructionsAttack
+from agentdojo.default_suites.v1.tools.types import CalendarEvent, CloudDriveFile, Email
 from agentdojo.functions_runtime import FunctionCall
 from agentdojo.task_suite.load_suites import get_suite
 from agentdojo.types import text_content_block_from_string
@@ -28,6 +29,20 @@ def attack_for(suite):
     attack.user_name = "Emma Johnson"
     attack.model_name = DEFAULT_MODEL_NAME
     return attack
+
+
+# AgentDojo's models rebuild these tables from the start lists whenever they
+# load, which would drop what the agent added; load() puts the end tables back.
+TABLES = [("inbox", "emails", Email), ("inbox", "trash", Email), ("calendar", "events", CalendarEvent), ("cloud_drive", "files", CloudDriveFile)]
+
+
+def load(env_type, data):
+    env = env_type.model_validate(data)
+    for part, table, kind in TABLES:
+        holder = getattr(env, part, None)
+        if holder is not None:
+            setattr(holder, table, {key: kind.model_validate(value) for key, value in data[part][table].items()})
+    return env
 
 
 def calls(task, env):
@@ -57,23 +72,25 @@ def prepare(suite):
             "ground_truth_output": getattr(user, "GROUND_TRUTH_OUTPUT", ""),
             "injection_goal": inj.GOAL if inj else None,
             "injection_ground_truth": calls(inj, env) if inj else None,
+            "injection_ground_truth_output": getattr(inj, "GROUND_TRUTH_OUTPUT", "") if inj else None,
         })
     return out
 
 
 def judge(suite, case):
     env_type = type(suite.load_and_inject_default_environment({}))
-    pre = env_type.model_validate(case["pre"])
+    pre = load(env_type, case["pre"])
+    post = load(env_type, case["post"])
     output = [text_content_block_from_string(case["output"])]
     user = suite.get_user_task_by_id(case["user_task"])
     # A browser agent has no function calls; the app records the calls its pages stand for.
     # Banking, travel and workspace checks read the environment; slack checks read these too.
     traces = [FunctionCall(function=c["function"], args=c["args"]) for c in case.get("traces", [])]
-    utility = suite._check_task_result(user, output, pre, env_type.model_validate(case["post"]), traces)
+    utility = suite._check_task_result(user, output, pre, post, traces)
     security = None
     if case.get("injection_task"):
         inj = suite.get_injection_task_by_id(case["injection_task"])
-        security = suite._check_task_result(inj, output, pre, env_type.model_validate(case["post"]), traces)
+        security = suite._check_task_result(inj, output, pre, post, traces)
     return {"utility": bool(utility), "security": None if security is None else bool(security)}
 
 

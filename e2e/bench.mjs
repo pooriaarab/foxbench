@@ -8,11 +8,13 @@
 //   AgentDojo slack  noop 0/31 with every attack blocked (DS6); perfect 31/31
 //               with 0 followed; gullible follows 10/10; wrong passes only the
 //               four cases its overlap allows (DS7)
+//   AgentDojo travel  noop 0/34 with every attack blocked; perfect 34/34 with 0
+//               followed; gullible follows 14/14; wrong 0/34 (DT4-DT7)
 // Writes artifacts/bench/<id>/score-*.{json,md}.
 // Usage: pnpm e2e:bench [--headed]. Needs git, uv and Firefox (FIREFOX).
 import { benchContext, benchmarkById, noopAdapter, runBenchmarks, writeScore } from "../dist/index.js";
 import { prepareCases } from "../dist/bench/agentdojo/common.js";
-import { agentdojoScripted, miniwobScripted, SCRIPTED_MINIWOB, slackDriver } from "./scripted-bench.mjs";
+import { agentdojoScripted, miniwobScripted, SCRIPTED_MINIWOB, slackDriver, travelDriver } from "./scripted-bench.mjs";
 
 const headless = !process.argv.includes("--headed");
 const firefox = process.env.FIREFOX;
@@ -54,10 +56,19 @@ try {
   const slackWrong = await run("agentdojo-slack", agentdojoScripted("wrong", slackCases, slackDriver));
   const lucky = slackWrong.results.filter((r) => r.success).map((r) => r.id.split("+")[0]);
   check("slack wrong passes only user tasks 0 and 9", slackWrong.passed === 4 && lucky.every((id) => id === "user_task_0" || id === "user_task_9"), lucky);
+  const travelCases = prepareCases(benchContext().cacheDir, "travel");
+  const travelNoop = await run("agentdojo-travel", noopAdapter());
+  check("travel noop passes 0/34 with every attack blocked", travelNoop.passed === 0 && travelNoop.tasks === 34 && travelNoop.attacksBlocked === 14, `${travelNoop.passed}/${travelNoop.tasks}, blocked ${travelNoop.attacksBlocked}`);
+  const travelPerfect = await run("agentdojo-travel", agentdojoScripted("perfect", travelCases, travelDriver));
+  check("travel perfect passes 34/34 with 0 followed", travelPerfect.passed === 34 && travelPerfect.attacksFollowed === 0, `${travelPerfect.passed}/${travelPerfect.tasks}`);
+  const travelGullible = await run("agentdojo-travel", agentdojoScripted("gullible", travelCases, travelDriver));
+  check("travel gullible follows 14/14", travelGullible.attacksFollowed === 14, `${travelGullible.attacksFollowed}/${travelGullible.traps}`);
+  const travelWrong = await run("agentdojo-travel", agentdojoScripted("wrong", travelCases, travelDriver));
+  check("travel wrong passes 0/34", travelWrong.passed === 0, `${travelWrong.passed}/${travelWrong.tasks}`);
 } catch (error) {
   check("the run finished", false, error instanceof Error ? error.message : String(error));
 }
 for (const c of checks) console.log(`${c.ok ? "ok " : "BAD"} ${c.name}: ${JSON.stringify(c.actual)}`);
-const passed = checks.length === 11 && checks.every((c) => c.ok);
+const passed = checks.length === 15 && checks.every((c) => c.ok);
 console.log(passed ? "PASS" : "FAIL");
 process.exitCode = passed ? 0 : 1;
