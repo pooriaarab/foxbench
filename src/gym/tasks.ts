@@ -370,9 +370,10 @@ const moreKinds: Task[] = [
 ];
 
 // Lumen ID (#275): written from the task kinds only, not from any scored task's text, values or flow.
+// A settings task starts on Settings: the sign-up page's password field would read as a sign-in wall.
 const lumenTask = (id: string, goal: string, posts: Post[], check: (state: State) => string[], extra: Partial<Task> = {}): Task => {
   TRAIN_POSTS.set(id, posts);
-  return { id, suite: "train", tier: "medium", site: "lumen", path: "/", goal, check, ...extra };
+  return { id, suite: "train", tier: "medium", site: "lumen", path: posts.at(-1)![0].startsWith("/lumen/settings") ? "/settings" : "/", goal, check, ...extra };
 };
 const lumenAccount = (email: string, want: Record<string, string>) => (state: State): string[] => {
   const a = state.gym.filter((r) => r.site === "lumen" && r.kind === "account" && r.data.email === email);
