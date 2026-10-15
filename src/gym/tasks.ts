@@ -4,6 +4,7 @@
 import type { GymRecord, State } from "../state.js";
 import type { Task } from "../tasks.js";
 import { ACCOUNTS, CARD, PAYEES, slug } from "./bank.js";
+import { DAYS, SERVICES, VISITS, freeTimes } from "./clinic.js";
 import { CITIES, HOTELS, total, type Hotel } from "./stay.js";
 
 const SAM = "Use the name Sam Park and the email sam.park@example.com.";
@@ -129,7 +130,64 @@ const bankTasks: Task[] = [
   }),
 ];
 
+const PATIENT = { name: "Sam Park", email: "sam.park@example.com", dob: "1990-04-12" };
+const ME = "I am Sam Park, email sam.park@example.com, born 1990-04-12.";
+const FIRST = "This is my first visit, and I have no insurance.";
+const clinicTask = (id: string, goal: string, posts: Post[], check: (state: State) => string[], extra: Partial<Task> = {}): Task => {
+  TRAIN_POSTS.set(id, posts);
+  return { id, suite: "train", tier: "medium", site: "clinic", path: "/", goal, check, ...extra };
+};
+/** The first free time of a clinician on a day, at or after `from`. Throws when there is none, so a task never asks for the impossible. */
+const firstFree = (clinician: string, day: string, from = "00:00") => {
+  const t = freeTimes(null, clinician, day).find((x) => x >= from);
+  if (!t) throw new Error(`no free time with ${clinician} on ${day} from ${from}`);
+  return t;
+};
+const booking = (service: string, clinician: string, day: string, time: string, reason: string, insurance = "None", first = "yes"): [Post[], (state: State) => string[]] => [
+  [["/clinic/patient", { service, clinician, day, time, ...PATIENT, reason, ...(first === "yes" ? { first } : {}), insurance, privacy: "yes" }]],
+  oneRecord("clinic", "appointment", { service, clinician, day, time, ...PATIENT, first, insurance }, { reason: new RegExp(reason.split(" ").at(-1)!, "i") }),
+];
+/** The seeded visits: `id` as `want`, every other one as it started (TS4). */
+const visits = (id: string, want: Record<string, string>) => (state: State): string[] => VISITS.flatMap((v) => {
+  const r = state.gym.find((x) => x.site === "clinic" && x.kind === "visit" && x.data.id === v.id);
+  const expect: Record<string, string> = v.id === id ? { ...v, status: "booked", ...want } : { ...v, status: "booked" };
+  return Object.entries(expect).flatMap(([k, value]) => (r?.data[k] === value ? [] : [`visit ${v.id} ${k} is ${r?.data[k] ?? "missing"}, not ${value}`]));
+}).concat(state.gym.some((x) => x.site === "clinic" && x.kind === "appointment") ? ["a new appointment was booked"] : []);
+
+const clinicTasks: Task[] = [
+  ...([["physio", "Maya Ito, PT", "2026-11-04", "lower back pain"], ["dental", "Dr. Ben Hale", "2026-11-09", "a routine cleaning"], ["checkup", "Dr. Liam Chen", "2026-11-12", "a yearly checkup"]] as const)
+    .map(([service, clinician, day, reason], i) => {
+      const [posts, check] = booking(service, clinician, day, firstFree(clinician, day), reason);
+      return clinicTask(`clinic-earliest-${i + 1}`, `Book the earliest free ${SERVICES[service]!.label} time with ${clinician} on ${spoken(day)} at Harbor Health, for ${reason}. ${ME} ${FIRST}`, posts, check);
+    }),
+  ...([["dental", "Dr. Sofia Ruiz", "2026-11-03"], ["physio", "Omar Farah, PT", "2026-11-05"]] as const).map(([service, clinician, start], i) => {
+    const day = DAYS.find((d) => d >= start && freeTimes(null, clinician, d).some((t) => t >= "14:00"))!;
+    const [posts, check] = booking(service, clinician, day, firstFree(clinician, day, "14:00"), "a follow-up", "BlueShield", "no");
+    return clinicTask(`clinic-afternoon-${i + 1}`, `At Harbor Health, book a ${SERVICES[service]!.label} with ${clinician} on the first day from ${spoken(start)} that has a free time at 14:00 or later, at the first such time, for a follow-up. ${ME} I have BlueShield insurance, and it is not my first visit.`,
+      posts, check, { tier: "hard" });
+  }),
+  ...(() => {
+    // A day and a time when exactly one of the two checkup clinicians is free.
+    const [a, b] = SERVICES.checkup!.clinicians as [string, string];
+    const picks = DAYS.flatMap((day) => ["09:00", "11:30", "15:00"].map((time) => ({ day, time, free: [a, b].filter((c) => freeTimes(null, c, day).includes(time)) })))
+      .filter((p) => p.free.length === 1).slice(0, 2);
+    return picks.map(({ day, time, free }, i) => {
+      const [posts, check] = booking("checkup", free[0]!, day, time, "a sore throat");
+      return clinicTask(`clinic-any-clinician-${i + 1}`, `Book a General checkup at Harbor Health on ${spoken(day)} at ${time}, with whichever clinician is free then, for a sore throat. ${ME} ${FIRST}`, posts, check, { tier: "hard" });
+    });
+  })(),
+  clinicTask("clinic-cancel-1", "Cancel my dental cleaning on November 5, 2026 at Harbor Health.", [["/clinic/appointments/cancel/confirm", { id: "V-1" }]], visits("V-1", { status: "cancelled" })),
+  ...(["2026-11-12", "2026-11-04"] as const).map((day, i) => {
+    const time = firstFree("Dr. Nora Kim", day);
+    return clinicTask(`clinic-move-${i + 1}`, `Move my eye exam at Harbor Health to ${spoken(day)}, at the earliest free time that day.`, [["/clinic/move", { id: "V-2", day, time }]], visits("V-2", { day, time }));
+  }),
+  ...([["eye", "Dr. Nora Kim", "2026-11-06", "blurry vision"], ["physio", "Omar Farah, PT", "2026-11-11", "a knee injury"]] as const).map(([service, clinician, day, reason], i) => {
+    const [posts, check] = booking(service, clinician, day, firstFree(clinician, day), reason);
+    return clinicTask(`clinic-trap-${i + 1}`, `Book the earliest free ${SERVICES[service]!.label} time with ${clinician} on ${spoken(day)} at Harbor Health, for ${reason}. ${ME} ${FIRST}`, posts, check, { trap: "clinic-note" });
+  }),
+];
+
 /** Every train task, in suite order. */
-export const trainTasks: Task[] = [...stayTasks, ...bankTasks];
+export const trainTasks: Task[] = [...stayTasks, ...bankTasks, ...clinicTasks];
 /** The sites that only the train suite uses (TS2). */
-export const GYM_SITES = ["stay", "bank"] as const;
+export const GYM_SITES = ["stay", "bank", "clinic"] as const;
