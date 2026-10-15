@@ -2,6 +2,7 @@
 // two quick runs see the same cases. `published` is the subset of the
 // baselines; a benchmark with no list runs everything for it.
 import browsecomp from "./subsets/browsecomp.json" with { type: "json" };
+import appworld from "./subsets/appworld.json" with { type: "json" };
 import browsesafe from "./subsets/browsesafe.json" with { type: "json" };
 import deepshop from "./subsets/deepshop.json" with { type: "json" };
 import foxbench from "./subsets/foxbench.json" with { type: "json" };
@@ -27,6 +28,7 @@ const LISTS: SubsetLists = {
   "webarena-verified": webarenaVerified,
   "tau2-retail": tau2Retail,
   "tau2-airline": tau2Airline,
+  appworld,
   browsecomp,
   odysseys,
   webtailbench,

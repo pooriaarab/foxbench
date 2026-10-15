@@ -733,6 +733,22 @@ package (`tests/fixtures/fake-appworld/`).
 | AW7 | One case's world, or its sign-ins, leak into the next case. | Each `open` makes a fresh AppWorld world for its task and forgets the tokens. | `AW7 ...` |
 | AW8 | The bridge dies and its caller hangs. | A dead bridge fails each call at once. | `AW8 ...` |
 
+The benchmark `appworld` (`index.ts`) serves the apps as a site (`site.ts`)
+built at run time from AppWorld's API docs: each app lists its APIs, and each
+API has a page with a form of its parameters. The tests are in
+`tests/appworld.test.ts` on the fake AppWorld, and in
+`tests/appworld-real.test.ts`, which runs only with `FOXBENCH_APPWORLD_ROOT`
+set to a real install: there a scripted perfect agent runs each dev task's
+own solution, with each API call made through the pages.
+
+| # | Failure mode | Wanted behaviour | Test |
+|---|---|---|---|
+| AW9 | The case list is wrong, or `foxbench list` shows AppWorld's text. | Cases are AppWorld's task ids with the split as a tag and difficulty 1, 2, 3 as tier easy, medium, hard, and no goal. `published` is test_normal plus test_challenge; `quick` is the committed first task of 20 test_normal scenarios. | `AW9 ...` |
+| AW10 | Viewing a page changes the world, or a page shows AppWorld's text as markup. | A page view runs only a read API (method GET), from its form; a form post runs the API. Every value is HTML-escaped. | `AW10 ...` |
+| AW11 | An agent that does nothing or a wrong one passes, or the board holds AppWorld's text. | AppWorld's evaluator decides: `noop` and a wrong agent fail with the count of failed tests, a perfect agent passes. The benchmark is `redact: true`: the board holds ids, verdicts and test counts, with no goal, test text or agent log. A run writes no file. | `AW11 ...` |
+| AW12 | The agent keeps working after it marked the task complete, or says "done" without it. | The episode ends when AppWorld records `complete_task`; the agent's `done` never changes the score. | `AW12 ...` |
+| AW13 | A dead bridge shows as an API error on the page. | The page answers 502 and the case fails with a `harness:` reason. | `AW13 ...` |
+
 ## The user channel (`src/bench/user.ts`)
 
 Some benchmarks (tau2, Gaia2) test whether the agent asks the user for what it
