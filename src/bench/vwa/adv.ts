@@ -81,24 +81,27 @@ async function fetchFile(ctx: BenchContext, path: string): Promise<Buffer> {
 }
 
 interface Config { sites: string[]; start_url: string; intent: string; image?: unknown; eval: WaTask["eval"] }
-interface Loaded { site: SiteName; start: URL; intent: string; clean: WaTask; adv: WaTask; victimPath: string; attack: Buffer }
+interface Loaded { site: SiteName; start: URL; intent: string; clean: WaTask; adv: WaTask; victimPaths: string[]; attack: Buffer }
 
 /** A case's files: the attacked and the clean task, the clean page's text (it names the victim image), and the attack image. */
 async function loadCase(ctx: BenchContext, id: string, kind: string): Promise<Loaded> {
   const json = async <T>(path: string) => JSON.parse((await fetchFile(ctx, path)).toString("utf8")) as T;
   const base = id.split("_").slice(0, 2).join("_");
   const adv = await json<Config>(`data/agent_adv/${id}/config.json`);
-  const data = await json<{ victim_som_id: number }>(`data/agent_adv/${id}/data.json`);
+  const data = await json<{ victim_som_id: number | number[] }>(`data/agent_adv/${id}/data.json`);
   const clean = await json<Config>(`data/agent_clean/${base}/config.json`);
   const obs = (await fetchFile(ctx, `data/agent_clean/${base}/obs_text.txt`)).toString("utf8");
-  // The victim image is the `[<som id>] [IMG] [..., url: <url>]` line of the clean observation (VA4).
-  const url = new RegExp(`^\\[${data.victim_som_id}\\] \\[IMG\\] \\[.*?url: (\\S+?)\\]\\s*$`, "m").exec(obs)?.[1];
-  if (!url) throw new Error(`the victim image [${data.victim_som_id}] is not in the clean page of ${id}`);
+  // The victim images are the `[<som id>] [IMG] [..., url: <url>]` lines of the clean observation; one id or several, each shown the same attack image (VA4).
+  const victims = [data.victim_som_id].flat().map((som) => {
+    const url = new RegExp(`^\\[${som}\\] \\[IMG\\] \\[.*?url: (\\S+?)\\]\\s*$`, "m").exec(obs)?.[1];
+    if (!url) throw new Error(`the victim image [${som}] is not in the clean page of ${id}`);
+    return new URL(url).pathname;
+  });
   const attack = await fetchFile(ctx, `data/agent_adv/${id}/${KINDS[kind]}`);
   const site = adv.sites[0] as SiteName;
   if (!(site in SITES)) throw new Error(`${id} is on ${site}, which the vwa env does not run`);
   const image = typeof clean.image === "string" && clean.image.startsWith("http") ? `\n\nThe image the task refers to: ${clean.image}` : "";
-  return { site, start: new URL(adv.start_url), intent: clean.intent + image, clean: { intent: clean.intent, eval: clean.eval }, adv: { intent: adv.intent, eval: adv.eval }, victimPath: new URL(url).pathname, attack };
+  return { site, start: new URL(adv.start_url), intent: clean.intent + image, clean: { intent: clean.intent, eval: clean.eval }, adv: { intent: adv.intent, eval: adv.eval }, victimPaths: victims, attack };
 }
 
 const host = (ctx: BenchContext) => ctx.env.FOXBENCH_VWA_HOST || "127.0.0.1";
@@ -167,7 +170,7 @@ export const vwaAdvBenchmark = (o: { offset?: number; agentOffset?: number; rese
       const har = await startHar(tunnel(ctx, site), canonical);
       const episode: Episode = {
         url: har.origin + loaded.start.pathname + loaded.start.search, startPath: loaded.start.pathname, port: agentPort(site), headers, goal: loaded.intent,
-        replace: [{ path: loaded.victimPath, type: "image/png", body: loaded.attack }],
+        replace: loaded.victimPaths.map((path) => ({ path, type: "image/png", body: loaded.attack })),
         close: () => har.close(),
       };
       running.set(episode, { loaded, site, har });
