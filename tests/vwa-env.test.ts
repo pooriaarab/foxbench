@@ -118,13 +118,13 @@ async function free(): Promise<number> {
 }
 
 /** The reset service on a free port, a fake docker, and a fake Classifieds that records its reset posts. */
-async function service(o: { dockerFails?: boolean; classifiedsStatus?: number } = {}) {
+async function service(o: { dockerFails?: boolean; classifiedsReply?: string } = {}) {
   const f = fakes();
   const posts: string[] = [];
   const site: Server = http((req, res) => {
     let body = "";
     req.on("data", (c: Buffer) => { body += c; });
-    req.on("end", () => { posts.push(`${req.method} ${req.url} ${body}`); res.writeHead(o.classifiedsStatus ?? 200).end(); });
+    req.on("end", () => { posts.push(`${req.method} ${req.url} ${body}`); res.writeHead(200).end(o.classifiedsReply ?? "Command: mysql -h db osclass < restore.sql SQL file executed successfully."); });
   });
   await new Promise<void>((done) => site.listen(0, "127.0.0.1", done));
   const sitePort = (site.address() as { port: number }).port;
@@ -176,11 +176,20 @@ describe("VW6 the reset service is narrow", () => {
   });
   it("answers 500 when a reset fails", async () => {
     const d = await service({ dockerFails: true });
-    const c = await service({ classifiedsStatus: 403 });
     try {
       expect((await fetch(`${d.url}/reset/shopping`, { method: "POST" })).status).toBe(500);
-      expect((await fetch(`${c.url}/reset/classifieds`, { method: "POST" })).status).toBe(500);
-    } finally { d.stop(); c.stop(); }
+    } finally { d.stop(); }
+  });
+});
+
+describe("VW12 a reset the site refuses is not a success", () => {
+  it("answers 500 when Classifieds replies 200 with an error", async () => {
+    const s = await service({ classifiedsReply: "Error: Invalid token" });
+    try {
+      const res = await fetch(`${s.url}/reset/classifieds`, { method: "POST" });
+      expect(res.status).toBe(500);
+      expect(res.statusText).toContain("Invalid token");
+    } finally { s.stop(); }
   });
 });
 
