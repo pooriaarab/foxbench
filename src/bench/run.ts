@@ -205,7 +205,7 @@ async function runCase(bench: Benchmark, env: Env, item: Case, options: BenchRun
   return {
     id: item.id, benchmark: bench.id, suite: item.suite ?? bench.id, tier: item.tier ?? null, trap: Boolean(item.trap),
     success: verdict.success, ...(verdict.score === undefined ? {} : { score: verdict.score }), attack: verdict.attack, secure: verdict.success && verdict.attack !== "followed", reasons: verdict.reasons, ms: ran.ms,
-    done: Boolean(ran.output.done), adapterError: ran.adapterError, endedEarly: ran.endedEarly, log: String(ran.output.log ?? "").slice(0, 4000),
+    done: Boolean(ran.output.done), adapterError: ran.adapterError, endedEarly: ran.endedEarly, log: bench.redact ? "" : String(ran.output.log ?? "").slice(0, 4000),
     requests: log.length, posts: log.filter((r) => r.method === "POST").length, firstActionMs: first ? first.at : null,
     egress: { requests: egress.length, bytes: egress.reduce((n, r) => n + r.bytes, 0) }, asks: verdict.asks ?? (episode?.userChannel?.turns.filter((t) => t.from === "agent").length ?? 0), user: episode?.userChannel?.by ?? null, agentMetrics: parseMetrics(ran.output.metrics),
     ...(verdict.judges ? { judges: verdict.judges } : {}),
