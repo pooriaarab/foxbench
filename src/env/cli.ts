@@ -7,6 +7,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 import { parseArgs } from "node:util";
+import { dockerDown, dockerStatus, dockerUp } from "./docker.js";
 import { cloudEnvs } from "./envs.js";
 import { createVm, deleteVm, listVms, startTunnel, type Gcp } from "./gcp.js";
 
@@ -14,6 +15,7 @@ const USAGE = `Usage:
   foxbench env up <env> [--no-spot] [--max-run-duration 4h] [--local-port-offset N] [gcp options]
   foxbench env down <env> [gcp options]
   foxbench env status [<env>] [gcp options]
+  foxbench env up|down|status <env> --provider docker   (local Docker, for the envs that have it)
 GCP options: --project (FOXBENCH_GCP_PROJECT), --zone (FOXBENCH_GCP_ZONE), --account (FOXBENCH_GCP_ACCOUNT).
 Envs: ${cloudEnvs.map((e) => e.name).join(", ")}.`;
 
@@ -110,7 +112,7 @@ export async function envCli(argv: string[]): Promise<void> {
   try {
     const { positionals, values } = parseArgs({ args: argv, allowPositionals: true, allowNegative: true, options: {
       project: { type: "string" }, zone: { type: "string" }, account: { type: "string" },
-      spot: { type: "boolean", default: true }, "max-run-duration": { type: "string", default: "4h" }, "local-port-offset": { type: "string", default: "0" }, help: { type: "boolean", short: "h" },
+      provider: { type: "string", default: "gcp" }, spot: { type: "boolean", default: true }, "max-run-duration": { type: "string", default: "4h" }, "local-port-offset": { type: "string", default: "0" }, help: { type: "boolean", short: "h" },
     } });
     if (values.help) return console.log(USAGE);
     const [command, name] = positionals;
@@ -121,6 +123,15 @@ export async function envCli(argv: string[]): Promise<void> {
     const account = values.account || process.env.FOXBENCH_GCP_ACCOUNT || undefined;
     if (!["up", "down", "status"].includes(command ?? "")) throw new UsageError(command ? `Unknown env command "${command}".` : "Give up, down or status.");
     if (command !== "status" && !name) throw new UsageError(`Give an env: foxbench env ${command} <env>.`);
+    if (!["gcp", "docker"].includes(values.provider)) throw new UsageError(`--provider is gcp or docker, not ${values.provider}.`);
+    if (values.provider === "docker") {
+      const env = cloudEnvs.find((e) => e.name === name);
+      if (!env?.local) throw new UsageError(name ? `${name} has no local Docker mode.` : "Give an env with a local Docker mode.");
+      if (command === "up") dockerUp(env);
+      else if (command === "down") dockerDown();
+      else dockerStatus();
+      return;
+    }
     if (!project) throw new UsageError("Give a GCP project with --project or FOXBENCH_GCP_PROJECT.");
     if (command === "up" && !zone) throw new UsageError("Give a GCP zone with --zone or FOXBENCH_GCP_ZONE.");
     const gcp: Gcp = { project, zone: zone ?? "", account };
