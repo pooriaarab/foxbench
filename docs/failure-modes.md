@@ -363,6 +363,7 @@ tunnel on local port 18081. The tests are in `tests/suitecrm-env.test.ts`.
 | SE6 | The env tunnels a port nothing serves, or the reset service is unreachable. | The env's ports, the container's `-p` mapping and the reset service's port come from one table. | `SE6 ...` |
 | SE7 | The VM is too small or too big: SuiteCRM, PHP and MariaDB need about 2 GB; the images take about 1 GB. | e2-standard-4 and a 30 GB disk, as the plan says. | `SE7 ...` |
 | SE8 | The reset service accepts any path or method and drops the database. | Only `POST /reset` resets; anything else gets 404 or 405 and changes nothing. | `SE8 ...` |
+| SE9 | Two envs tunnel to the same local port, so one of them fails to come up when both are wanted. | No two envs in `cloudEnvs` share a local port; suitecrm's reset service is on VM port 8873, not mypcbench's 8871. | `SE9 ...` |
 
 ## MiniWoB++ and AgentDojo (`src/bench/miniwob/`, `src/bench/agentdojo/`)
 

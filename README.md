@@ -403,7 +403,7 @@ with your own login. Give the project, zone and account with `--project`,
   e2-standard-4 with 30 GB, for ST-WebAgentBench's SuiteCRM tasks. SuiteCRM on
   VM port 8080 is tunnelled to 18081; the agent sees `http://127.0.0.1:8080`
   through the recording proxy. The boot loads upstream's demo data (fetched at
-  a pinned commit) once. A reset service on VM port 8871 (tunnelled to 18871)
+  a pinned commit) once. A reset service on VM port 8873 (tunnelled to 18873)
   restores the seeded database on `POST /reset`. Log in as `user` / `bitnami`.
 
 `FOXBENCH_GCP_ACCOUNT`. The only env so far is `smoke`, a static page on
