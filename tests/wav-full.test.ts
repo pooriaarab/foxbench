@@ -13,7 +13,7 @@ import type { Adapter, TaskOutput } from "../src/adapter.js";
 import { noopAdapter } from "../src/adapter.js";
 import { benchContext } from "../src/bench/registry.js";
 import { runBenchmarks } from "../src/bench/run.js";
-import { webarenaVerified, wavFullSites, wavImage, wavSites } from "../src/bench/wav/index.js";
+import { webarenaVerified, wavFullSites, wavImage, wavSites, WIKIPEDIA_ZIM } from "../src/bench/wav/index.js";
 import { WAV_VERSION, wavDir } from "../src/bench/wav/tasks.js";
 import { cloudEnvs } from "../src/env/envs.js";
 import { freeBase } from "./free-base.js";
@@ -58,15 +58,27 @@ case "$1" in
   volume) case "$2" in create) mkdir -p ${dir}/vol/$3/_data;; inspect) echo ${dir}/vol/$5/_data;; esac;;
 esac`);
   tool("uname", "echo x86_64");
-  // curl serves ${dir}/served/<name>; a count in curl-cut makes that many calls end early, as a dropped connection does (curl exit 18).
-  tool("curl", `for a; do url=$a; done; f=${dir}/served/$(basename $url); [ -e $f ] || exit 22
-n=$(cat ${dir}/curl-cut 2>/dev/null || echo 0)
-[ "$n" -gt 0 ] && { echo $((n-1)) > ${dir}/curl-cut; head -c 20000 $f; exit 18; }
-cat $f`);
+  // curl without -o streams ${dir}/served/<name> (the map's archives); a count in curl-cut makes that many calls end early, as a dropped connection does (curl exit 18).
+  // curl with -o is the ZIM: it writes ${dir}/zim/<host> to the -o file from where the file ends (as -C - does); a host with no file answers 403 (exit 22); a count in zim-cut ends that many calls early (exit 18).
+  tool("curl", `for a; do [ "$p" = -o ] && out=$a; p=$a; url=$a; done
+if [ -z "$out" ]; then
+  f=${dir}/served/$(basename $url); [ -e $f ] || exit 22
+  n=$(cat ${dir}/curl-cut 2>/dev/null || echo 0)
+  [ "$n" -gt 0 ] && { echo $((n-1)) > ${dir}/curl-cut; head -c 20000 $f; exit 18; }
+  cat $f; exit
+fi
+src=${dir}/zim/$(echo $url | sed 's,^[a-z]*://,,; s,/.*,,'); [ -e $src ] || exit 22
+have=$(stat -c %s $out 2>/dev/null || echo 0); n=$(cat ${dir}/zim-cut 2>/dev/null || echo 0)
+[ "$n" -gt 0 ] && { echo $((n-1)) > ${dir}/zim-cut; tail -c +$((have+1)) $src | head -c 20000 >> $out; exit 18; }
+tail -c +$((have+1)) $src >> $out`);
   for (const name of ["systemctl", "systemd-run", "apt-get"]) tool(name, name === "systemctl" ? '[ "$1" != is-active ]' : name === "apt-get" ? aptBody : "true");
   tool("python3", `${pythonPre}\n[ "$1" = -m ] && [ "$2" = venv ] && [ "$3" != --help ] && for t in pip webarena-verified; do mkdir -p $3/bin; printf '#!/bin/sh\\necho "$t $*" >> ${dir}/log\\n' | sed "s/\\$t/$t/" > $3/bin/$t; chmod +x $3/bin/$t; done; true`);
+  if (!existsSync(join(dir, "zim"))) serveZim(dir, { "archive.org": BYTES });
+  // The ZIM is 95 GB: the script runs against a small one, whose size and md5 replace the pinned ones.
+  const zim = existsSync(join(dir, "zim", "archive.org")) ? readFileSync(join(dir, "zim", "archive.org")) : Buffer.alloc(0);
+  const md5 = execFileSync("md5sum", { input: zim, encoding: "utf8" }).split(" ")[0]!;
   const script = join(dir, "startup.sh");
-  writeFileSync(script, env.startup.replaceAll("/opt/foxbench", join(dir, "fb")));
+  writeFileSync(script, env.startup.replaceAll("/opt/foxbench", join(dir, "fb")).replaceAll(String(WIKIPEDIA_ZIM.size), String(zim.length)).replaceAll(WIKIPEDIA_ZIM.md5, md5));
   mkdirSync(join(dir, "fb"), { recursive: true });
   const r = spawnSync("sh", [script], { encoding: "utf8", env: { PATH: `${bin}:/usr/bin:/bin`, DOCKER_DAEMON_JSON: join(dir, "daemon.json") } });
   return { status: r.status, stderr: r.stderr, log: existsSync(join(dir, "log")) ? readFileSync(join(dir, "log"), "utf8").trim().split("\n") : [], script };
@@ -110,25 +122,28 @@ describe("WF2 WF3 the startup script", () => {
     expect(first.status, first.stderr).toBe(0);
     const at = (re: RegExp) => first.log.findIndex((l) => re.test(l));
     const setup = first.log.filter((l) => l.startsWith("webarena-verified env setup init"));
-    expect(setup.map((l) => l.split(" ")[5])).toEqual(["wikipedia"]);
+    expect(setup).toEqual([]);
     expect(first.log).toContain(`pip install -q webarena-verified==${WAV_VERSION}`);
     const lastCore = Math.max(...wavSites.map((s) => at(new RegExp(`^docker run .*--name wav-${s.id} `))));
     expect(lastCore).toBeGreaterThan(-1);
     expect(at(/^systemd-run /)).toBeGreaterThan(lastCore);
-    expect(at(/^webarena-verified env setup init/)).toBeGreaterThan(at(/^systemd-run /));
+    expect(at(/^curl /)).toBeGreaterThan(at(/^systemd-run /));
     // Wikipedia gets the ZIM directory; the map gets upstream's named volumes; each on its ports.
     expect(first.log.find((l) => l.includes("--name wav-wikipedia "))).toMatch(/-p 8888:8080 -p 8889:8874 .*-v \S+wav-data:\/data:ro/);
     expect(first.log.find((l) => l.includes("--name wav-map "))).toMatch(/-p 3000:8080 -p 3071:8877 .*-v webarena_verified_map_tile_db:\/data\/database/);
   });
   it("downloads nothing on the second boot and only starts the containers", () => {
+    const first = readFileSync(join(dir, "log"), "utf8").trim().split("\n");
     const second = boot(dir);
     expect(second.status, second.stderr).toBe(0);
     const before = readFileSync(join(dir, "log"), "utf8").trim().split("\n");
-    expect(before.filter((l) => l.startsWith("webarena-verified env setup init"))).toHaveLength(1);
+    expect(curls(before)).toBe(curls(first));
     expect(before.filter((l) => l.startsWith("docker pull"))).toHaveLength(6);
     expect(before.filter((l) => l.startsWith("docker start"))).toHaveLength(6);
   });
 });
+
+const curls = (log: string[]) => log.filter((l) => l.startsWith("curl ")).length;
 
 // The map's three archives as upstream's config.py lays them out, in miniature: [archive, volume, path inside it].
 const MAP_TARS: [string, string, string][] = [
@@ -242,6 +257,90 @@ describe("WF9 every image runs on the VM's architecture", () => {
       if (/toomanyrequests|429/.test(r.stderr)) return t.skip("Docker Hub rate limit");
       expect(r.status, `${image}: ${r.stderr}`).toBe(0);
     }
+  });
+});
+
+const zimFile = (dir: string) => join(dir, "fb", "wav-data", WIKIPEDIA_ZIM.file);
+// A small ZIM for the fake curl: `sources` are the hosts that have it, each with its own bytes.
+function serveZim(dir: string, sources: Record<string, Buffer>) {
+  mkdirSync(join(dir, "zim"), { recursive: true });
+  for (const [host, bytes] of Object.entries(sources)) writeFileSync(join(dir, "zim", host), bytes);
+}
+const BYTES = Buffer.alloc(90_000, "wikipedia ");
+const fresh10 = () => mkdtempSync(join(tmpdir(), "fbn-wf10-"));
+const wikiRuns = (log: string[]) => log.some((l) => l.startsWith("docker run") && l.includes("--name wav-wikipedia "));
+
+describe("WF10 the ZIM file is complete before Wikipedia starts", () => {
+  it("downloads it from the first source, resuming a cut transfer, and keeps no .part file", () => {
+    const dir = fresh10();
+    try {
+      serveZim(dir, { "metis.lti.cs.cmu.edu": BYTES, "archive.org": BYTES });
+      writeFileSync(join(dir, "zim-cut"), "2");
+      const r = boot(dir);
+      expect(r.status, r.stderr).toBe(0);
+      expect(readFileSync(zimFile(dir)).equals(BYTES)).toBe(true);
+      expect(existsSync(`${zimFile(dir)}.part`)).toBe(false);
+      expect(r.log.filter((l) => l.startsWith("curl ") && l.includes(" -o ")).every((l) => l.includes("-C -") && l.includes("metis.lti.cs.cmu.edu"))).toBe(true);
+      expect(wikiRuns(r.log)).toBe(true);
+    } finally { rmSync(dir, { recursive: true, force: true }); }
+  });
+  it("falls back to the Internet Archive when the first source answers 403", () => {
+    const dir = fresh10();
+    try {
+      serveZim(dir, { "archive.org": BYTES });
+      const r = boot(dir);
+      expect(r.status, r.stderr).toBe(0);
+      expect(readFileSync(zimFile(dir)).equals(BYTES)).toBe(true);
+    } finally { rmSync(dir, { recursive: true, force: true }); }
+  });
+  it("stops the boot with one clear line when every source is short, and starts no Wikipedia", () => {
+    const dir = fresh10();
+    try {
+      serveZim(dir, { "archive.org": BYTES });
+      writeFileSync(join(dir, "zim-cut"), "99");
+      const r = boot(dir);
+      expect(r.status).not.toBe(0);
+      expect(r.stderr).toMatch(/^foxbench: BOOT FAILED: Wikipedia ZIM \S+ is short: \d+ of 90000 bytes$/m);
+      expect(existsSync(zimFile(dir))).toBe(false);
+      expect(wikiRuns(r.log)).toBe(false);
+    } finally { rmSync(dir, { recursive: true, force: true }); }
+  });
+  it("rejects a file of the right size with the wrong checksum, and tries the next source", () => {
+    const dir = fresh10();
+    try {
+      serveZim(dir, { "metis.lti.cs.cmu.edu": Buffer.alloc(BYTES.length, "x"), "archive.org": BYTES });
+      const r = boot(dir);
+      expect(r.status, r.stderr).toBe(0);
+      expect(r.stderr).toMatch(/foxbench: ZIM from \S+cmu\.edu\S+ has md5 \w+, not \w+/);
+      expect(readFileSync(zimFile(dir)).equals(BYTES)).toBe(true);
+    } finally { rmSync(dir, { recursive: true, force: true }); }
+  });
+  it("does not trust a file that exists with no check, such as the 0 bytes the first real run left", () => {
+    const dir = fresh10();
+    try {
+      serveZim(dir, { "archive.org": BYTES });
+      mkdirSync(join(dir, "fb", "wav-data"), { recursive: true });
+      writeFileSync(zimFile(dir), "");
+      const r = boot(dir);
+      expect(r.status, r.stderr).toBe(0);
+      expect(readFileSync(zimFile(dir)).equals(BYTES)).toBe(true);
+    } finally { rmSync(dir, { recursive: true, force: true }); }
+  });
+  it("downloads nothing on the second boot", () => {
+    const dir = fresh10();
+    try {
+      serveZim(dir, { "archive.org": BYTES });
+      const first = boot(dir);
+      expect(first.status).toBe(0);
+      const second = boot(dir);
+      expect(second.status, second.stderr).toBe(0);
+      expect(second.log.filter((l) => l.startsWith("curl "))).toHaveLength(first.log.filter((l) => l.startsWith("curl ")).length);
+    } finally { rmSync(dir, { recursive: true, force: true }); }
+  });
+  it("pins the size of the file the Internet Archive serves", async (t) => {
+    const head = await fetch(`https://archive.org/download/wikipedia_en_all_maxi_2022-05/${WIKIPEDIA_ZIM.file}`, { method: "HEAD", signal: AbortSignal.timeout(30_000) }).catch(() => null);
+    if (!head) return t.skip("no network");
+    expect(head.headers.get("content-length")).toBe(String(WIKIPEDIA_ZIM.size));
   });
 });
 

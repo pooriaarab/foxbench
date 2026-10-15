@@ -70,6 +70,17 @@ const MAP_VOLUMES: { volume: string; mount: string; tar?: string; path?: string 
 ];
 const mapVolume = (v: string) => `webarena_verified_map_${v}`;
 
+/**
+ * The ZIM file Wikipedia serves. Upstream's URL (its config.py) answered 403 from a GCP VM, so the Internet Archive's copy of the same
+ * file is the second source. Its size and md5 are the Archive's own metadata (archive.org/metadata/wikipedia_en_all_maxi_2022-05).
+ */
+export const WIKIPEDIA_ZIM = {
+  file: "wikipedia_en_all_maxi_2022-05.zim",
+  size: 95199730590,
+  md5: "054c8bd86af847d2a8f9c832db26a038",
+  sources: ["http://metis.lti.cs.cmu.edu/webarena-images/wikipedia_en_all_maxi_2022-05.zim", "https://archive.org/download/wikipedia_en_all_maxi_2022-05/wikipedia_en_all_maxi_2022-05.zim"],
+};
+
 /** The Docker Hub image of a site; the startup script and the registry test both read it from here. */
 export const wavImage = (s: WavSite) => `am1n3e/webarena-verified-${s.id}:${s.tag ?? WAV_TAG}`;
 
@@ -125,6 +136,45 @@ function mapStreams(): string {
   return tars.map((tar) => `load_map ${tar} ${MAP_VOLUMES.filter((v) => v.tar === tar).map((v) => `${mapVolume(v.volume)} ${v.path}`).join(" ")}`).join("\n");
 }
 
+/**
+ * The startup script's ZIM download: to a .part file that resumes, from each source in turn, kept only when its size and md5 are the
+ * pinned ones. A file at the final path with no done marker was never checked (upstream's setup took the 0 bytes of the first real
+ * run for a finished download), so it is deleted.
+ */
+function fetchZim(): string {
+  const { file, size, md5, sources } = WIKIPEDIA_ZIM;
+  return `ZIM=$DATA/${file}
+ZIM_SIZE=${size}
+ZIM_MD5=${md5}
+size_of() { stat -c %s "$1" 2>/dev/null || echo 0; }
+# try_zim URL: sets why and returns 1 unless the file is whole and its md5 is right.
+try_zim() {
+  for try in 1 2 3; do
+    [ "$(size_of $ZIM.part)" -le $ZIM_SIZE ] || rm -f $ZIM.part
+    [ "$(size_of $ZIM.part)" = $ZIM_SIZE ] || curl -fL -C - --connect-timeout 30 -o $ZIM.part "$1" || true
+    [ "$(size_of $ZIM.part)" = $ZIM_SIZE ] && break
+    echo "foxbench: ZIM from $1: $(size_of $ZIM.part) of $ZIM_SIZE bytes (try $try of 3)" >&2
+  done
+  why="is short: $(size_of $ZIM.part) of $ZIM_SIZE bytes"
+  [ "$(size_of $ZIM.part)" = $ZIM_SIZE ] || return 1
+  sum=$(md5sum $ZIM.part | cut -d' ' -f1)
+  [ "$sum" = $ZIM_MD5 ] && return 0
+  why="has md5 $sum, not $ZIM_MD5"
+  echo "foxbench: ZIM from $1 $why" >&2
+  rm -f $ZIM.part
+  return 1
+}
+fetch_zim() {
+  if [ -e /opt/foxbench/data-wikipedia.done ] && [ "$(size_of $ZIM)" = $ZIM_SIZE ]; then return; fi
+  rm -f $ZIM
+  for url in ${sources.join(" ")}; do
+    if try_zim $url; then mv $ZIM.part $ZIM; touch /opt/foxbench/data-wikipedia.done; return; fi
+  done
+  fail "Wikipedia ZIM ${file} $why"
+}
+fetch_zim`;
+}
+
 /** The part of the startup script that downloads Wikipedia's and the map's data, once per site. */
 function wavData(): string {
   return `# wav-full: the data of the two sites (the ZIM file is 95 GB, the map data 187 GB). The core sites above are already up.
@@ -133,7 +183,7 @@ mkdir -p $DATA
 fail() { echo "foxbench: BOOT FAILED: $*" >&2; exit 1; }
 python3 -c "import ensurepip" >/dev/null 2>&1 || { apt-get update -q && DEBIAN_FRONTEND=noninteractive apt-get install -y -q python3-venv; }
 [ -x /opt/foxbench/wav-venv/bin/webarena-verified ] || { python3 -m venv /opt/foxbench/wav-venv && /opt/foxbench/wav-venv/bin/pip install -q webarena-verified==${WAV_VERSION}; }
-[ -e /opt/foxbench/data-wikipedia.done ] || { /opt/foxbench/wav-venv/bin/webarena-verified env setup init --site wikipedia --data-dir $DATA && touch /opt/foxbench/data-wikipedia.done; }
+${fetchZim()}
 # stream_map URL VOLUME PATH...: each volume is emptied, then filled from its path in the archive on stdin (tar strips the path, as upstream's strip_components does).
 stream_map() {
   url=$1; shift
