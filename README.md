@@ -378,6 +378,10 @@ with your own login. Give the project, zone and account with `--project`,
   am1n3e/webarena-verified-shopping:0.1.0`. Set `FOXBENCH_WAV_HOST` when
   that Docker host is not `127.0.0.1`.
 
+`FOXBENCH_GCP_ACCOUNT`. The only env so far is `smoke`, a static page on
+`http://127.0.0.1:18080`. If another process holds a local port, `up` stops
+before it makes a VM; `--local-port-offset N` moves every tunnel port by N.
+
 Every VM is Spot unless you pass `--no-spot`, has no external IP, has the
 label `foxbench-env=<env>` and the network tag `foxbench`, and deletes itself
 after `--max-run-duration`. `down` closes the tunnel and deletes every VM with

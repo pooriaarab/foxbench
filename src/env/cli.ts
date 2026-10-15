@@ -11,7 +11,7 @@ import { cloudEnvs } from "./envs.js";
 import { createVm, deleteVm, listVms, startTunnel, type Gcp } from "./gcp.js";
 
 const USAGE = `Usage:
-  foxbench env up <env> [--no-spot] [--max-run-duration 4h] [gcp options]
+  foxbench env up <env> [--no-spot] [--max-run-duration 4h] [--local-port-offset N] [gcp options]
   foxbench env down <env> [gcp options]
   foxbench env status [<env>] [gcp options]
 GCP options: --project (FOXBENCH_GCP_PROJECT), --zone (FOXBENCH_GCP_ZONE), --account (FOXBENCH_GCP_ACCOUNT).
@@ -63,9 +63,10 @@ async function openTunnel(gcp: Gcp, vm: string, port: { remote: number; local: n
   throw new Error(`The tunnel to ${vm}:${port.remote} did not open in ${minutes} minutes. See ${log}. Run foxbench env down to delete the VM.`);
 }
 
-async function up(gcp: Gcp, name: string, spot: boolean, maxRun: string): Promise<void> {
-  const env = cloudEnvs.find((e) => e.name === name);
-  if (!env) throw new UsageError(`Unknown env "${name}".`);
+async function up(gcp: Gcp, name: string, spot: boolean, maxRun: string, offset: number): Promise<void> {
+  const found = cloudEnvs.find((e) => e.name === name);
+  if (!found) throw new UsageError(`Unknown env "${name}".`);
+  const env = { ...found, ports: found.ports.map((p) => ({ ...p, local: p.local + offset })) };
   if (!/^\d+[smhd]$/.test(maxRun)) throw new UsageError(`--max-run-duration must look like 4h or 90m, not ${maxRun}.`);
   if (readState(name)) throw new Error(`${name} is up already (${stateFile(name)}). Run foxbench env down ${name} first.`);
   for (const p of env.ports) if (!(await portFree(p.local))) throw new Error(`Local port ${p.local} is in use; ${name} tunnels to it. Free it first.`);
@@ -109,10 +110,12 @@ export async function envCli(argv: string[]): Promise<void> {
   try {
     const { positionals, values } = parseArgs({ args: argv, allowPositionals: true, allowNegative: true, options: {
       project: { type: "string" }, zone: { type: "string" }, account: { type: "string" },
-      spot: { type: "boolean", default: true }, "max-run-duration": { type: "string", default: "4h" }, help: { type: "boolean", short: "h" },
+      spot: { type: "boolean", default: true }, "max-run-duration": { type: "string", default: "4h" }, "local-port-offset": { type: "string", default: "0" }, help: { type: "boolean", short: "h" },
     } });
     if (values.help) return console.log(USAGE);
     const [command, name] = positionals;
+    const offset = Number(values["local-port-offset"]);
+    if (!Number.isInteger(offset)) throw new UsageError(`--local-port-offset must be a whole number, not ${values["local-port-offset"]}.`);
     const project = values.project || process.env.FOXBENCH_GCP_PROJECT;
     const zone = values.zone || process.env.FOXBENCH_GCP_ZONE;
     const account = values.account || process.env.FOXBENCH_GCP_ACCOUNT || undefined;
@@ -121,7 +124,7 @@ export async function envCli(argv: string[]): Promise<void> {
     if (!project) throw new UsageError("Give a GCP project with --project or FOXBENCH_GCP_PROJECT.");
     if (command === "up" && !zone) throw new UsageError("Give a GCP zone with --zone or FOXBENCH_GCP_ZONE.");
     const gcp: Gcp = { project, zone: zone ?? "", account };
-    if (command === "up") await up(gcp, name!, values.spot, values["max-run-duration"]);
+    if (command === "up") await up(gcp, name!, values.spot, values["max-run-duration"], offset);
     else if (command === "down") down(gcp, name!);
     else status(gcp, name);
   } catch (error) {
