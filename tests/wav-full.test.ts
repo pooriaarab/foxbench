@@ -127,16 +127,18 @@ describe("WF2 WF3 the startup script", () => {
     const lastCore = Math.max(...wavSites.map((s) => at(new RegExp(`^docker run .*--name wav-${s.id} `))));
     expect(lastCore).toBeGreaterThan(-1);
     expect(at(/^systemd-run /)).toBeGreaterThan(lastCore);
-    expect(at(/^webarena-verified env setup init/)).toBeGreaterThan(at(/^systemd-run /));
+    expect(at(/^curl /)).toBeGreaterThan(at(/^systemd-run /));
     // Wikipedia gets the ZIM directory; the map gets upstream's named volumes; each on its ports.
     expect(first.log.find((l) => l.includes("--name wav-wikipedia "))).toMatch(/-p 8888:8080 -p 8889:8874 .*-v \S+wav-data:\/data:ro/);
     expect(first.log.find((l) => l.includes("--name wav-map "))).toMatch(/-p 3000:8080 -p 3071:8877 .*-v webarena_verified_map_tile_db:\/data\/database/);
   });
   it("downloads nothing on the second boot and only starts the containers", () => {
+    const curls = (log: string[]) => log.filter((l) => l.startsWith("curl ")).length;
+    const first = readFileSync(join(dir, "log"), "utf8").trim().split("\n");
     const second = boot(dir);
     expect(second.status, second.stderr).toBe(0);
     const before = readFileSync(join(dir, "log"), "utf8").trim().split("\n");
-    expect(before.filter((l) => l.startsWith("webarena-verified env setup init"))).toHaveLength(1);
+    expect(curls(before)).toBe(curls(first));
     expect(before.filter((l) => l.startsWith("docker pull"))).toHaveLength(6);
     expect(before.filter((l) => l.startsWith("docker start"))).toHaveLength(6);
   });
@@ -331,7 +333,7 @@ describe("WF10 the ZIM file is complete before Wikipedia starts", () => {
       expect(first.status).toBe(0);
       const second = boot(dir);
       expect(second.status, second.stderr).toBe(0);
-      expect(second.log.filter((l) => l.startsWith("curl "))).toHaveLength(0);
+      expect(second.log.filter((l) => l.startsWith("curl "))).toHaveLength(first.log.filter((l) => l.startsWith("curl ")).length);
     } finally { rmSync(dir, { recursive: true, force: true }); }
   });
   it("pins the size of the file the Internet Archive serves", async (t) => {
