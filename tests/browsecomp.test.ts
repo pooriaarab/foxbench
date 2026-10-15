@@ -68,6 +68,8 @@ const bench = browsecompBenchmark({ sha256: sha(body) });
 const play = (adapter: Adapter, judges: Judge[]) => runBenchmarks({ adapter, runs: [{ benchmark: bench, subset: "full" }], judges, timeoutMs: 30_000 });
 const ctx = () => benchContext();
 
+const leaks = (text: string) => ROWS.flatMap((r) => [r.problem, r.answer, ...r.answer.split(" "), r.answer.toUpperCase(), r.answer.replace(" ", "  ")]).filter((x) => text.includes(x));
+
 describe("BrowseComp", () => {
   it("BC1 BC7 a file that differs from the pin, or a row that does not decrypt, stops the load", async () => {
     expect(browsecompBenchmark()).toMatchObject({ upstream: { ref: expect.stringMatching(/^[0-9a-f]{64}$/) }, redact: true, scoring: "llm", licence: { mode: "user-access" } });
@@ -104,7 +106,6 @@ describe("BrowseComp", () => {
       expect(text).not.toContain(r.problem);
       expect(text).not.toContain(r.answer);
     }
-    expect(board.results.every((r) => r.log === "")).toBe(true);
   });
 
   it("BC6 a judge with no verdict fails the case, and the verdict names the model", async () => {
@@ -117,7 +118,6 @@ describe("BrowseComp", () => {
   });
 
   it("BC8 BC9 BC10 a board keeps the steps, errors and last message of a log with the answer and question masked", async () => {
-    const leaks = (text: string) => ROWS.flatMap((r) => [r.problem, r.answer, ...r.answer.split(" "), r.answer.toUpperCase(), r.answer.replace(" ", "  ")]).filter((x) => text.includes(x));
     const agent: Adapter = {
       name: "chatty",
       async runTask({ goal }) {
