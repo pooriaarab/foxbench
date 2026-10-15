@@ -134,14 +134,19 @@ export async function pageImageQuery(run: Run): Promise<void> {
 /** WebArena's scoring plus page_image_query. */
 export const scoreVwa = (task: WaTask, facts: WaFacts): Promise<WaScore> => scoreWa(task, { ...facts, evaluators: { ...facts.evaluators, page_image_query: pageImageQuery } });
 
+/** What the bytes are, by their first bytes: the types the Claude API takes. */
+export function imageType(bytes: Buffer): JudgeImage["mediaType"] | undefined {
+  const sniff = bytes.subarray(0, 12).toString("latin1");
+  return sniff.startsWith("\x89PNG") ? "image/png" : sniff.startsWith("\xff\xd8") ? "image/jpeg" : sniff.startsWith("GIF8") ? "image/gif" : sniff.startsWith("RIFF") && sniff.endsWith("WEBP") ? "image/webp" : undefined;
+}
+
 /** An image the judge can look at, from its URL; refuses what the Claude API would (over 5 MB, or not PNG, JPEG, GIF or WebP). */
 export async function fetchImage(url: string, headers: Record<string, string> = {}): Promise<JudgeImage> {
   const res = await fetch(url, { headers, signal: AbortSignal.timeout(60_000) });
   if (!res.ok) throw new Error(`${url}: ${res.status}`);
   const bytes = Buffer.from(await res.arrayBuffer());
   if (bytes.length > 5_000_000) throw new Error(`${url}: ${bytes.length} bytes is over the 5 MB image limit`);
-  const sniff = bytes.subarray(0, 12).toString("latin1");
-  const mediaType = sniff.startsWith("\x89PNG") ? "image/png" : sniff.startsWith("\xff\xd8") ? "image/jpeg" : sniff.startsWith("GIF8") ? "image/gif" : sniff.startsWith("RIFF") && sniff.endsWith("WEBP") ? "image/webp" : undefined;
+  const mediaType = imageType(bytes);
   if (!mediaType) throw new Error(`${url}: not a PNG, JPEG, GIF or WebP image`);
   return { mediaType, data: bytes.toString("base64") };
 }
