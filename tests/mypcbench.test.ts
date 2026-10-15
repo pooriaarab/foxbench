@@ -25,7 +25,7 @@ const TASKS = [
   { id: "desk-c003", app: "multi_app", instruction: "Write the report in LibreOffice Calc.", apps_involved: ["Gringotts", "LibreOffice Calc"], category: "aggregation", difficulty: "hard", grading: { type: "llm_judge", rubrics: [rubric("Makes the sheet [answer:sheet]", 1)] } },
   { id: "shop-d004", app: "hoolishop", instruction: "What does the stapler cost at HooliShop?", apps_involved: ["HooliShop"], category: "retrieval", difficulty: "easy", grading: { type: "llm_judge", rubrics: [rubric("States the price 12.99 [answer:12.99]", 1)] } },
 ];
-const ANSWER: Record<string, string> = { "bank-a001": "The balance is 4213.55", "mail-b002": "Done: emailed Dwight and added the meeting", "shop-d004": "It costs 12.99" };
+const ANSWER: Record<string, string> = { "bank-a001": "The balance is 4213.55", "mail-b002": "Emailed Dwight and added the meeting", "shop-d004": "It costs 12.99" };
 const WRITES: Record<string, [string, string][]> = { "mail-b002": [["HooliMail", "/api/emails"], ["HooliCalendar", "/api/events"]] };
 
 const dir = mkdtempSync(join(tmpdir(), "fbn-mpc-"));

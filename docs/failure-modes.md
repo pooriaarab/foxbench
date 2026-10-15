@@ -1030,7 +1030,7 @@ not have; they are not run. The task file is fetched at a pinned commit.
 | MB8 | A judge reply that lacks an item, or is not JSON, counts as a pass. | The case fails with a `judge:` reason (J5); the verdict names the judge model. | `MB8 ...` |
 | MB9 | A case's changes carry into the next case. | After a case with a write, the VM resets before the next case starts; a read-only case causes no reset; the mark outlives the run. | `MB9 ...` |
 | MB10 | An app is reached without its login, or on the VM's own port, so the trace misses it. | Each involved app is served on its port through its own proxy, with the persona's session cookie added; the agent never sees the cookie. | `MB10 ...` |
-| MB11 | The rubric text or the goal leaks to the board. | Boards hold ids, tags and verdicts; reasons name the items by number and weight, not by text. | `MB11 ...` |
+| MB11 | The rubric text leaks to the board. | Reasons name the items by number and weight, not by text. | `MB11 ...` |
 | MB12 | Cases run with no judge, so every case fails and looks like an agent fault. | With no judge, the run loop gives a skip row (J2). | `MB12 ...` |
 
 ## AMO release build and listed submission (`scripts/amo-listing.mjs`)
