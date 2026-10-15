@@ -372,6 +372,7 @@ judges them.
 | WJ6 | A case changes a site (a post, an order), and the next case on that site starts from the changed state. | After a case whose HAR has a request that is not GET, HEAD or OPTIONS to a site, the next case on that site first resets it: the env's reset service recreates the container from its image, then `start` waits for the site's probe. Cases that only read share one reset. The marks are kept in the cache, so the next run resets a site that the last one changed. | `WJ6 ...` |
 | WJ7 | A reset never ends (GitLab boots for minutes), so the run hangs. | `start` waits up to 10 minutes, then the case fails with a `harness:` reason, and the site stays marked for reset. | `WJ7 ...` |
 | WJ8 | The agent reaches the reset service (it is on a tunnel port too) and resets a site during its case. | A known limit. The reset service has no key. A reset can only remove the agent's own work, and the score reads the trace, not the site. | - |
+| WJ9 | Two runs on one machine, or a run and a test, write and read the same `<cache>/har/<id>.har`. One run's judge reads the other's trace, so a case passes or fails on requests the agent never made. | Each run gets its own HAR directory (a fresh temp directory, removed by `down`; `harDir` sets it for a test). Nothing is written to the shared `<cache>/har`. Each test passes its own `harDir`. | `WJ9 ...` |
 
 ## SuiteCRM env (`suitecrm`, `src/bench/suitecrm/`)
 
