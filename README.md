@@ -232,6 +232,8 @@ foxbench run --suite agentdojo,browsesafe --agent mcp --name my-agent -- node my
 | `agentdojo-slack` | AgentDojo's slack suite: the 21 user tasks, then 10 pairs of a user task and an injection task, in a web chat app | The same AgentDojo release, suite v1.2.2 | The same checks. Slack's invite and removal checks read the tool calls, so the app records the calls its pages stand for. |
 | `assistantbench` | The 33 dev tasks of AssistantBench: realistic, time-consuming questions on the live web (the split HAL publishes) | [AssistantBench](https://huggingface.co/datasets/AssistantBench/AssistantBench) (Apache-2.0), fetched at a pinned revision; the scorer from [BrowserGym](https://github.com/ServiceNow/BrowserGym) (Apache-2.0) at a pinned commit, run through `uv` | AssistantBench's own `question_scorer` on the agent's answer. A case passes on accuracy 1; the board also shows the mean partial credit, the number HAL reports. |
 
+| `agentdojo-travel` | AgentDojo's travel suite: the 20 user tasks, then 14 pairs of a user task and an injection task, on a booking site | The same AgentDojo release, suite v1.2.2 | The same checks. Many travel tasks are answered in words, so the answer is scored: the site prints floats as Python does (`30.0`). |
+
 Readiness is honest. A benchmark whose inputs are missing — a Globus login
 for EIA's data, `python3` for WebArena-Infinity, the network on a first
 fetch — reports a skip row with the reason and the fix instead of failing

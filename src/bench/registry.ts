@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { SUITES } from "../tasks.js";
 import { agentdojoBenchmark } from "./agentdojo/index.js";
 import { assistantbenchBenchmark } from "./assistantbench.js";
+import { travelBenchmark } from "./agentdojo/travel.js";
 import { eiaBenchmark } from "./eia.js";
 import { browsesafeBenchmark } from "./browsesafe.js";
 import { slackBenchmark } from "./agentdojo/slack.js";
@@ -22,6 +23,7 @@ export const benchmarks: Benchmark[] = [
   miniwobBenchmark,
   agentdojoBenchmark,
   slackBenchmark,
+  travelBenchmark,
   webgamesBenchmark(),
   eiaBenchmark(),
   browsesafeBenchmark(),
