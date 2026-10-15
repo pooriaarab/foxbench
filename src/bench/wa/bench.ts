@@ -16,6 +16,8 @@ import { judgeBrowser, type JudgeBrowser } from "./page.js";
 /** One task of a list: WebArena's config shape. */
 export interface WaListTask extends WaTask {
   task_id: number;
+  /** Tags a list adds to the sites and eval types. */
+  tags?: string[];
   sites: string[];
   start_url: string;
 }
@@ -30,6 +32,8 @@ export interface WaSpec {
   source: { url: string; dir: string };
   /** The tasks, from the fetched file. */
   tasks(ctx: BenchContext, file: string): Promise<WaListTask[]>;
+  /** The evaluators; WebArena's by default. */
+  score?: typeof scoreWa;
   /** `func:` helpers that need a site, by name. `site(id)` has the origin the judge browser reaches the site on, and the one the agent saw. */
   helpers?: (site: (id: string) => { origin: string; canonical: string }) => NonNullable<Parameters<typeof scoreWa>[1]["helpers"]>;
 }
@@ -50,18 +54,19 @@ interface WaEnv extends WavEnv {
   browser: JudgeBrowser;
 }
 
-/** The task file at the pinned commit: fetched once into the cache, written whole (LI1). */
-export async function fetchTasks(ctx: BenchContext, source: WaSpec["source"]): Promise<string> {
-  const file = join(ctx.cacheDir, source.dir, "tasks.json");
+/** A file at the pinned commit: fetched once into the cache, written whole (LI1). */
+export async function fetchCached(ctx: BenchContext, dir: string, name: string, url: string): Promise<string> {
+  const file = join(ctx.cacheDir, dir, name);
   if (!existsSync(file)) {
-    const res = await fetch(source.url);
-    if (!res.ok) throw new Error(`${source.url}: ${res.status}`);
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`${url}: ${res.status}`);
     mkdirSync(dirname(file), { recursive: true });
     writeFileSync(`${file}.${process.pid}`, await res.text());
     renameSync(`${file}.${process.pid}`, file);
   }
   return file;
 }
+const fetchTasks = (ctx: BenchContext, source: WaSpec["source"]) => fetchCached(ctx, source.dir, "tasks.json", source.url);
 
 const isPage = (e: HarEntry) => {
   if (e.response.redirectURL || e.response.status >= 400) return false;
@@ -84,7 +89,7 @@ export function waBenchmark(spec: WaSpec, options: WaOptions = {}): Benchmark {
     check: (ctx) => wavReady(ctx, options.offset, options.portOffset),
     async load(ctx, subset) {
       const cases: Case[] = (await listed(ctx)).map((t) => ({
-        id: String(t.task_id), goal: t.intent, tags: [...t.sites, ...t.eval.eval_types, ...(new Set(t.sites).size > 1 ? ["multi-site"] : [])],
+        id: String(t.task_id), goal: t.intent, tags: [...t.sites, ...t.eval.eval_types, ...(new Set(t.sites).size > 1 ? ["multi-site"] : []), ...(t.tags ?? [])],
         ...(hasFuzzy(t) ? { judge: "llm" as const } : {}),
       }));
       return pickSubset(spec.id, cases, subset);
@@ -122,9 +127,9 @@ export function waBenchmark(spec: WaSpec, options: WaOptions = {}): Benchmark {
           }
         }
         const site = (id: string) => ({ canonical: canonical[id]!, origin: wav.origins[canonical[id]!]! });
-        const score = await scoreWa(resolved, { answer: output.answer, finalUrl: finalUrl(entries), judges: ctx.judges ?? [], page: () => wav.browser.page(), ...(spec.helpers ? { helpers: spec.helpers(site) } : {}), ...(options.settleMs === undefined ? {} : { settleMs: options.settleMs }) });
+        const score = await (spec.score ?? scoreWa)(resolved, { answer: output.answer, finalUrl: finalUrl(entries), judges: ctx.judges ?? [], page: () => wav.browser.page(), ...(spec.helpers ? { helpers: spec.helpers(site) } : {}), ...(options.settleMs === undefined ? {} : { settleMs: options.settleMs }) });
         const first = score.judges?.[0];
-        return { success: score.success, attack: null, reasons: score.reasons.slice(0, 5).map((r) => r.slice(0, 400)), judgedBy: score.llm && first ? `llm:${first.model}` : "programmatic", ...(score.judges ? { judges: score.judges } : {}) };
+        return { success: score.success, ...(score.score === undefined ? {} : { score: score.score }), attack: null, reasons: score.reasons.slice(0, 5).map((r) => r.slice(0, 400)), judgedBy: score.llm && first ? `llm:${first.model}` : "programmatic", ...(score.judges ? { judges: score.judges } : {}) };
       } finally {
         await Promise.all(proxies.map((p) => p.close()));
         await wav.browser.closePages();
