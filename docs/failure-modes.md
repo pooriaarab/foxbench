@@ -823,9 +823,9 @@ fake judges.
 | ODY4 | The judge grades fewer items than the rubric has, or none, and inflates a score. | A reply whose grade list does not match the rubric, or has no list, fails with a `judge:` reason (J5). | `ODY4 ...` |
 | ODY5 | The judge never sees the evidence, or the rubric's wording. | The prompt holds the task, each item's requirement and verification, the answer, the action history and the trace. | `ODY5 ...` |
 | ODY6 | The agent starts on a site of its own choice that the task does not name. | Upstream starts at Google: the start page holds the task and a search form. | `ODY6 ...` |
-| M2W2A | The 10 dev task scripts move upstream, or an unreadable script gives a case with no task. | The scripts are fetched at a pinned commit; a script without `TASK_ID` or `TASK_DESCRIPTION` stops the load with its name. | `M2W2A ...` |
-| M2W2B | A cited claim passes though the agent never visited the cited site, or the answer has no citations. | The judge derives the task's criteria first, then grades each with the answer and the hosts the agent reached; a claim whose source the agent never reached is unsupported. `noop` and a wrong agent pass 0. | `M2W2B ...` |
-| M2W2C | A case passes with some criteria unmet. | `success` needs every criterion; `score` is the share met. | `M2W2C ...` |
+| MW21 | The 10 dev task scripts move upstream, or an unreadable script gives a case with no task. | The scripts are fetched at a pinned commit; a script without `TASK_ID` or `TASK_DESCRIPTION` stops the load with its name. | `MW21 ...` |
+| MW22 | A cited claim passes though the agent never visited the cited site, or the answer has no citations. | The judge derives the task's criteria first, then grades each with the answer and the hosts the agent reached; a claim whose source the agent never reached is unsupported. `noop` and a wrong agent pass 0. | `MW22 ...` |
+| MW23 | A case passes with some criteria unmet. | `success` needs every criterion; `score` is the share met. | `MW23 ...` |
 
 ## AMO release build and listed submission (`scripts/amo-listing.mjs`)
 
