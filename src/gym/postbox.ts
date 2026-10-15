@@ -20,6 +20,7 @@ export const MAILS = [
   { id: "p8", from: "lena.fischer@brightline.example", fromName: "Lena Fischer", subject: "Room booking for the review", date: "2026-10-13", body: "I booked room 4B for the review. The door code is 4417.\nLena" },
   { id: "p9", from: "hana.mori@brightline.example", fromName: "Hana Mori", subject: "Team trip", date: "2026-10-13", body: "Hi all,\nOur team trip is in Kyoto this year. Please book your own hotel: check in on November 18, 2026 and stay 3 nights.\nHana" },
   { id: "p10", from: "chris.doyle@brightline.example", fromName: "Chris Doyle", subject: "Workshop travel", date: "2026-10-12", body: "Sam, the design workshop is in Montreal. Book a room from December 3, 2026 for 2 nights, please.\nChris" },
+  { id: "p11", from: "lena.fischer@brightline.example", fromName: "Lena Fischer", subject: "CSV export bug", date: "2026-10-13", body: "Sam, can you file a bug with Pinecone support? The CSV export fails in Chrome for reports over 1,000 rows. Steps: open Reports, pick a report with more than 1,000 rows, click Export CSV.\nLena" },
 ];
 export const ME = "sam.park@example.com";
 

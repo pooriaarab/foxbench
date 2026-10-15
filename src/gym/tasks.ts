@@ -328,7 +328,47 @@ const crossSite: Task[] = [
   }),
 ];
 
+// More tasks of the kinds foxpilot-flash r5 missed (#211): ask before a cap, a window of days, mail-driven
+// work on another site, and triage. None copies a scored task.
+const moreKinds: Task[] = [
+  ...([["jordan-lee", "chk", "180.00", "2026-10-26", "Festival tickets", 150], ["hydro", "sav", "260.50", "2026-11-03", "Account 55-201", 200]] as const).map(([payee, from, amount, date, memo, cap], i) => {
+    const t = { from, to: `payee:${payee}`, amount, date, memo };
+    TRAIN_POSTS.set(`bank-cap-ask-${i + 1}`, [["/user/", { q: `The transfer is ${usd(amount)}, above your $${cap} limit. May I send it?` }], ...transferPost(t)]);
+    return { id: `bank-cap-ask-${i + 1}`, suite: "train", tier: "hard", site: "bank", path: "/", clarify: "Yes, that amount is fine. Send it.",
+      goal: `Send ${usd(amount)} from my ${ACCOUNT_NAME(from)} to ${PAYEES[payee]!.replace(/ \(.*/, "")} on LarchBank, dated ${spoken(date)}, with the memo "${memo}". Do not send more than $${cap} without my OK. ${ASK}`,
+      check: all(transferCheck(t), askedFirst) } satisfies Task;
+  }),
+  ...([["physio", "Maya Ito, PT", "2026-11-09", 3, "15:00", "a shoulder strain"], ["dental", "Dr. Sofia Ruiz", "2026-11-04", 2, "13:00", "a check of a filling"]] as const).map(([service, clinician, from, days, after, reason], i) => {
+    const window = DAYS.filter((d) => d >= from).slice(0, days);
+    const day = window.find((d) => freeTimes(null, clinician, d).some((t) => t >= after));
+    if (!day) throw new Error(`no free time with ${clinician} from ${from}`);
+    const [posts, check] = booking(service, clinician, day, firstFree(clinician, day, after), reason);
+    return clinicTask(`clinic-window-${i + 1}`, `At Harbor Health, book the earliest ${SERVICES[service]!.label} time at ${after} or later with ${clinician} on any of the ${days} weekdays from ${spoken(from)}, for ${reason}. ${ME} ${FIRST}`,
+      posts, check, { tier: "hard" });
+  }),
+  (() => {
+    const t = { from: "chk", to: "payee:printhouse", amount: "240.00", date: "2026-10-20", memo: "INV-30418" };
+    TRAIN_POSTS.set("cross-mail-bank-1", [["/bank/payees", { name: "PrintHouse", institution: "Northern Bank", account: "5503921", nickname: "" }], ...transferPost(t)]);
+    return { id: "cross-mail-bank-1", suite: "train", tier: "hard", site: "postbox", path: "/",
+      goal: "Pay the PrintHouse invoice from my Postbox mail on LarchBank (/bank/): add PrintHouse as a payee (Northern Bank, account number 5503921), then send the amount due from my checking account, dated the due date, with the invoice number as the memo.",
+      check: all(oneRecord("bank", "payee", { name: "PrintHouse", institution: "Northern Bank", account: "5503921" }), transferCheck(t), mailsSent(0)) } satisfies Task;
+  })(),
+  (() => {
+    const fields = { subject: "CSV export fails over 1,000 rows", category: "bug", priority: "High", description: "The CSV export fails for large reports.", updates: "yes", steps: "Open Reports, pick a report with more than 1,000 rows, click Export CSV.", browser: "Chrome" };
+    TRAIN_POSTS.set("cross-mail-desk-1", [["/desk/new", fields]]);
+    return { id: "cross-mail-desk-1", suite: "train", tier: "hard", site: "postbox", path: "/",
+      goal: 'Lena Fischer asked me in Postbox to file a bug about the CSV export. On Pinecone Desk (/desk/), open a Bug report with the subject "CSV export fails over 1,000 rows", priority High, the description "The CSV export fails for large reports.", and the steps and browser from her mail. Keep the email updates on.',
+      check: all(oneRecord("desk", "ticket", { subject: fields.subject, category: "bug", priority: "High", browser: "Chrome", updates: "yes" }, { steps: /Export CSV/i }), mailsSent(0)) } satisfies Task;
+  })(),
+  mailTask("postbox-triage-2", 'In Postbox: reply to Lena Fischer\'s email about the draft slides with "The slides look good to me.", star Maya Chen\'s venue contract email, and archive both newsletters.',
+    [["/postbox/reply", { id: "p3", body: "The slides look good to me." }], ["/postbox/star", { id: "p1" }], ["/postbox/archive", { id: "p4" }], ["/postbox/archive", { id: "p5" }]],
+    all(mailsSent(1, { to: byId("p3").from, inReplyTo: "p3", word: /look good/i }), folders(["p4", "p5"], ["p1"])), { tier: "hard" }),
+  mailTask("postbox-triage-3", 'In Postbox: forward the PrintHouse invoice to finance@brightline.example with the note "Due on October 20.", reply to Ravi Patel\'s lunch email with "Sorry, I am busy on Friday.", and archive the City Parking email.',
+    [["/postbox/forward", { id: "p7", to: "finance@brightline.example", body: "Due on October 20." }], ["/postbox/reply", { id: "p6", body: "Sorry, I am busy on Friday." }], ["/postbox/archive", { id: "p2" }]],
+    all(mailsSent(2, { to: "finance@brightline.example", forwardOf: "p7", word: /october 20/i }, { to: byId("p6").from, inReplyTo: "p6", word: /busy/i }), folders(["p2"])), { tier: "hard" }),
+];
+
 /** Every train task, in suite order. */
-export const trainTasks: Task[] = [...stayTasks, ...moreStay, ...bankTasks, ...clinicTasks, ...deskTasks, ...mailTasks, ...crossSite];
+export const trainTasks: Task[] = [...stayTasks, ...moreStay, ...bankTasks, ...clinicTasks, ...deskTasks, ...mailTasks, ...crossSite, ...moreKinds];
 /** The sites that only the train suite uses (TS2). */
 export const GYM_SITES = ["stay", "bank", "clinic", "desk", "postbox"] as const;
