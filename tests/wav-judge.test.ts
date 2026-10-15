@@ -12,8 +12,10 @@ import { benchContext } from "../src/bench/registry.js";
 import { runBenchmarks } from "../src/bench/run.js";
 import { webarenaVerified, wavSites } from "../src/bench/wav/index.js";
 import { WAV_VERSION, wavDir } from "../src/bench/wav/tasks.js";
+import { freeBase } from "./free-base.js";
 
-const OFFSET = 50000;
+// Below the ephemeral range, in a band of this file's own.
+const OFFSET = await freeBase(17000, 1000, [...wavSites.flatMap((s) => [s.port, s.ctrlPort]), 8870]);
 const IDS = ["0", "27", "44", "580"];
 const ctx = benchContext();
 const servers: Server[] = [];
