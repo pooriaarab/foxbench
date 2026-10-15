@@ -12,7 +12,7 @@ import { pickSubset } from "../subsets.js";
 import type { Benchmark, BenchContext, Env, Episode, Readiness } from "../types.js";
 import { startHar, type HarRecorder } from "./har.js";
 import { judgeCase } from "./judge.js";
-import { fillPrompt, loadPrompts, loadTasks, parseStartUrl, promptName, toCase, uvMissing, wavDir, type WavTask } from "./tasks.js";
+import { fillPrompt, loadPrompts, loadTasks, parseStartUrl, promptName, toCase, uvMissing, WAV_VERSION, wavDir, type WavTask } from "./tasks.js";
 
 export const WAV_TAG = "0.1.0";
 export const TUNNEL_OFFSET = 10000;
@@ -21,18 +21,24 @@ export const RESET_PORT = 8870;
 const PROBE_MS = 10_000;
 
 export interface WavSite {
-  id: "shopping" | "shopping_admin" | "reddit" | "gitlab";
+  id: "shopping" | "shopping_admin" | "reddit" | "gitlab" | "wikipedia" | "map";
   /** The port the agent sees (the proxy's) and the VM's site port; the site's base URL is on it. */
   port: number;
-  /** The VM port of the container's env-ctrl server (8877 inside). */
+  /** The VM port of the container's env-ctrl server. */
   ctrlPort: number;
+  /** Where env-ctrl listens inside the container; the default is 8877. */
+  ctrlInner?: number;
   containerPort: number;
+  /** The image tag on Docker Hub; the default is WAV_TAG (wikipedia's only tag is 1.0.0). */
+  tag?: string;
   /** A page that answers once the site is up, as upstream's own health check. */
   health: string;
   /** The path upstream's site URL has, as in its config (shopping_admin is at /admin). */
   base?: string;
-  /** Upstream's test user, and the image's auto-login header; GitLab has none, so start signs in. */
-  login: { user: string; password: string; header?: string };
+  /** Upstream's test user, and the image's auto-login header; GitLab has none, so start signs in. Wikipedia and map have no login. */
+  login?: { user: string; password: string; header?: string };
+  /** No case changes this site, so it is never reset (WF7). */
+  readOnly?: boolean;
 }
 
 // Ports and health pages as upstream's environments/container/config.py; users as its examples/configs/config.example.json.
@@ -44,9 +50,45 @@ export const wavSites: WavSite[] = [
   { id: "gitlab", port: 8023, ctrlPort: 8024, containerPort: 8023, health: "/users/sign_in", login: { user: "byteblaze", password: "hello1234" } },
 ];
 
-/** The VM's startup script: Docker, then each pinned image with its base URL set to the proxy's. */
-export function wavStartup(): string {
-  const run = wavSites.map((s) => `run wav-${s.id} am1n3e/webarena-verified-${s.id}:${WAV_TAG} -p ${s.port}:${s.containerPort} -p ${s.ctrlPort}:8877 -e WA_ENV_CTRL_EXTERNAL_SITE_URL=http://127.0.0.1:${s.port}${s.id === "gitlab" ? " --shm-size=2g" : ""}`);
+// Ports and health pages as upstream's config.py (its docs say map is on 3030; its code and the WebArena paper say 3000). Map's env-ctrl is on 3071, not upstream's 3001: mypcbench tunnels its 3001 to the same local port.
+export const wavFullSites: WavSite[] = [
+  { id: "wikipedia", port: 8888, ctrlPort: 8889, ctrlInner: 8874, containerPort: 8080, tag: "1.0.0", health: "/", readOnly: true },
+  { id: "map", port: 3000, ctrlPort: 3071, containerPort: 8080, health: "/", readOnly: true },
+];
+
+// The data volumes upstream's `env setup init --site map` fills (its config.py), and the mount each has in the container.
+const MAP_VOLUMES: [string, string][] = [
+  ["tile_db", "/data/database"], ["routing_car", "/data/routing/car"], ["routing_bike", "/data/routing/bike"], ["routing_foot", "/data/routing/foot"],
+  ["nominatim_db", "/data/nominatim/postgres"], ["nominatim_flatnode", "/data/nominatim/flatnode"], ["website_db", "/var/lib/postgresql/14/main"], ["tiles", "/data/tiles"], ["style", "/data/style"],
+];
+
+/** The Docker Hub image of a site; the startup script and the registry test both read it from here. */
+export const wavImage = (s: WavSite) => `am1n3e/webarena-verified-${s.id}:${s.tag ?? WAV_TAG}`;
+
+/** The sites the startup script runs, with the flags that put each one on its ports with the proxy's base URL. */
+function wavRun(s: WavSite): string {
+  const extra = s.id === "gitlab" ? " --shm-size=2g" : s.id === "wikipedia" ? " -v /opt/foxbench/wav-data:/data:ro"
+    : s.id === "map" ? MAP_VOLUMES.map(([v, m]) => ` -v webarena_verified_map_${v}:${m}`).join("") : "";
+  return `run wav-${s.id} ${wavImage(s)} -p ${s.port}:${s.containerPort} -p ${s.ctrlPort}:${s.ctrlInner ?? 8877} -e WA_ENV_CTRL_EXTERNAL_SITE_URL=http://127.0.0.1:${s.port}${extra}`;
+}
+
+/** The part of the startup script that downloads Wikipedia's and the map's data with upstream's own CLI at the pinned version, once per site. */
+function wavData(): string {
+  return `# wav-full: the data of the two sites, from upstream's CLI (the ZIM file is 100 GB, the map data 60 GB). The core sites above are already up.
+DATA=/opt/foxbench/wav-data
+mkdir -p $DATA
+python3 -c "import ensurepip" >/dev/null 2>&1 || { apt-get update -q && DEBIAN_FRONTEND=noninteractive apt-get install -y -q python3-venv; }
+[ -x /opt/foxbench/wav-venv/bin/webarena-verified ] || { python3 -m venv /opt/foxbench/wav-venv && /opt/foxbench/wav-venv/bin/pip install -q webarena-verified==${WAV_VERSION}; }
+for site in ${wavFullSites.map((s) => s.id).join(" ")}; do
+  [ -e /opt/foxbench/data-$site.done ] || { /opt/foxbench/wav-venv/bin/webarena-verified env setup init --site $site --data-dir $DATA && touch /opt/foxbench/data-$site.done; }
+done
+${wavFullSites.map(wavRun).join("\n")}
+`;
+}
+
+/** The VM's startup script: Docker, then each pinned image with its base URL set to the proxy's. With `full`, the data sites too, last. */
+export function wavStartup(full = false): string {
+  const run = wavSites.map(wavRun);
   return `#!/bin/sh
 # wav-core: the WebArena-Verified sites. Runs as root on every boot; a container that exists is only started.
 set -e
@@ -64,7 +106,7 @@ mkdir -p /opt/foxbench
 cat > /opt/foxbench/wav-reset.py <<'PY'
 ${RESET_SERVICE}PY
 systemctl is-active --quiet wav-reset || systemd-run --unit=wav-reset python3 /opt/foxbench/wav-reset.py
-`;
+${full ? wavData() : ""}`;
 }
 
 // POST /reset/<site> recreates wav-<site> with the ports, base URL and shm size it ran with.
@@ -96,9 +138,9 @@ http.server.ThreadingHTTPServer(("0.0.0.0", ${RESET_PORT}), Reset).serve_forever
 `;
 
 /** Each site's URL and env-ctrl URL on the tunnel, or on FOXBENCH_WAV_HOST, and `port`, where its proxy listens. */
-export function wavUrls(env: NodeJS.ProcessEnv, offset = TUNNEL_OFFSET, portOffset = 0) {
+export function wavUrls(env: NodeJS.ProcessEnv, offset = TUNNEL_OFFSET, portOffset = 0, sites = wavSites) {
   const host = env.FOXBENCH_WAV_HOST || "127.0.0.1";
-  return wavSites.map((s) => ({ site: s, port: s.port + portOffset, url: `http://${host}:${s.port + offset}`, ctrl: `http://${host}:${s.ctrlPort + offset}`, reset: `http://${host}:${RESET_PORT + offset}/reset/${s.id}` }));
+  return sites.map((s) => ({ site: s, port: s.port + portOffset, url: `http://${host}:${s.port + offset}`, ctrl: `http://${host}:${s.ctrlPort + offset}`, reset: `http://${host}:${RESET_PORT + offset}/reset/${s.id}` }));
 }
 
 export type SiteUrl = ReturnType<typeof wavUrls>[number];
@@ -126,17 +168,18 @@ async function gitlabSession(u: SiteUrl, host: string): Promise<string> {
   const token = /name="authenticity_token" value="([^"]+)"/.exec(page.body)?.[1];
   const anon = sessionCookie(page.headers);
   if (!token || !anon) throw new Error(`gitlab: ${u.url}/users/sign_in has no sign-in form (${page.status})`);
-  const form = new URLSearchParams({ authenticity_token: token, "user[login]": u.site.login.user, "user[password]": u.site.login.password, "user[remember_me]": "0" });
+  const form = new URLSearchParams({ authenticity_token: token, "user[login]": u.site.login!.user, "user[password]": u.site.login!.password, "user[remember_me]": "0" });
   const res = await http(`${u.url}/users/sign_in`, { method: "POST", body: form.toString(),
     headers: { host, cookie: `_gitlab_session=${anon}`, "content-type": "application/x-www-form-urlencoded" } });
   const session = sessionCookie(res.headers);
-  if (res.status !== 302 || !session) throw new Error(`gitlab: signing in as ${u.site.login.user} returned ${res.status}`);
+  if (res.status !== 302 || !session) throw new Error(`gitlab: signing in as ${u.site.login!.user} returned ${res.status}`);
   return `_gitlab_session=${session}`;
 }
 
 /** What the proxy adds on each request to a site: its own Host, so links stay on the proxy port, and the login (P3). */
 export async function siteHeaders(u: SiteUrl): Promise<Record<string, string>> {
   const host = `127.0.0.1:${u.port}`;
+  if (!u.site.login) return { host };
   const { header, user, password } = u.site.login;
   return { host, ...(header ? { [header]: `${user}:${password}` } : { cookie: await gitlabSession(u, host) }) };
 }
@@ -218,7 +261,10 @@ export const webarenaVerified = (options: { offset?: number; portOffset?: number
     const { tasks } = await loadTasks(ctx);
     const dirtyFile = wavDirtyFile(ctx, options.offset);
     const dirty = new Set<string>(existsSync(dirtyFile) ? JSON.parse(readFileSync(dirtyFile, "utf8")) : []);
-    const env: WavEnv = { ctx, sites: wavUrls(ctx.env, options.offset, options.portOffset), tasks: new Map(tasks.map((t) => [String(t.id), t])), prompts: await loadPrompts(ctx, tasks), dirty, dirtyFile,
+    // The data sites run only on wav-full: the ones that answer join wav-core's four (WF4).
+    const full = wavUrls(ctx.env, options.offset, options.portOffset, wavFullSites);
+    const answering = (await Promise.all(full.map(async (u) => ((await probe(u.url, u.ctrl, u.site.health)) ? null : u)))).filter((u) => u !== null);
+    const env: WavEnv = { ctx, sites: [...wavUrls(ctx.env, options.offset, options.portOffset), ...answering], tasks: new Map(tasks.map((t) => [String(t.id), t])), prompts: await loadPrompts(ctx, tasks), dirty, dirtyFile,
       harDir: options.harDir ?? mkdtempSync(join(tmpdir(), "fbn-wav-har-")), ownsHarDir: !options.harDir };
     return env as unknown as Env;
   },
@@ -228,7 +274,7 @@ export const webarenaVerified = (options: { offset?: number; portOffset?: number
     const task = tasks.get(item.id);
     if (!task) throw new Error(`webarena-verified has no task ${item.id}`);
     const missing = task.sites.filter((id) => !sites.some((u) => u.site.id === id));
-    if (missing.length) throw new Error(`task ${item.id} needs ${missing.join(" and ")}, which wav-core does not run; it needs wav-full`);
+    if (missing.length) throw new Error(`skipped: task ${item.id} needs ${missing.join(" and ")}, which is not up (wav-core runs shopping, shopping_admin, reddit and gitlab); run it on wav-full (foxbench env up wav-full)`);
     const site = (id: string) => sites.find((u) => u.site.id === id)!;
     const starts = task.startUrls.map(parseStartUrl).map((s) => ({ ...s, path: (site(s.site).site.base ?? "") + s.path }));
     const first = site(starts[0]!.site);
@@ -266,7 +312,7 @@ export const webarenaVerified = (options: { offset?: number; portOffset?: number
     const { ctx, sites, dirty } = wav;
     const run = running.get(episode);
     if (!run) throw new Error("webarena-verified did not start this episode");
-    for (const { site, har } of run.hars) if (har.entries.some((e) => !READS.includes(e.request.method))) dirty.add(site);
+    for (const { site, har } of run.hars) if (!sites.find((u) => u.site.id === site)?.site.readOnly && har.entries.some((e) => !READS.includes(e.request.method))) dirty.add(site);
     saveDirty(wav);
     const entries = run.hars.flatMap((h) => h.har.entries).toSorted((a, b) => a.startedDateTime.localeCompare(b.startedDateTime));
     const urls = Object.fromEntries(sites.map((u) => [`__${u.site.id.toUpperCase()}__`, `http://127.0.0.1:${u.port}${u.site.base ?? ""}`]));
