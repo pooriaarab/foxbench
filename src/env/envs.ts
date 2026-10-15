@@ -3,6 +3,7 @@
 import { join } from "node:path";
 import { SUITECRM_TUNNEL, suitecrmStartup } from "../bench/suitecrm/index.js";
 import { RESET_PORT as MYPC_RESET_PORT, TUNNEL_OFFSET as MYPC_OFFSET, mypcApps, mypcbenchStartup } from "../bench/mypcbench/env.js";
+import { vwaStartup, vwaTunnel } from "../bench/vwa/env.js";
 import { RESET_PORT, TUNNEL_OFFSET, wavFullSites, wavSites, wavStartup } from "../bench/wav/index.js";
 import { TUNNEL_OFFSET as WEBMALL_OFFSET, webmallScript, webmallSites, webmallKey, webmallStartup, WEBMALL_REF } from "../bench/webmall/env.js";
 
@@ -102,5 +103,16 @@ systemd-run --unit=foxbench-smoke python3 -m http.server 8080 --directory /srv/f
     // real run. `up` waits for the first port, so doctor says which of the two data sites is still missing.
     bootMinutes: 330,
     startup: wavStartup(true),
+  },
+  {
+    // VisualWebArena: the WebArena-Verified shopping and reddit images (about 45 GB pulled, 22 GB unpacked) and
+    // Classifieds (MySQL, an 84 MB data file). Its Wikipedia tasks need wav-full's Wikipedia, not this env.
+    name: "vwa",
+    machineType: "n2-standard-8",
+    diskGb: 100,
+    ports: vwaTunnel,
+    // The first boot installs Docker, pulls the images and loads the Classifieds data.
+    bootMinutes: 45,
+    startup: vwaStartup(),
   },
 ];
