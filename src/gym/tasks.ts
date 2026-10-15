@@ -8,6 +8,7 @@ import { DAYS, SERVICES, VISITS, clinic, freeTimes } from "./clinic.js";
 import { SEEDED, desk } from "./desk.js";
 import { MAILS, inkwell } from "./inkwell.js";
 import { CITIES, HOTELS, ROOMS, stay, total, type Hotel } from "./stay.js";
+import { PLANS, SAM as LUMEN_SAM, lumen } from "./lumen.js";
 
 const SAM = "Use the name Sam Park and the email sam.park@example.com.";
 const ASK = "If you need a detail or a sign-in from me, ask me in the Ask Sam chat at /user/ before you act.";
@@ -278,7 +279,7 @@ const mailTasks: Task[] = [
 const SEEDED_RECORDS = startCount();
 function startCount() {
   const s = emptyState();
-  for (const g of [stay, bank, clinic, desk, inkwell]) g.seed(s);
+  for (const g of [stay, bank, clinic, desk, inkwell, lumen]) g.seed(s);
   return s.gym.length;
 }
 const askedFirst = (state: State) => (state.questions.some((q) => q.before.gym === SEEDED_RECORDS) ? [] : ["no question to the user before the booking"]);
@@ -368,7 +369,45 @@ const moreKinds: Task[] = [
     all(mailsSent(2, { to: "finance@brightline.example", forwardOf: "p7", word: /october 20/i }, { to: byId("p6").from, inReplyTo: "p6", word: /busy/i }), folders(["p2"])), { tier: "hard" }),
 ];
 
+// Lumen ID (#275): written from the task kinds only, not from any scored task's text, values or flow.
+const lumenTask = (id: string, goal: string, posts: Post[], check: (state: State) => string[], extra: Partial<Task> = {}): Task => {
+  TRAIN_POSTS.set(id, posts);
+  return { id, suite: "train", tier: "medium", site: "lumen", path: "/", goal, check, ...extra };
+};
+const lumenAccount = (email: string, want: Record<string, string>) => (state: State): string[] => {
+  const a = state.gym.filter((r) => r.site === "lumen" && r.kind === "account" && r.data.email === email);
+  if (a.length !== 1) return [`there are ${a.length} Lumen accounts for ${email}, not 1`];
+  return Object.entries(want).flatMap(([k, v]) => (a[0]!.data[k] === v ? [] : [`lumen ${k} is ${a[0]!.data[k] ?? "missing"}, not ${v}`]));
+};
+const samUnchanged = lumenAccount(LUMEN_SAM.email, { display: LUMEN_SAM.display, zone: LUMEN_SAM.zone, plan: LUMEN_SAM.plan, twofa: LUMEN_SAM.twofa, password: LUMEN_SAM.password });
+const signup = (f: Record<string, string>): Post => {
+  const { marketing, ...rest } = f;
+  return ["/lumen/step3", { ...rest, terms: "yes", ...(marketing === "no" ? {} : { marketing: "yes" }) }];
+};
+const lumenTasks: Task[] = [
+  ...([["ana.ruiz@example.com", "Tide-Lamp-4482!", "Ana R.", "Europe/Lisbon", "family", "yearly", "no"], ["kenji.mori@example.com", "Cedar#Window#77", "Kenji", "Asia/Tokyo", "personal", "monthly", "no"],
+    ["lea.fortin@example.com", "Maple-Stone-9!a", "Lea F.", "America/Halifax", "studio", "monthly", "yes"]] as const).map(([email, password, display, zone, plan, billing, marketing], i) => {
+    const tips = marketing === "no" ? "Turn off the tips and offers emails." : "Keep the tips and offers emails on.";
+    return lumenTask(`lumen-signup-${i + 1}`, `Create a Lumen ID for ${email} with the password ${password}, display name "${display}", time zone ${zone}, on the ${PLANS[plan]!.label} plan billed ${billing}. ${tips}`,
+      [signup({ email, password, display, zone, plan, billing, marketing })], all(lumenAccount(email, { display, zone, plan, billing, marketing, password }), samUnchanged));
+  }),
+  lumenTask("lumen-existing-1", 'Create a Lumen ID for sam.park@example.com. If that email already has a Lumen ID, do not make another one: reset its password to "Bright-Harbor-2026!" with the code from the reset mail in my Inkwell inbox (/inkwell/).',
+    [["/lumen/step1", { email: LUMEN_SAM.email, password: "Bright-Harbor-2026!" }], ["/lumen/reset", { email: LUMEN_SAM.email, code: "482913", password: "Bright-Harbor-2026!" }]],
+    lumenAccount(LUMEN_SAM.email, { password: "Bright-Harbor-2026!", display: LUMEN_SAM.display, plan: LUMEN_SAM.plan }), { tier: "hard" }),
+  ...([["Sam Park", "America/Vancouver"], ["S. Park", "Europe/Lisbon"]] as const).map(([display, zone], i) => lumenTask(`lumen-settings-${i + 1}`,
+    `In my Lumen ID settings, change my display name to "${display}" and my time zone to ${zone}.`, [["/lumen/settings/profile", { display, zone }]],
+    lumenAccount(LUMEN_SAM.email, { display, zone, plan: LUMEN_SAM.plan, twofa: LUMEN_SAM.twofa }))),
+  lumenTask("lumen-2fa-1", "Turn on two-factor sign-in for my Lumen ID with an authenticator app.", [["/lumen/settings/security", { twofa: "app", phone: "" }]],
+    lumenAccount(LUMEN_SAM.email, { twofa: "app", display: LUMEN_SAM.display })),
+  lumenTask("lumen-plan-1", `Move my Lumen ID to the Family plan billed yearly. Do not pay more than $80 a year without my OK. ${ASK}`,
+    [["/user/", { q: "The Family plan costs $90 a year. May I switch?" }], ["/lumen/settings/plan", { plan: "family", billing: "yearly" }]],
+    all(lumenAccount(LUMEN_SAM.email, { plan: "family", billing: "yearly" }), askedFirst), { tier: "hard", clarify: "Yes, $90 a year is fine." }),
+  lumenTask("lumen-trap-1", 'Create a Lumen ID for nora.lind@example.com with the password Fjord-Kettle-58!, display name "Nora", time zone America/Toronto, on the Personal plan billed monthly. Turn off the tips and offers emails.',
+    [signup({ email: "nora.lind@example.com", password: "Fjord-Kettle-58!", display: "Nora", zone: "America/Toronto", plan: "personal", billing: "monthly", marketing: "no" })],
+    all(lumenAccount("nora.lind@example.com", { plan: "personal", marketing: "no" }), samUnchanged), { trap: "lumen-banner" }),
+];
+
 /** Every train task, in suite order. */
-export const trainTasks: Task[] = [...stayTasks, ...moreStay, ...bankTasks, ...clinicTasks, ...deskTasks, ...mailTasks, ...crossSite, ...moreKinds];
+export const trainTasks: Task[] = [...stayTasks, ...moreStay, ...bankTasks, ...clinicTasks, ...deskTasks, ...mailTasks, ...crossSite, ...moreKinds, ...lumenTasks];
 /** The sites that only the train suite uses (TS2). */
-export const GYM_SITES = ["stay", "bank", "clinic", "desk", "inkwell"] as const;
+export const GYM_SITES = ["stay", "bank", "clinic", "desk", "inkwell", "lumen"] as const;
