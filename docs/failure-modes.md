@@ -758,6 +758,10 @@ own solution, with each API call made through the pages.
 | AW11 | An agent that does nothing or a wrong one passes, or the board holds AppWorld's text. | AppWorld's evaluator decides: `noop` and a wrong agent fail with the count of failed tests, a perfect agent passes. The benchmark is `redact: true`: the board holds ids, verdicts and test counts, with no goal, test text or agent log. A run writes no file. | `AW11 ...` |
 | AW12 | The agent keeps working after it marked the task complete, or says "done" without it. | The episode ends when AppWorld records `complete_task`; the agent's `done` never changes the score. | `AW12 ...` |
 | AW13 | A dead bridge shows as an API error on the page. | The page answers 502 and the case fails with a `harness:` reason. | `AW13 ...` |
+| AW14 | An id in a result is dead text, so the agent retypes it into the next form and can mistype it. | A result key `x_id` (or `x_ids`) links to a page of the same app whose API takes a parameter `x_id`, or the key with leading words dropped (`sent_email_id` to `email_id`), with that field prefilled. A read API with nothing else required also runs. Only whole numbers link. | `AW14 ...` |
+| AW15 | Long text goes into a one-line input, which drops its line breaks. | A string parameter named body, text, content, description, message, comment, note, review, reply or answer is a textarea. A form shows the values it was sent with, so a failed post can be fixed. | `AW15 ...` |
+| AW16 | A list is longer than its page and the page gives no way on, so the agent sees only the first rows. | A read API that takes `page_index` and `page_limit` and returns a full page links to the next page, and to the previous page after the first, with the same other values. | `AW16 ...` |
+| AW17 | An app has an API with no page, or a page with no field for a parameter. | Every API of every app of a task has a page with one field per parameter. The real-install test checks it for gmail, splitwise, amazon and todoist, which have no gold solutions. | `AW17 ...` |
 
 ## The user channel (`src/bench/user.ts`)
 
