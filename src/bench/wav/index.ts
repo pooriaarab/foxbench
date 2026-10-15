@@ -3,8 +3,9 @@
 // tag. One site table drives the VM's startup script, the tunnel ports and
 // check(). The agent sees each site on its own port through the recording
 // proxy; the proxy forwards to the tunnel on that port plus TUNNEL_OFFSET.
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { request, type IncomingHttpHeaders } from "node:http";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { startProxy, type RecordingProxy } from "../proxy.js";
 import { pickSubset } from "../subsets.js";
@@ -167,6 +168,9 @@ interface WavEnv {
   dirty: Set<string>;
   /** The marks live in the cache, per host, so the next run resets too. */
   dirtyFile: string;
+  /** This run's HAR files, and whether `down` removes them (WJ9). */
+  harDir: string;
+  ownsHarDir: boolean;
 }
 const saveDirty = (env: WavEnv) => writeFileSync(env.dirtyFile, JSON.stringify([...env.dirty]));
 /** Each episode's task and HAR recorders, for its judge. */
@@ -187,8 +191,8 @@ export async function reset(u: SiteUrl, waitMs: number): Promise<void> {
 /** The file of the sites to reset before their next case, per host and tunnel offset (WJ6). */
 export const wavDirtyFile = (ctx: BenchContext, offset = TUNNEL_OFFSET) => join(wavDir(ctx), `dirty-${ctx.env.FOXBENCH_WAV_HOST || "127.0.0.1"}-${offset}.json`);
 
-/** For tests: `offset` moves the tunnel ports, `portOffset` the sites' own (the proxies') ports, and `resetWaitMs` shortens the wait for a reset. */
-export const webarenaVerified = (options: { offset?: number; portOffset?: number; resetWaitMs?: number } = {}): Benchmark => ({
+/** For tests: `offset` moves the tunnel ports, `portOffset` the sites' own (the proxies') ports, `resetWaitMs` shortens the wait for a reset, and `harDir` is the test's own HAR directory. */
+export const webarenaVerified = (options: { offset?: number; portOffset?: number; resetWaitMs?: number; harDir?: string } = {}): Benchmark => ({
   id: "webarena-verified",
   title: "WebArena-Verified",
   upstream: { repo: "https://github.com/ServiceNow/webarena-verified", ref: "v1.2.3", paper: "https://openreview.net/forum?id=94tlGxmqkN" },
@@ -214,7 +218,8 @@ export const webarenaVerified = (options: { offset?: number; portOffset?: number
     const { tasks } = await loadTasks(ctx);
     const dirtyFile = wavDirtyFile(ctx, options.offset);
     const dirty = new Set<string>(existsSync(dirtyFile) ? JSON.parse(readFileSync(dirtyFile, "utf8")) : []);
-    const env: WavEnv = { ctx, sites: wavUrls(ctx.env, options.offset, options.portOffset), tasks: new Map(tasks.map((t) => [String(t.id), t])), prompts: await loadPrompts(ctx, tasks), dirty, dirtyFile };
+    const env: WavEnv = { ctx, sites: wavUrls(ctx.env, options.offset, options.portOffset), tasks: new Map(tasks.map((t) => [String(t.id), t])), prompts: await loadPrompts(ctx, tasks), dirty, dirtyFile,
+      harDir: options.harDir ?? mkdtempSync(join(tmpdir(), "fbn-wav-har-")), ownsHarDir: !options.harDir };
     return env as unknown as Env;
   },
   async start(env, item) {
@@ -265,12 +270,15 @@ export const webarenaVerified = (options: { offset?: number; portOffset?: number
     saveDirty(wav);
     const entries = run.hars.flatMap((h) => h.har.entries).toSorted((a, b) => a.startedDateTime.localeCompare(b.startedDateTime));
     const urls = Object.fromEntries(sites.map((u) => [`__${u.site.id.toUpperCase()}__`, `http://127.0.0.1:${u.port}${u.site.base ?? ""}`]));
-    const score = await judgeCase(ctx, run.task.id, entries, output.answer, urls);
+    const score = await judgeCase(ctx, wav.harDir, run.task.id, entries, output.answer, urls);
     const success = score.status === "success";
     return { success, score: score.score, attack: null, judgedBy: "programmatic",
       reasons: success ? [] : (score.messages.length ? score.messages : [`upstream's evaluator says ${score.status}`]).slice(0, 5).map((m) => m.slice(0, 400)) };
   },
   // The VM stops only through foxbench env down.
-  down: async () => {},
+  down: async (env) => {
+    const { harDir, ownsHarDir } = env as unknown as WavEnv;
+    if (ownsHarDir) rmSync(harDir, { recursive: true, force: true });
+  },
   baselines: [],
 });
