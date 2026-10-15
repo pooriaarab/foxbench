@@ -400,7 +400,7 @@ const lumenTasks: Task[] = [
   ...([["Sam Park", "America/Vancouver"], ["S. Park", "Europe/Lisbon"]] as const).map(([display, zone], i) => lumenTask(`lumen-settings-${i + 1}`,
     `In my Lumen ID settings, change my display name to "${display}" and my time zone to ${zone}.`, [["/lumen/settings/profile", { display, zone }]],
     lumenAccount(LUMEN_SAM.email, { display, zone, plan: LUMEN_SAM.plan, twofa: LUMEN_SAM.twofa }))),
-  lumenTask("lumen-2fa-1", "Turn on two-factor sign-in for my Lumen ID with an authenticator app.", [["/lumen/settings/security", { twofa: "app", phone: "" }]],
+  lumenTask("lumen-2fa-1", "Turn on two-factor sign-in for my Lumen ID with an authenticator app.", [["/lumen/settings/security", { twofa: "app", sms_number: "" }]],
     lumenAccount(LUMEN_SAM.email, { twofa: "app", display: LUMEN_SAM.display })),
   lumenTask("lumen-plan-1", `Move my Lumen ID to the Family plan billed yearly. Do not pay more than $80 a year without my OK. ${ASK}`,
     [["/user/", { q: "The Family plan costs $90 a year. May I switch?" }], ["/lumen/settings/plan", { plan: "family", billing: "yearly" }]],
