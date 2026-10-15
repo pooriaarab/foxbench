@@ -95,9 +95,10 @@ export function rubricVerdict(judges: Judge[], task: string, items: Criterion[],
   });
 }
 
+const esc = (s: string) => s.replace(/[&<>"]/g, (c) => `&#${c.charCodeAt(0)};`);
+
 /** A local start page with the task and a search form, so the agent picks the site (WTB6). */
 export async function startPage(id: string, task: string, link = "") {
-  const esc = (s: string) => s.replace(/[&<>"]/g, (c) => `&#${c.charCodeAt(0)};`);
   const html = `<!doctype html><meta charset="utf-8"><title>${esc(id)}</title><main data-case="${esc(id)}"><p>${esc(task)}</p>
 ${link ? `<p>Start at <a href="${esc(link)}">${esc(link)}</a>.</p>` : `<form action="https://www.google.com/search" method="get"><input name="q" aria-label="Search the web"><button>Search</button></form>`}</main>`;
   const server = createServer((_req, res) => res.writeHead(200, { "content-type": "text/html; charset=utf-8" }).end(html));
@@ -113,10 +114,9 @@ export const webtailbenchBenchmark = (): Benchmark => {
   let tasks: Task[] = [];
   const read = async (ctx: BenchContext) => {
     const [main, refusals] = await Promise.all(FILES.map((file) => datasetFile(ctx, { dataset: "microsoft/WebTailBench", ref: WTB_REF, file })));
-    const body = (text: string | undefined) => parseTsv(text!).slice(1);
     tasks = [
-      ...body(main).map(([category, id, task, rubric]): Task => ({ id: id!, category: category!, task: task!, refusal: false, items: (JSON.parse(rubric!) as { items: { criterion: string; description: string; max_points: number }[] }).items.map((i) => ({ criterion: i.criterion, description: i.description, max: i.max_points })) })),
-      ...body(refusals).map(([id, category, task]): Task => ({ id: id!, category: category!.trim().toLowerCase(), task: task!, refusal: true, items: [] })),
+      ...parseTsv(main!).slice(1).map(([category, id, task, rubric]): Task => ({ id: id!, category: category!, task: task!, refusal: false, items: (JSON.parse(rubric!) as { items: { criterion: string; description: string; max_points: number }[] }).items.map((i) => ({ criterion: i.criterion, description: i.description, max: i.max_points })) })),
+      ...parseTsv(refusals!).slice(1).map(([id, category, task]): Task => ({ id: id!, category: category!.trim().toLowerCase(), task: task!, refusal: true, items: [] })),
     ];
   };
   return {
