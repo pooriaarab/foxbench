@@ -706,6 +706,26 @@ and run the real upstream scorer on the real dev answers.
 | A9 | Live sites change, so a pass today is a fail next month. | A known limit of live-web benchmarks (plan 6.1 rule 4): the board's date is the run date; compare only with runs from the same week. | - |
 | A10 | A scorer process per case loads numpy and scipy each time, so a run, and CI next to other tests, slows down until other tests time out. | One scorer process per run, started in `up` and closed in `down`; a scorer error on one answer scores that answer 0 with the error's name and the process goes on. | `A4 ...` (33 cases in seconds) |
 
+## GAIA validation (`src/bench/gaia.ts`)
+
+GAIA is gated on Hugging Face and must not be reshared, so it runs only
+through the user's own access (`HF_TOKEN` from an account that accepted its
+terms). The validation questions and their attached files are fetched at a
+pinned revision into the cache; answers are scored by GAIA's own
+`question_scorer` from the `gaia-benchmark/leaderboard` space at a pinned
+revision, through `uv`. The tests in `tests/gaia.test.ts` use a fake Hugging
+Face endpoint (`HF_ENDPOINT`) with a synthetic dataset, and the real scorer.
+
+| # | Failure mode | Wanted behaviour | Test |
+|---|---|---|---|
+| Q1 | The dataset or the scorer moves upstream, so a score is for data or code nobody pinned. | Both are fetched at pinned revisions into the cache. Nothing from GAIA is committed. | `Q1 ...` |
+| Q2 | GAIA's text leaks into a public board: a question, a gold answer, an agent log that repeats them. | The benchmark is `redact: true`. The run loop drops the agent log of a redacted benchmark, cases carry no goal, and reasons never hold the gold answer, so the JSON and Markdown boards hold ids and verdicts only. | `Q2 ...` |
+| Q3 | No token, or a token without access, makes every case fail, which looks like an agent fault. | `check()` is not ready, with the fix: set `HF_TOKEN`, or accept GAIA's terms with that account. Missing `uv` is not ready too. | `Q3 ...` |
+| Q4 | The case list is wrong: ids that change, or a lost level. | GAIA's `task_id` is the id; Level 1, 2, 3 is tier easy, medium, hard and tag `level1`..`level3`. | `Q4 ...` |
+| Q5 | An agent that does nothing, or a wrong answer, passes; a right answer in another format fails. | The upstream scorer decides: `noop` and a wrong agent pass 0, a scripted perfect agent passes every case, and `1,000` passes for a gold of `1000`, as GAIA's scorer allows. | `Q5 ...` |
+| Q6 | A task with an attached file cannot be solved, because the agent never sees the file. | The start page links the attachment, served from the cache through the recording proxy. | `Q6 ...` |
+| Q7 | The scorer runs from inside the fetched files. | The helper lives in foxbench's own cache directory and runs with `uv run --isolated` and `python -I`; the scorer is loaded by path. | `Q7 ...` |
+
 ## AMO release build and listed submission (`scripts/amo-listing.mjs`)
 
 `pnpm check:amo` reads `dist-ext/`, which is what `release.yml` signs. Each
