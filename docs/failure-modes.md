@@ -703,6 +703,31 @@ has no NL assertions in the basis, so code alone scores it. The tests are in
 | WL4 | `quick` changes between runs, or covers one app, so a quick score is not comparable. | `quick` is the committed list in `src/bench/subsets/webarena-infinity.json`: 20 ids that exist, every app, both kinds and every tier, in the same order each time. | `WL4 ...` |
 | WL5 | A function task is judged by a real task's verifier, or the function verifier path is not checked. | A function case runs its own `function-tasks/` verifier. A scripted perfect agent passes real function cases, and noop and a wrong agent fail them. | `WL5 ...` |
 
+## AppWorld (`src/bench/appworld/`)
+
+AppWorld is 9 everyday apps (mail, notes, payments, music and more) with 457
+APIs over the lives of about 100 people. Its app code and task data ship
+encrypted, under a licence that says any public copy must stay encrypted. So
+it runs only through the user's own install (`pip install appworld`,
+`appworld install`, `appworld download data`), in a Python bridge
+(`bridge.py`) that keeps each task's world in memory. The bridge hands out
+AppWorld's own API docs at run time, so the repo holds no AppWorld app, API
+or task text, runs each call through AppWorld's own APIs, and judges with
+AppWorld's own evaluator (its unit tests on the end database). The tests in
+`tests/appworld-bridge.test.ts` run the real bridge against a fake AppWorld
+package (`tests/fixtures/fake-appworld/`).
+
+| # | Failure mode | Wanted behaviour | Test |
+|---|---|---|---|
+| AW1 | AppWorld's decrypted text reaches the disk or a log. | AppWorld's output folders, state saves and logs are turned off and Python runs with `-B`, so a session writes no file. The bridge's stderr is dropped, and a harness error gives only the exception's name. | `AW1 ...` |
+| AW2 | Another AppWorld version or no install scores the run, or every case fails as if the agent did. | `check` is not ready, with the commands to fix it, when `APPWORLD_ROOT` is unset, its data is missing, or the package is missing, not `0.1.3.post1`, or not unpacked by `appworld install`. | `AW2 ...` |
+| AW3 | The task list is wrong: ids that change, a lost split or difficulty. | Ids and splits come from AppWorld's own task loader, difficulty from each task's metadata. | `AW3 ...` |
+| AW4 | The verdict is foxbench's guess, not AppWorld's. | AppWorld's own `evaluate_task` runs on the open world's memory and gives its test counts: no calls fails, a wrong call fails a test, the right calls pass. | `AW4 ...` |
+| AW5 | A form sends text where the API wants a number, a boolean or a list, so a correct agent fails. | Each field is converted by the type in AppWorld's API doc; a list is JSON or comma-separated; a blank field is left out. A bad value is an error the agent sees. | `AW5 ...` |
+| AW6 | The agent must carry an access token from call to call, which a code agent keeps in a variable. | After a sign-in returns `access_token`, a blank `access_token` of that app is filled with it. | `AW6 ...` |
+| AW7 | One case's world, or its sign-ins, leak into the next case. | Each `open` makes a fresh AppWorld world for its task and forgets the tokens. | `AW7 ...` |
+| AW8 | The bridge dies and its caller hangs. | A dead bridge fails each call at once. | `AW8 ...` |
+
 ## The user channel (`src/bench/user.ts`)
 
 Some benchmarks (tau2, Gaia2) test whether the agent asks the user for what it
