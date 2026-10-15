@@ -1097,7 +1097,7 @@ hijacked; they are not run either. The tests are in
 | VA12 | A program_html check reads the agent's page, or a page the agent changed after its run, or opens a session that is not signed in and reads the login form. | The check opens its page in the runner's own judge browser behind a proxy that signs in as the user, apart from the agent's proxies. The agent's browser is never used, and the judge's requests stay out of the agent's trace. | `VA12 ...` |
 | VA13 | A helper reads the wrong thing: all of the page for `get_query_text`, the first comment for the user's latest, or an order that is not the latest. | `get_query_text` is the element's text (empty if absent); `reddit_get_latest_comment_content_by_username` is the text of the user's newest comment by time, at any depth; `shopping_get_latest_order_url` is the order URL of the newest order from the shop's REST API with the admin token. | `VA13 ...` |
 | VA14 | A check on an element that is not on the page passes, for example a noop on a `must_exclude` rule. | A missing element reads as empty and the check fails (WE6). | `VA14 ...` |
-| VA15 | A fuzzy match runs with no judge, or its verdict is not recorded. | The 10 cases with a fuzzy_match are `judge: "llm"` and the benchmark is `mixed`; with no judge they fail with `judge: no judge` (J2); the verdict holds the judges' replies and `judgedBy` names the model. | `VA15 ...` |
+| VA15 | A fuzzy match runs with no judge, or its verdict is not recorded. | The cases with a fuzzy_match are `judge: "llm"` and the benchmark is `mixed`; with no judge they fail with `judge: no judge` (J2); the verdict holds the judges' replies and `judgedBy` names the model. | `VA15 ...` |
 
 ## AMO release build and listed submission (`scripts/amo-listing.mjs`)
 
