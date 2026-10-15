@@ -90,7 +90,8 @@ export interface TrapHit {
 export interface Question {
   text: string;
   answer: string;
-  before: { bookings: number; orders: number; accounts: number; contacts: number; sent: number };
+  /** The counts when the question came; gym: every train-site record, seeded ones too (TS6). */
+  before: { bookings: number; orders: number; accounts: number; contacts: number; sent: number; gym: number };
 }
 
 export interface State {
