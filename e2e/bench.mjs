@@ -10,11 +10,14 @@
 //               four cases its overlap allows (DS7)
 //   AgentDojo travel  noop 0/34 with every attack blocked; perfect 34/34 with 0
 //               followed; gullible follows 14/14; wrong 0/34 (DT4-DT7)
+//   AgentDojo workspace (mail and calendar)  noop 0/42 with every attack
+//               blocked; perfect 42/42; gullible follows 18/18; wrong passes
+//               only user task 12 (DW5)
 // Writes artifacts/bench/<id>/score-*.{json,md}.
 // Usage: pnpm e2e:bench [--headed]. Needs git, uv and Firefox (FIREFOX).
 import { benchContext, benchmarkById, noopAdapter, runBenchmarks, writeScore } from "../dist/index.js";
 import { prepareCases } from "../dist/bench/agentdojo/common.js";
-import { agentdojoScripted, miniwobScripted, SCRIPTED_MINIWOB, slackDriver, travelDriver } from "./scripted-bench.mjs";
+import { agentdojoScripted, miniwobScripted, SCRIPTED_MINIWOB, slackDriver, travelDriver, workspaceDriver } from "./scripted-bench.mjs";
 
 const headless = !process.argv.includes("--headed");
 const firefox = process.env.FIREFOX;
@@ -65,10 +68,22 @@ try {
   check("travel gullible follows 14/14", travelGullible.attacksFollowed === 14, `${travelGullible.attacksFollowed}/${travelGullible.traps}`);
   const travelWrong = await run("agentdojo-travel", agentdojoScripted("wrong", travelCases, travelDriver));
   check("travel wrong passes 0/34", travelWrong.passed === 0, `${travelWrong.passed}/${travelWrong.tasks}`);
+
+  const offered = new Set((await benchmarkById("agentdojo-workspace").load(benchContext(), "full")).map((c) => c.id));
+  const workspaceCases = prepareCases(benchContext().cacheDir, "workspace").filter((c) => offered.has(c.id));
+  const workspaceNoop = await run("agentdojo-workspace", noopAdapter());
+  check("workspace noop passes 0/42 with every attack blocked", workspaceNoop.passed === 0 && workspaceNoop.tasks === 42 && workspaceNoop.attacksBlocked === 18, `${workspaceNoop.passed}/${workspaceNoop.tasks}, blocked ${workspaceNoop.attacksBlocked}`);
+  const workspacePerfect = await run("agentdojo-workspace", agentdojoScripted("perfect", workspaceCases, workspaceDriver));
+  check("workspace perfect passes 42/42 with 0 followed", workspacePerfect.passed === 42 && workspacePerfect.attacksFollowed === 0, `${workspacePerfect.passed}/${workspacePerfect.tasks}`);
+  const workspaceGullible = await run("agentdojo-workspace", agentdojoScripted("gullible", workspaceCases, workspaceDriver));
+  check("workspace gullible follows 18/18", workspaceGullible.attacksFollowed === 18, `${workspaceGullible.attacksFollowed}/${workspaceGullible.traps}`);
+  const workspaceWrong = await run("agentdojo-workspace", agentdojoScripted("wrong", workspaceCases, workspaceDriver));
+  const luckyWorkspace = workspaceWrong.results.filter((r) => r.success).map((r) => r.id.split("+")[0]);
+  check("workspace wrong passes only user task 12", workspaceWrong.passed === 2 && luckyWorkspace.every((id) => id === "user_task_12"), luckyWorkspace);
 } catch (error) {
   check("the run finished", false, error instanceof Error ? error.message : String(error));
 }
 for (const c of checks) console.log(`${c.ok ? "ok " : "BAD"} ${c.name}: ${JSON.stringify(c.actual)}`);
-const passed = checks.length === 15 && checks.every((c) => c.ok);
+const passed = checks.length === 19 && checks.every((c) => c.ok);
 console.log(passed ? "PASS" : "FAIL");
 process.exitCode = passed ? 0 : 1;
