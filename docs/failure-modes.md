@@ -363,6 +363,7 @@ file holds a fixed port such as 9999.
 | WT9 | `uv` is missing, and every case fails late. | `check()` is not ready, with the fix. | `WT9 ...` |
 | WT10 | The agent gets another prompt than upstream's agents, so the scores are not comparable. | The goal is upstream's prompt for the task's sites, from the repo at the pinned commit and kept in the cache, with the intent and the start URLs on the proxy ports filled in. | `WT10 ...` |
 | WT11 | A site's own port (7770, 7780, 9999, 8023) is taken, by another case in a parallel run, another benchmark process or any local program. The proxy cannot listen there, and the case hangs, or fails with a bare `listen EADDRINUSE` the operator cannot place. | `start` fails the case at once, and the loop records `harness: port <n> is in use ...`, naming the port and saying that multi-site WebArena-Verified cases must run serially or on separate hosts (a site keeps one origin, so two cases cannot share its port). Nothing waits, and `start` stops the proxies and recorders it had already started. | `WT11 ...` |
+| WT12 | A task on more sites than its start URLs name (WebArena-Lite and WebChoreArena have them) gets no proxy, login or HAR for the unnamed site, and the agent cannot reach it. | `wavStart` serves every site the task uses: each other site gets its own proxy on its port with its login and a HAR recorder, and the goal names its root URL. | `WT12 ...` |
 
 ## WebArena-Verified scoring (`src/bench/wav/judge.ts`, `src/bench/wav/har.ts`)
 
