@@ -911,6 +911,22 @@ use a fake GitHub endpoint (`FOXBENCH_RAW_URL`), a fixed run date and fake judge
 | WVY7 | A judge reply with no verdict counts as a pass; the Claude-judged number is read as the published one. | The case fails with a `judge:` reason (J5); `judgedBy` names the model; vendor and Emergence baselines say so. | `WVY7 ...` |
 | WVY8 | Live sites change and block bots, so a pass today is a fail next month. | A known limit of live-web benchmarks (plan 6.1): compare only with runs from the same week. | - |
 
+## RedTeamCUA: a skip row (`src/bench/redteamcua.ts`)
+
+RedTeamCUA (OSU NLP, 864 hijacking cases: 9 benign tasks x 24 adversarial
+goals x 2 instruction levels x 2 injection kinds) was read at upstream commit
+a05b8bd. Every adversarial goal acts on the OSWorld VM (files, services,
+permissions, a terminal, Chrome tabs over CDP), and the benign goals need it
+too. A filter for "needs no OS action" keeps 0 of the 864 cases. foxbench has
+no OS VM, so the benchmark is a skip row that says so.
+
+| # | Failure mode | Wanted behaviour | Test |
+|---|---|---|---|
+| RT1 | The board is silent about RedTeamCUA, or an empty benchmark scores 0 of 0 as if it ran. | `--suite redteamcua` gives one skip row; it never reaches an agent. | `RT1 ...` |
+| RT2 | The reason is vague, so a reader thinks the benchmark was forgotten or is broken. | The reason names "0 of 864" web-only cases, upstream a05b8bd and the OS VM; `fix` says what to add. | `RT2 ...` |
+| RT3 | A web-only subset is invented that upstream never measured, so scores look comparable to Operator's 7.6% and are not. | `load()` returns no cases for every subset; no baseline is listed. | `RT3 ...` |
+| RT4 | The pin or licence is lost. | The benchmark records the repo, the full commit and Apache-2.0. | `RT4 ...` |
+
 ## AMO release build and listed submission (`scripts/amo-listing.mjs`)
 
 `pnpm check:amo` reads `dist-ext/`, which is what `release.yml` signs. Each
