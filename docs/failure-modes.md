@@ -242,6 +242,9 @@ argv and prints canned JSON.
 | V12 | The tunnel starts before the VM listens and gcloud's connection test fails. | `up` restarts the tunnel until gcloud says `Listening on port`, for up to 5 minutes, then stops and names the log. The state file stays so `down` can delete the VM. | - (needs a real VM) |
 | V13 | IAP cannot reach the VM because no firewall rule allows Google's IAP range. | A setup step, not code: `README.md` gives the firewall rule for the `foxbench` network tag that every VM gets. | - |
 | V14 | Two envs tunnel to the same local port (SuiteCRM and WebMall both took 18081), so the second `up` cannot open its tunnel, or a probe reaches the wrong site. | Every local port is used by one env only. | `tests/env.test.ts` V14 |
+| V15 | A Spot VM is preempted. Its tunnel processes keep running and hold the local ports, and `down` says "No VMs" and leaves them. | `down` stops every tunnel in the env's state even when no VM exists, then removes the state. A tunnel that `up` started but had not yet recorded is in the state too: `up` records the pid when it starts the process. | `V15 ...` |
+| V16 | The next `up` stops at "Local port N is in use" because of the env's own tunnels from an earlier run. | `up` finds the env's state. When no VM has the env's label it stops the state's tunnels and removes it before it checks ports. When a VM exists it still stops with "up already". | `V16 ...` |
+| V17 | V16 kills a process that is not a tunnel: the pid in an old state file now belongs to another program, or another program holds the port. | A pid is stopped only when its command line has `start-iap-tunnel`. A port held by another program still stops `up` and nothing is killed. | `V17 ...` |
 
 ## WebMall env (`src/bench/webmall/env.ts`, `foxbench env up webmall`)
 
