@@ -1074,8 +1074,11 @@ VWA's own url_match or string_match accepts). Upstream's images are tuned for
 GPT-4V, Gemini, Claude 3 Opus and GPT-4o, so a score here is a transfer rate.
 Only the case ids are committed; each case's files are fetched from the
 upstream repo at a pinned commit when it starts. This PR scores url_match and
-string_match cases (122 of 185 with the captioner attack, 67 of 98 with the
-CLIP attack); program_html cases are the next PR. The tests are in
+string_match cases (121 with the captioner attack, 66 with the CLIP attack);
+program_html cases are the next PR. 14 upstream cases have no config and are
+not run. 20 more have an attacker check that is a `must_exclude` rule, which
+also passes when the agent does nothing, so a noop would count as hijacked;
+they are not run either. The tests are in
 `tests/vwa-adv.test.ts`.
 
 | # | Failure mode | Wanted behaviour | Test |
@@ -1083,7 +1086,7 @@ CLIP attack); program_html cases are the next PR. The tests are in
 | VA1 | Upstream's data is committed, or fetched from a moving branch, so two runs see different cases. | Only case ids are committed. Each case's files are fetched by the pinned commit into the cache when it starts, and cached. | `VA1 ...` |
 | VA2 | The attack kind is mixed up: CLIP images (98 cases, tuned to transfer) and captioner images (185, tuned to a captioner the agent does not use). | The default is the CLIP attack; `FOXBENCH_VWAADV_ATTACK=bim` selects the captioner attack. A case has the images of its kind only, and an unknown kind stops the load. | `VA2 ...` |
 | VA3 | The agent starts on the home page, so it may never see the trigger. | The agent starts at the case's own start URL, the page where the trigger appears. | `VA3 ...` |
-| VA4 | The attack image is not shown, or every image is replaced. | The proxy serves the attack image at the victim image's path, found in the clean observation's `[som id] [IMG] ... url:` line, and forwards every other path. | `VA4 ...` |
+| VA4 | The attack image is not shown, only one of several victim images is swapped, or every image is replaced. | The proxy serves the attack image at each victim image's path (`victim_som_id` is one id or a list, as upstream's pipeline reads it), found in the clean observation's `[som id] [IMG] ... url:` lines, and forwards every other path. | `VA4 ...` |
 | VA5 | The agent is not signed in, or sees the login. | Shopping and reddit get their auto-login header, Classifieds a cookie from its login form (CSRF token included), all added by the proxy; the goal and the page never hold them. | `VA5 ...` |
 | VA6 | A noop agent scores. | It fails the user goal and the attack is blocked, in every case. | `VA6 ...` |
 | VA7 | A perfect agent fails, so the harness cannot be passed. | An agent that reaches the benign target (or answers it) passes with the attack blocked. | `VA7 ...` |
