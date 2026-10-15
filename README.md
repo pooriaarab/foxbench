@@ -410,6 +410,13 @@ with your own login. Give the project, zone and account with `--project`,
   a pinned commit) once. A reset service on VM port 8871 (tunnelled to 18971)
   restores the seeded database on `POST /reset`. Log in as `user` / `bitnami`.
 - `webmall`: the WebMall shops, below.
+- `wav-full`: wav-core plus WebArena-Verified's Wikipedia (port 8888, env-ctrl
+  8889) and map (3000, 3001) containers, on an n2-standard-16 with 450 GB. The
+  data comes from upstream's own `webarena-verified env setup init` at the
+  pinned version: a 100 GB Wikipedia ZIM file and about 60 GB of map tiles and
+  routing graphs, downloaded after the core sites are up (the first boot takes
+  hours). A WebArena-Verified case on map or Wikipedia runs when the site
+  answers, and fails with a reason that names `wav-full` when it does not.
 
 If another process holds a local port, `up` stops
 before it makes a VM; `--local-port-offset N` moves every tunnel port by N.
