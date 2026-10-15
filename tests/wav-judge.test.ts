@@ -1,8 +1,9 @@
 // Tests for the WebArena-Verified scoring failure modes in docs/failure-modes.md
-// (WJ1-WJ7). Real cases run through the run loop with scripted agents, against
+// (WJ1-WJ9). Real cases run through the run loop with scripted agents, against
 // fake sites on the tunnel ports; upstream's own evaluator judges them.
 import { execFileSync } from "node:child_process";
-import { readFileSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { createServer, type Server } from "node:http";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -17,6 +18,8 @@ import { freeBase } from "./free-base.js";
 // Below the ephemeral range, in a band of this file's own.
 const OFFSET = await freeBase(17000, 1000, [...wavSites.flatMap((s) => [s.port, s.ctrlPort]), 8870]);
 const IDS = ["0", "27", "44", "580"];
+// This file's own HAR directory; the shared <cache>/har is not used (WJ9).
+const HAR_DIR = mkdtempSync(join(tmpdir(), "fbn-wj-har-"));
 const ctx = benchContext();
 const servers: Server[] = [];
 const resets: string[] = [];
@@ -74,6 +77,7 @@ beforeAll(async () => {
   await listen(createServer((req, res) => { resets.push(req.url ?? ""); res.end("reset"); }), 8870);
 }, 300_000);
 afterAll(async () => {
+  rmSync(HAR_DIR, { recursive: true, force: true });
   await Promise.all(servers.map((s) => new Promise((r) => { s.closeAllConnections(); s.close(r); })));
 });
 
@@ -108,8 +112,8 @@ const run = (adapter: Adapter, ids = IDS, opts = {}, keep = false) => {
   if (!keep) rmSync(join(wavDir(ctx), `dirty-127.0.0.1-${OFFSET}.json`), { force: true });
   return runOnce(adapter, ids, opts);
 };
-const runOnce = (adapter: Adapter, ids: string[], opts: object) => runBenchmarks({ adapter, runs: [{ benchmark: webarenaVerified({ offset: OFFSET, portOffset: PORT_OFFSET, ...opts }), subset: "full" }], ids, timeoutMs: 60_000 });
-const har = (id: string) => JSON.parse(readFileSync(join(wavDir(ctx), "har", `${id}.har`), "utf8")).log.entries as { request: Record<string, unknown> & { url: string; method: string; headers: { name: string; value: string }[] }; response: Record<string, unknown> }[];
+const runOnce = (adapter: Adapter, ids: string[], opts: object) => runBenchmarks({ adapter, runs: [{ benchmark: webarenaVerified({ offset: OFFSET, portOffset: PORT_OFFSET, harDir: HAR_DIR, ...opts }), subset: "full" }], ids, timeoutMs: 60_000 });
+const har = (id: string) => JSON.parse(readFileSync(join(HAR_DIR, `${id}.har`), "utf8")).log.entries as { request: Record<string, unknown> & { url: string; method: string; headers: { name: string; value: string }[] }; response: Record<string, unknown> }[];
 
 describe("WJ1 WJ4 upstream's evaluator decides", () => {
   it("passes the scripted perfect agent on every case", async () => {
@@ -133,6 +137,24 @@ describe("WJ1 WJ4 upstream's evaluator decides", () => {
   }, 300_000);
 });
 
+describe("WJ9 the HAR path is the run's own", () => {
+  it("writes to harDir, and to a fresh temp directory by default, never to <cache>/har", async () => {
+    const shared = join(wavDir(ctx), "har");
+    mkdirSync(shared, { recursive: true });
+    const decoy = join(shared, "44.har");
+    writeFileSync(decoy, "another run's trace");
+    const own = mkdtempSync(join(tmpdir(), "fbn-wj9-"));
+    await run(perfect, ["44"], { harDir: own });
+    expect(JSON.parse(readFileSync(join(own, "44.har"), "utf8")).log.entries.length).toBeGreaterThan(0);
+    const before = readdirSync(tmpdir()).filter((f) => f.startsWith("fbn-wav-har-"));
+    expect((await run(perfect, ["44"], { harDir: undefined })).passed).toBe(1);
+    expect(readFileSync(decoy, "utf8")).toBe("another run's trace");
+    expect(readdirSync(tmpdir()).filter((f) => f.startsWith("fbn-wav-har-") && !before.includes(f))).toEqual([]);
+    rmSync(own, { recursive: true });
+    rmSync(decoy);
+  }, 300_000);
+});
+
 describe("WJ2 WJ3 the HAR", () => {
   it("holds the URL the agent saw, the headers, the post data and the redirect, with no login", async () => {
     await run(perfect, ["44", "580"]);
@@ -145,7 +167,7 @@ describe("WJ2 WJ3 the HAR", () => {
     expect(post.response).toMatchObject({ status: 302, redirectURL: `http://127.0.0.1:${at(9999)}/f/sci_fi` });
     expect(post.response.cookies).toContainEqual(expect.objectContaining({ name: "flash", value: "done" }));
     for (const id of ["44", "580"]) for (const e of har(id)) expect(e.request.headers.map((h) => h.name)).not.toEqual(expect.arrayContaining(["cookie"]));
-    expect(readFileSync(join(wavDir(ctx), "har", "580.har"), "utf8")).not.toMatch(/auto-login|test1234|_gitlab_session/i);
+    expect(readFileSync(join(HAR_DIR, "580.har"), "utf8")).not.toMatch(/auto-login|test1234|_gitlab_session/i);
   }, 300_000);
 });
 
