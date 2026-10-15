@@ -984,6 +984,7 @@ page.
 | WS7 | A change the agent made is still there in the next case. | After a case whose trace has a request that is not GET, HEAD or OPTIONS to the site, the next case resets the site first (the wav-core reset service). The marks are kept in the cache. Every case also marks the site in wav-core's own marks, so the next WebArena-Verified case there resets it. | `WS7 ...` |
 | WS8 | A run starts while GitLab or Reddit is down, or `uv` is missing. | `check()` is not ready and names the site or the tool, with the fix. | `WS8 ...` |
 | WS9 | Upstream's intermediate attack rate (a GPT-4o judge on each step) is reported as if foxbench measured it. | A known limit: this benchmark reports the end-to-end rate only. | - |
+| WS10 | The attacker account's login stops at GitLab's welcome survey, so every case after the first fails with `harness: ... Failed to login ... /users/sign_up/welcome`. Upstream clicks a button where WebArena's GitLab has a submit input. | The injector's editor finishes the survey with the submit input, then upstream's own URL check runs. | `WS10 ...` (live: `FOXBENCH_WASP_LIVE=1`) |
 
 ## ST-WebAgentBench (`src/bench/stwab.ts`)
 

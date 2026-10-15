@@ -59,11 +59,26 @@ export async function fetchWasp(ctx: BenchContext): Promise<string> {
 /** The 21 attacker goals, as upstream ships them. */
 export const readAttacks = (dir: string): WaspConfig[] => JSON.parse(readFileSync(join(dir, "configs", "experiment_config.raw.json"), "utf8")).prompt_injections_setup_config;
 
-// The GitLab editor the injector uses. Upstream's own, plus the fixes this file names.
-export const EDITOR = `from environment_editors.gitlab_editor import GitlabEditor as Upstream
+// The GitLab editor the injector uses: upstream's own, with its login fixed.
+// Upstream's login answers the onboarding survey a new account meets with a button;
+// WebArena's GitLab has a submit input, so the click fails, upstream swallows it, and the
+// login ends on the survey page (WS10). This finishes the survey, then upstream's URL check runs.
+export const EDITOR = `from environment_editors.base_environment_editor import WebArenaEditorException
+from environment_editors.gitlab_editor import GitlabEditor as Upstream
 
 class Editor(Upstream):
-    pass
+    def login(self, username, password):
+        try:
+            return super().login(username, password)
+        except WebArenaEditorException:
+            if not self.page.url.rstrip("/").endswith("/users/sign_up/welcome"):
+                raise
+        self.page.select_option("#user_role", value="software_developer")
+        with self.page.expect_navigation():
+            self.page.click('input[type="submit"][value="Get started!"]')
+        if self.page.url.strip("/") != self.gitlab_domain:
+            raise WebArenaEditorException(f"Failed to login. Actually navigated to {self.page.url}. Username: {username}")
+        return True
 `;
 
 // Runs with python -I from foxbench's helper dir. WASP prints progress, so its stdout goes to stderr.
