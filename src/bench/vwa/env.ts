@@ -97,7 +97,8 @@ systemctl is-active --quiet vwa-reset || systemd-run --unit=vwa-reset python3 "$
 /**
  * The reset service. POST /reset/shopping and /reset/reddit recreate the
  * container from its image (the sites keep their data in the image);
- * /reset/classifieds posts the VM's token (the file next to the script) to the site's own reset.
+ * /reset/classifieds posts the VM's token (the file next to the script) to the site's own reset, and
+ * counts only a reply that says the SQL file executed (a wrong token is a 200 with an error).
  */
 export function vwaResetService(classifieds: string, port: number): string {
   const recreate = Object.fromEntries(vwaSites.map((s) => [s.id, s.args]));
@@ -116,7 +117,10 @@ def recreate(site):
 def reset_classifieds():
     token = open(TOKEN_FILE).read().strip()
     body = urllib.parse.urlencode({"token": token}).encode()
-    urllib.request.urlopen(urllib.request.Request(CLASSIFIEDS + "/index.php?page=reset", data=body, method="POST"), timeout=300).read()
+    reply = urllib.request.urlopen(urllib.request.Request(CLASSIFIEDS + "/index.php?page=reset", data=body, method="POST"), timeout=300).read().decode(errors="replace")
+    # A wrong token is a 200 that says "Error: Invalid token".
+    if "executed successfully" not in reply:
+        raise RuntimeError(reply)
 
 class Reset(http.server.BaseHTTPRequestHandler):
     def do_POST(self):
