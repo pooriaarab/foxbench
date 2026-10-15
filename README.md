@@ -399,6 +399,10 @@ with your own login. Give the project, zone and account with `--project`,
   WA_ENV_CTRL_EXTERNAL_SITE_URL=http://127.0.0.1:7770
   am1n3e/webarena-verified-shopping:0.1.0`. Set `FOXBENCH_WAV_HOST` when
   that Docker host is not `127.0.0.1`.
+  A site keeps its own port as its origin, so a case's proxies listen on the
+  site ports of its sites. Two WebArena-Verified cases that share a site cannot
+  run at once: run them serially, or on separate hosts. If a site port is busy,
+  that case fails at once with `harness: port <n> is in use ...`; it never waits.
 - `suitecrm`: SuiteCRM 8.8.1 and MariaDB 11.4.7 (`bitnamilegacy` images) on an
   e2-standard-4 with 30 GB, for ST-WebAgentBench's SuiteCRM tasks. SuiteCRM on
   VM port 8080 is tunnelled to 18081; the agent sees `http://127.0.0.1:8080`
