@@ -19,6 +19,7 @@ import { onlineMind2webBenchmark } from "./online-mind2web.js";
 import type { BenchContext, Benchmark, Readiness, SubsetName } from "./types.js";
 import { DEFAULT_USER_MODEL } from "./user.js";
 import { tau2Benchmark } from "./tau2/index.js";
+import { choreBenchmark } from "./wa/chore.js";
 import { liteBenchmark } from "./wa/lite.js";
 import { webarenaVerified } from "./wav/index.js";
 import { waiBenchmark } from "./wai/index.js";
@@ -73,6 +74,7 @@ export const benchmarks: Benchmark[] = [
   agentdamBenchmark(),
   doomarenaBenchmark(),
   liteBenchmark(),
+  choreBenchmark(),
 ];
 
 export const benchmarkById = (id: string): Benchmark | undefined => benchmarks.find((b) => b.id === id);

@@ -13,6 +13,7 @@ import miniwob from "./subsets/miniwob.json" with { type: "json" };
 import odysseys from "./subsets/odysseys.json" with { type: "json" };
 import tau2Airline from "./subsets/tau2-airline.json" with { type: "json" };
 import tau2Retail from "./subsets/tau2-retail.json" with { type: "json" };
+import webchorearena from "./subsets/webchorearena.json" with { type: "json" };
 import webarenaLite from "./subsets/webarena-lite.json" with { type: "json" };
 import webarenaVerified from "./subsets/webarena-verified.json" with { type: "json" };
 import wasp from "./subsets/wasp.json" with { type: "json" };
@@ -31,6 +32,7 @@ const LISTS: SubsetLists = {
   webmall,
   browsesafe,
   "webarena-lite": webarenaLite,
+  webchorearena,
   "webarena-verified": webarenaVerified,
   "tau2-retail": tau2Retail,
   "tau2-airline": tau2Airline,
