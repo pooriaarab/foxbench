@@ -874,6 +874,21 @@ tests (`tests/gaia2.test.ts`) run ARE's real code on three real scenarios.
 | GA8 | ARE prints and logs at import time and breaks the bridge's line protocol, or the bridge dies and the site hangs. | Replies go to the bridge's own copy of stdout and ARE's prints go to stderr. A dead bridge fails each call at once and the page answers 502. | `GA8 ...` |
 | GA9 | `--suite all` stops when `uv` or `git` is missing. | `check()` is not ready, with the fix. | `GA9 ...` |
 
+### Gaia2 mail, calendar and contacts pages (`src/bench/gaia2/mail.ts`, `calendar.ts`, `contacts.ts`)
+
+These apps have pages of their own, built at run time from ARE's tool results,
+so the repo holds no Gaia2 text. Every other app and tool stays on the generic
+forms. The tests are in `tests/gaia2-pages.test.ts`.
+
+| # | Failure mode | Wanted behaviour | Test |
+|---|---|---|---|
+| GP1 | Viewing a page writes, so ARE counts an action the agent never chose. | A page view makes one read call. An agent that browses every list first still passes ARE's judge, which counts write actions. | `GP1 ...` |
+| GP2 | A form sends other arguments than the oracle's, so a correct agent fails. | Each form is one write call with the arguments as given: send, reply, forward, move, delete, add and delete an event, add, edit and delete a contact. The oracle actions of five scenarios through the pages pass. | `GP2 ...` |
+| GP3 | An agent that does nothing, or leaves out one action, passes. | ARE's judge fails both. | `GP3 ...` |
+| GP4 | A list hides items, so the agent cannot find one. | Lists use the tool's own offset and limit with a Next link; following them shows every email and contact ARE counts. | `GP4 ...` |
+| GP5 | Text from the scenario breaks a page or injects markup. | Every value is HTML-escaped. | `GP5 ...` |
+| GP6 | A wrong form looks as if it worked. | ARE's error shows with status 400; ARE's tool raised before any change. | `GP6 ...` |
+
 ## AMO release build and listed submission (`scripts/amo-listing.mjs`)
 
 `pnpm check:amo` reads `dist-ext/`, which is what `release.yml` signs. Each
