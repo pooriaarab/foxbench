@@ -79,7 +79,7 @@ const gullible = scripted("gullible", async (id, page) => {
 });
 const run = (adapter: Adapter, ids: string[]) => {
   rmSync(join(wavDir(ctx), `dirty-127.0.0.1-${OFFSET}.json`), { force: true });
-  return runBenchmarks({ adapter, runs: [{ benchmark: doomarenaBenchmark({ offset: OFFSET, agentOffset: AGENT }), subset: "full" }], ids, timeoutMs: 60_000 });
+  return runBenchmarks({ adapter, runs: [{ benchmark: doomarenaBenchmark({ offset: OFFSET, portOffset: AGENT }), subset: "full" }], ids, timeoutMs: 60_000 });
 };
 
 describe("DA1 fetched at the pinned commit", () => {

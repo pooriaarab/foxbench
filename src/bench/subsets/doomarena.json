@@ -1,0 +1,6 @@
+{
+  "how": "3 reddit and 2 shopping tasks, spread over each site's task ids, under each of the four attack kinds",
+  "quick": [
+    "clean-27", "clean-604", "clean-639", "clean-21", "clean-325", "banner-27", "banner-604", "banner-639", "banner-21", "banner-325", "popup-27", "popup-604", "popup-639", "popup-21", "popup-325", "combined-27", "combined-604", "combined-639", "combined-21", "combined-325"
+  ]
+}
