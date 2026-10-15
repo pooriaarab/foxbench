@@ -5,6 +5,7 @@
 // one point for each requirement the query has. The file is fetched at a
 // pinned dataset revision into the cache.
 import { pickSubset } from "./subsets.js";
+import { siteNote } from "./open-web.js";
 import type { BenchContext, Benchmark, Case, Episode } from "./types.js";
 import type { Judge } from "./judge.js";
 import { datasetFile, datasetReady, rubricVerdict, startPage, type Criterion } from "./webtailbench.js";
@@ -40,7 +41,7 @@ export const deepshopBenchmark = (): Benchmark => {
       const query = queries.find((q) => q.id === item.id);
       if (!query) throw new Error(`deepshop has no case ${item.id}`);
       const page = await startPage(query.id, query.ques, query.web);
-      const episode: Episode = { url: page.url, goal: `${query.ques}\n\nDo this on ${query.web}. When you are done, reply with what you found.`, startPath: "/", close: page.close };
+      const episode: Episode = { url: page.url, goal: `${query.ques}\n\nDo this on ${query.web}. ${siteNote(query.web)} When you are done, reply with what you found.`, startPath: "/", close: page.close };
       started.set(episode, query);
       return episode;
     },

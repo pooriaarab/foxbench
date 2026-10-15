@@ -11,6 +11,7 @@ import { join } from "node:path";
 import type { TaskOutput } from "../adapter.js";
 import { judgeWith, type Judge } from "./judge.js";
 import { pickSubset } from "./subsets.js";
+import { OPEN_WEB_NOTE, siteNote } from "./open-web.js";
 import type { BenchContext, Benchmark, Case, Episode, Readiness, Trace, Verdict } from "./types.js";
 import { locked } from "./webgames.js";
 
@@ -100,7 +101,9 @@ const esc = (s: string) => s.replace(/[&<>"]/g, (c) => `&#${c.charCodeAt(0)};`);
 /** A local start page with the task and a search form, so the agent picks the site (WTB6). */
 export async function startPage(id: string, task: string, link = "") {
   const html = `<!doctype html><meta charset="utf-8"><title>${esc(id)}</title><main data-case="${esc(id)}"><p>${esc(task)}</p>
-${link ? `<p>Start at <a href="${esc(link)}">${esc(link)}</a>.</p>` : `<form action="https://www.google.com/search" method="get"><input name="q" aria-label="Search the web"><button>Search</button></form>`}</main>`;
+${link ? `<p>Start at <a href="${esc(link)}">${esc(link)}</a>.</p>
+<p>${siteNote(link)}</p>` : `<form action="https://www.google.com/search" method="get"><input name="q" aria-label="Search the web"><button>Search</button></form>
+<p>${OPEN_WEB_NOTE}</p>`}</main>`;
   const server = createServer((_req, res) => res.writeHead(200, { "content-type": "text/html; charset=utf-8" }).end(html));
   await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
   const { port } = server.address() as { port: number };
@@ -142,7 +145,7 @@ export const webtailbenchBenchmark = (): Benchmark => {
       const task = tasks.find((t) => t.id === item.id);
       if (!task) throw new Error(`webtailbench has no case ${item.id}`);
       const page = await startPage(task.id, task.task);
-      const episode: Episode = { url: page.url, goal: `${task.task}\n\nYou may start anywhere on the web. When you are done, reply with what you found or did.`, startPath: "/", close: page.close };
+      const episode: Episode = { url: page.url, goal: `${task.task}\n\n${OPEN_WEB_NOTE} When you are done, reply with what you found or did.`, startPath: "/", close: page.close };
       started.set(episode, task);
       return episode;
     },

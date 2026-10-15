@@ -1380,3 +1380,10 @@ against the fake gcloud and a fake docker.
 | MP6 | The next task starts on the last task's state, or on a VM that still boots. | `POST /reset` restarts the container and answers 200 only when the control API is healthy and every app answers; a VM that does not come up gives 500 with the reason. | `MP6 ...` |
 | MP7 | The VM is too small or its disk full: QEMU wants about 8 GB and 4 vCPUs, and the image is 5 GB compressed and 12 GB unpacked. | n2-standard-8 and a 60 GB disk. | `MP7 ...` |
 | MP8 | A reset call hangs forever on a dead tunnel. | `resetVm` times out and names the URL. | `MP8 ...` |
+
+## Open-web scope (`src/bench/open-web.ts`)
+
+| # | Failure mode | Wanted behaviour | Test |
+|---|---|---|---|
+| OW1 | The goal says "start anywhere" and the launch page says nothing, so the agent reads the local page as a sandbox and asks leave to go on. | Every open-search benchmark's goal and launch page carry `OPEN_WEB_NOTE`: not a sandbox, every public website is in scope. | `runTask` in the odysseys, gaia, assistantbench, browsecomp and webtailbench tests |
+| OW2 | A benchmark that names a site links to it, but nothing says going there is allowed, so a grant for the start host alone looks like a ban. | The goal and the launch page carry `siteNote(url)`: going to the site is allowed. | `runTask` in the webvoyager, online-mind2web and webtailbench (DeepShop) tests |

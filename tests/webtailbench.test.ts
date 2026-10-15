@@ -74,6 +74,9 @@ const scripted = (name: string, answer: (id: string) => string, log = "read the 
     const page = await (await fetch(url)).text();
     const id = /data-case="([^"]+)"/.exec(page)![1]!;
     expect(goal).toContain(GOALS[id]!);
+    const note = id.startsWith("Amazon") ? "is allowed" : "not a sandbox";
+    expect(page).toContain(note);
+    expect(goal).toContain(note);
     if (!id.startsWith("Amazon")) expect(goal).not.toMatch(/https?:\/\//);
     return { done: true, log, answer: answer(id) };
   },

@@ -32,6 +32,8 @@ const scripted = (name: string, answer: (t: AssistantbenchTask) => string): Adap
     expect(url).toMatch(/^http:\/\/127\.0\.0\.1:\d+\//);
     expect(goal).not.toMatch(/127\.0\.0\.1/);
     const page = await (await fetch(url)).text();
+    expect(page).toContain("not a sandbox");
+    expect(goal).toContain("not a sandbox");
     const task = tasks.find((t) => page.includes(`data-case="${t.id}"`))!;
     return { done: true, log: answer(task) };
   },

@@ -57,8 +57,10 @@ function fake(mode: Mode = "fair", calls: JudgeAsk[] = []): Judge {
 }
 const scripted = (name: string, answer: string): Adapter => ({
   name,
-  async runTask({ url }) {
+  async runTask({ url, goal }) {
     const page = await (await fetch(url)).text();
+    expect(page).toContain("not a sandbox");
+    expect(goal).toContain("not a sandbox");
     expect(page).toContain('data-case="');
     expect(page).toContain("google.com/search");
     return { done: true, log: "searched and read pages", answer };
