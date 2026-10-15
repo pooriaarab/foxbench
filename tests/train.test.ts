@@ -49,6 +49,10 @@ describe("TS2 train and scored tasks use other sites", () => {
     const gym = new Set<string>(GYM_SITES);
     expect(trainTasks.filter((t) => !gym.has(t.site))).toEqual([]);
     expect(tasks.filter((t) => gym.has(t.site))).toEqual([]);
+    // No train site carries a scored site's brand, so no goal names it.
+    const scoredTitles = new Set(sites.filter((s) => !gym.has(s.id)).map((s) => s.title.toLowerCase()));
+    expect(sites.filter((s) => gym.has(s.id) && scoredTitles.has(s.title.toLowerCase())).map((s) => s.id)).toEqual([]);
+    expect(trainTasks.filter((t) => [...scoredTitles].some((title) => title !== "ask sam" && t.goal.toLowerCase().includes(title))).map((t) => t.id)).toEqual([]);
   });
 });
 
