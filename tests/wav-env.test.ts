@@ -8,9 +8,14 @@ import { afterEach, describe, expect, it } from "vitest";
 import { benchContext, benchmarkById } from "../src/bench/registry.js";
 import { webarenaVerified, wavSites } from "../src/bench/wav/index.js";
 import { cloudEnvs } from "../src/env/envs.js";
+import { freeBase } from "./free-base.js";
 
 const env = cloudEnvs.find((e) => e.name === "wav-core")!;
-const OFFSET = 30000;
+const SITE_PORTS = [...wavSites.flatMap((s) => [s.port, s.ctrlPort]), 8870];
+// Below the ephemeral range, in bands of this file's own; WV7 probes its host too.
+const OFFSET = await freeBase(10000, 1000, SITE_PORTS);
+const host7 = Object.values(networkInterfaces()).flat().find((i) => i && i.family === "IPv4" && !i.internal)?.address;
+const OFFSET7 = await freeBase(20500, 1000, SITE_PORTS, host7 ? ["127.0.0.1", host7] : ["127.0.0.1"]);
 const servers: Server[] = [];
 afterEach(async () => {
   await Promise.all(servers.splice(0).map((s) => new Promise((r) => { s.closeAllConnections(); s.close(r); })));
@@ -111,10 +116,9 @@ describe("WV6 a probe that hangs", () => {
 describe("WV7 FOXBENCH_WAV_HOST", () => {
   it("probes the containers on that host", async () => {
     // A host other than 127.0.0.1 that every OS can bind: macOS does not route 127.0.0.2.
-    const host = Object.values(networkInterfaces()).flat().find((i) => i && i.family === "IPv4" && !i.internal)?.address;
+    const host = host7;
     if (!host) throw new Error("this machine has no non-loopback IPv4 address for WV7");
-    // Its own offset: a server on the runner can hold the shared ports on every address.
-    const offset = OFFSET + 1000;
+    const offset = OFFSET7;
     await fake(host, {}, offset);
     expect((await webarenaVerified({ offset }).check(ctx())).ready).toBe(false);
     expect(await webarenaVerified({ offset }).check(ctx({ FOXBENCH_WAV_HOST: host }))).toEqual({ ready: true });
