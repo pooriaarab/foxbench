@@ -11,6 +11,8 @@ export interface CloudEnv {
   name: string;
   machineType: string;
   diskGb: number;
+  /** The boot disk's type. Absent means gcloud's default (standard persistent disk). */
+  diskType?: string;
   /** VM port -> local port. `up` tunnels each one through IAP. */
   ports: { remote: number; local: number }[];
   /** Runs as root on boot. The VM has no external IP; it reaches the internet only through Cloud NAT. */
@@ -110,9 +112,12 @@ systemd-run --unit=foxbench-smoke python3 -m http.server 8080 --directory /srv/f
     name: "vwa",
     machineType: "n2-standard-8",
     diskGb: 500,
+    // A 500 GB standard disk writes about 60 MB/s and the Classifieds pull writes 230 GB (77 GB downloaded, 155 GB unpacked): over an hour.
+    diskType: "pd-ssd",
     ports: vwaTunnel,
     // The first boot installs Docker, pulls the images (the Classifieds one alone takes 25 minutes or more) and loads the Classifieds data.
-    bootMinutes: 150,
+    // Two pulls of the longest time (PULL_TIMEOUT_SECONDS) fit inside.
+    bootMinutes: 270,
     startup: vwaStartup(),
   },
 ];

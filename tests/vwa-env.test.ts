@@ -10,6 +10,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { PULL_ATTEMPTS, PULL_TIMEOUT_SECONDS, vwaResetService } from "../src/bench/vwa/env.js";
 import { cloudEnvs } from "../src/env/envs.js";
+import { createVm } from "../src/env/gcp.js";
 
 const env = cloudEnvs.find((e) => e.name === "vwa")!;
 const UPSTREAM_TOKEN = "4b61655535e7ed388f0d40a93600254c";
@@ -28,7 +29,8 @@ function fakes(sha = "match") {
 case "$1" in
   inspect) grep -qx "$2" ${dir}/exists 2>/dev/null; exit $? ;;
   network) [ "$2" = inspect ] && exit 1; exit 0 ;;
-  pull) [ -f ${dir}/slowpull ] && exec sleep 30 ;;
+  pull) [ -f ${dir}/slowpull ] && exec sleep 30
+        [ -f ${dir}/growpull ] && for i in 1 2 3 4 5; do echo $i > ${dir}/probe; sleep 1; done ;;
   run) echo "$*" | sed -n 's/.*--name \\([^ ]*\\).*/\\1/p' >> ${dir}/exists ;;
 esac
 exit 0`);
@@ -45,20 +47,12 @@ done`);
   program("sha1sum", `echo "sha1sum $(cat)" >> ${log}; ${sha === "match" ? "exit 0" : 'echo "sha1sum: FAILED" >&2; exit 1'}`);
   program("systemctl", `echo "systemctl $*" >> ${log}; [ "$1" = is-active ] && exit 1; exit 0`);
   program("systemd-run", `echo "systemd-run $*" >> ${log}`);
-  // GNU timeout, which the VM has and macOS does not: 124 when the time runs out.
-  program("timeout", `[ "$1" = -k ] && shift 2
-d=\${1%s}; shift
-"$@" & p=$!
-( sleep "$d"; kill -TERM $p ) >/dev/null 2>&1 & w=$!
-wait $p; s=$?
-kill -0 $w 2>/dev/null && { kill $w; exit $s; }
-exit 124`);
   return { dir, bin, log, lines: () => (existsSync(log) ? readFileSync(log, "utf8").trim().split("\n") : []) };
 }
 
 function boot(f: ReturnType<typeof fakes>, extra: Record<string, string> = {}) {
   const state = join(f.dir, "state");
-  const r = spawnSync("sh", ["-c", env.startup], { encoding: "utf8", env: { ...process.env, PATH: `${f.bin}:${process.env.PATH}`, FOXBENCH_DIR: state, ...extra } });
+  const r = spawnSync("sh", ["-c", env.startup], { encoding: "utf8", env: { ...process.env, PATH: `${f.bin}:${process.env.PATH}`, FOXBENCH_DIR: state, DOCKER_DAEMON_JSON: join(f.dir, "daemon.json"), PULL_PROBE: `cat ${f.dir}/probe 2>/dev/null`, ...extra } });
   return { status: r.status, stderr: r.stderr, state };
 }
 
@@ -247,6 +241,75 @@ describe("VW11 a pull that outlasts its time fails with the reason", () => {
 
   it("never lets the default wait outlast the boot", () => {
     expect(PULL_TIMEOUT_SECONDS * PULL_ATTEMPTS / 60).toBeLessThan(env.bootMinutes);
+  });
+});
+
+describe("VW13 a pull that stops moving is stopped", () => {
+  it("fails with the reason when no bytes arrive for the stall time, long before the total limit", () => {
+    const f = fakes();
+    writeFileSync(join(f.dir, "slowpull"), "");
+    const started = Date.now();
+    const b = boot(f, { PULL_STALL: "2", PULL_POLL: "1" });
+    expect(Date.now() - started).toBeLessThan(30_000);
+    expect(b.status).not.toBe(0);
+    expect(b.stderr).toMatch(/docker pull am1n3e\/webarena-verified-shopping:0\.1\.0 stalled: no new bytes for 2s \(attempt 1 of 2\)/);
+    expect(b.stderr).toContain("giving up");
+  });
+
+  it("lets a slow pull that keeps growing finish", () => {
+    const f = fakes();
+    writeFileSync(join(f.dir, "growpull"), "");
+    const b = boot(f, { PULL_STALL: "3", PULL_POLL: "1" });
+    expect(b.status, b.stderr).toBe(0);
+    expect(f.lines().filter((l) => l.startsWith("docker run")).length).toBe(4);
+  });
+
+  it("allows a pull of the 72 GB layer at 25 MB/s, and still fits the boot", () => {
+    expect(PULL_TIMEOUT_SECONDS).toBeGreaterThanOrEqual(2 * 3600);
+    expect(PULL_TIMEOUT_SECONDS * PULL_ATTEMPTS / 60).toBeLessThan(env.bootMinutes);
+  });
+});
+
+describe("VW14 the Docker Hub mirror is set before the first pull", () => {
+  it("writes Google's mirror to daemon.json, then restarts Docker, then pulls", () => {
+    const f = fakes();
+    const b = boot(f);
+    expect(b.status, b.stderr).toBe(0);
+    expect(JSON.parse(readFileSync(join(f.dir, "daemon.json"), "utf8"))).toEqual({ "registry-mirrors": ["https://mirror.gcr.io"] });
+    const calls = f.lines();
+    const restart = calls.indexOf("systemctl restart docker");
+    expect(restart).toBeGreaterThanOrEqual(0);
+    expect(restart).toBeLessThan(calls.findIndex((l) => l.startsWith("docker pull")));
+  });
+
+  it("does not restart Docker on a reboot that changes nothing", () => {
+    const f = fakes();
+    boot(f);
+    const first = f.lines().length;
+    boot(f);
+    expect(f.lines().slice(first)).not.toContain("systemctl restart docker");
+  });
+});
+
+describe("VW15 the boot disk is fast enough to unpack the image", () => {
+  it("is SSD persistent disk, since a 500 GB standard disk writes about 60 MB/s and the pull writes 230 GB", () => {
+    expect(env.diskType).toBe("pd-ssd");
+  });
+
+  it("is passed to gcloud as --boot-disk-type, and only for an env that names one", () => {
+    const log = join(mkdtempSync(join(tmpdir(), "fbn-vwa-gcloud-")), "calls.jsonl");
+    const was = { ...process.env };
+    Object.assign(process.env, { FOXBENCH_GCLOUD: join(import.meta.dirname, "fixtures/fake-gcloud.mjs"), FAKE_GCLOUD_LOG: log });
+    try {
+      for (const e of cloudEnvs) createVm({ project: "p", zone: "z" }, e, `t-${e.name}`, { spot: true, maxRun: "1h" });
+    } finally {
+      process.env = was;
+    }
+    const argvs = readFileSync(log, "utf8").trim().split("\n").map((l) => (JSON.parse(l) as { argv: string[] }).argv);
+    for (const e of cloudEnvs) {
+      const argv = argvs.find((a) => a.includes(`t-${e.name}`))!;
+      expect(argv.filter((a) => a.startsWith("--boot-disk-type="))).toEqual(e.diskType ? [`--boot-disk-type=${e.diskType}`] : []);
+    }
   });
 });
 

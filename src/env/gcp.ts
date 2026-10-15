@@ -39,6 +39,7 @@ export function createVm(gcp: Gcp, env: CloudEnv, name: string, opts: { spot: bo
   try {
     call(gcp, ["compute", "instances", "create", name, `--zone=${gcp.zone}`, `--machine-type=${env.machineType}`,
       "--image-family=debian-12", "--image-project=debian-cloud", `--boot-disk-size=${env.diskGb}GB`,
+      ...(env.diskType ? [`--boot-disk-type=${env.diskType}`] : []),
       `--labels=${LABEL}=${env.name}`, "--tags=foxbench", "--no-address",
       ...(env.nestedVirt ? ["--enable-nested-virtualization"] : []),
       `--provisioning-model=${opts.spot ? "SPOT" : "STANDARD"}`,
