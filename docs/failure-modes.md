@@ -803,6 +803,30 @@ synthetic encrypted file (`FOXBENCH_BROWSECOMP_URL`) and use fake judges.
 | BC6 | A judge reply with no verdict counts as a pass; the Claude-graded number is read as the official one. | The case fails with a `judge:` reason (J5); `judgedBy` names the model (J6). | `BC6 ...` |
 | BC7 | Decryption gives garbage for a row, and the case is graded against it. | A row that does not decrypt to text stops the load with its row number. | `BC7 ...` |
 
+## Odysseys and Mind2Web 2 dev (`src/bench/odysseys.ts`, `src/bench/mind2web2.ts`)
+
+Odysseys is 200 long-horizon tasks, each with its own rubric of about six
+items. Mind2Web 2 is citation-backed answers to open research tasks; its 10
+dev tasks are public as Python scripts. Both repos are fetched at pinned
+commits into the cache. Claude judges through the judge interface. The
+official Odysseys judge is Gemini and sees screenshots; the official Mind2Web 2
+evaluators need an OpenAI key and a cache of the cited pages. Neither is used,
+so scores are marked as judged by the named model. The tests in
+`tests/odysseys.test.ts` use a fake GitHub endpoint (`FOXBENCH_RAW_URL`) and
+fake judges.
+
+| # | Failure mode | Wanted behaviour | Test |
+|---|---|---|---|
+| ODY1 | The task file moves upstream, so two runs score different tasks under one name. | `odysseys.json` is fetched at a pinned commit into the cache; nothing is committed. | `ODY1 ...` |
+| ODY2 | The case list is wrong: ids that change, or a lost level. | Upstream's `task_id` is the id and `level` the tier and tag. | `ODY2 ...` |
+| ODY3 | An agent that does nothing passes, or a partly right agent counts as a pass. | The judge grades every rubric item 1 or 0. `noop` and a wrong agent pass 0; a perfect agent passes all; a partly right agent fails with its item average in `score`, the number Odysseys calls rubric average. | `ODY3 ...` |
+| ODY4 | The judge grades fewer items than the rubric has, or none, and inflates a score. | A reply whose grade list does not match the rubric, or has no list, fails with a `judge:` reason (J5). | `ODY4 ...` |
+| ODY5 | The judge never sees the evidence, or the rubric's wording. | The prompt holds the task, each item's requirement and verification, the answer, the action history and the trace. | `ODY5 ...` |
+| ODY6 | The agent starts on a site of its own choice that the task does not name. | Upstream starts at Google: the start page holds the task and a search form. | `ODY6 ...` |
+| M2W2A | The 10 dev task scripts move upstream, or an unreadable script gives a case with no task. | The scripts are fetched at a pinned commit; a script without `TASK_ID` or `TASK_DESCRIPTION` stops the load with its name. | `M2W2A ...` |
+| M2W2B | A cited claim passes though the agent never visited the cited site, or the answer has no citations. | The judge derives the task's criteria first, then grades each with the answer and the hosts the agent reached; a claim whose source the agent never reached is unsupported. `noop` and a wrong agent pass 0. | `M2W2B ...` |
+| M2W2C | A case passes with some criteria unmet. | `success` needs every criterion; `score` is the share met. | `M2W2C ...` |
+
 ## AMO release build and listed submission (`scripts/amo-listing.mjs`)
 
 `pnpm check:amo` reads `dist-ext/`, which is what `release.yml` signs. Each
