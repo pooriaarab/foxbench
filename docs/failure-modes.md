@@ -295,6 +295,26 @@ tests are in `tests/speed.test.ts`.
 | F6 | The fingerprint leaks who ran it: hostname, user name, home path. | Only the machine model, chip, RAM, OS, versions and mode. | `F6 ...` |
 | F7 | What the operator says about the agent (model, quant, flags, network) is mixed with what foxbench measured. | Reported facts come from `FOXBENCH_*` variables and sit under `reported`, apart from the measured ones. | `F7 ...` |
 
+## WebMall tasks and judge (`src/bench/webmall/`)
+
+Tasks come from the authors' BrowserGym fork at a pinned commit. The scorer is upstream's, ported
+to read end state: the answer's URLs, the carts and orders, and the pages the proxies logged.
+
+| ID | Failure mode | Wanted behaviour | Test |
+|---|---|---|---|
+| WS1 | The task list is wrong or comes from an unpinned file. | 91 tasks with unique ids and 230 gold URLs, from the pinned commit, fetched at run time and never committed. | `WS1 ...` |
+| WS2 | The goal tells the agent to type its result into upstream's page, which shows the text and sends nothing, so a right agent cannot be scored. | The goal asks for the result as the answer, names no submit page, has no unfilled `{{...}}`, and names the shops by the proxy's ports. | `WS2 ...` |
+| WS3 | The restored shops hold the authors' old carts and orders, so a cart task passes with no work. | `start` resets every shop. `noop` scores 0 on all 91, also when a gold product is in a cart before the case. | `WS3 ...` |
+| WS4 | A liar ("Done", prose with no URL) passes a search task, a wrong agent passes, or the harness cannot be solved so a perfect agent fails. | `judge` reads only the URLs in the answer and the shops' end state. A scripted perfect agent passes all 91; a scripted wrong one (an extra offer, an extra cart item, the wrong state in the billing address) passes none. | `WS4 ...` |
+| WS5 | The URL set is matched loosely: one extra offer passes, a missing one passes, or a shop's slug on another shop passes. | Exact match: every gold URL and no other. Order, `###` or spaces, `https`, host case and a trailing slash do not matter; the port (the shop) does. | `WS5 ...` |
+| WS6 | A cart task passes with an extra product, a product in the wrong shop, or a product that was added and removed. | The end-state carts must hold the gold products and nothing else. | `WS6 ...` |
+| WS7 | A checkout passes with the wrong billing details or product, or on a cart with no order. | A placed order (not a failed or pending one) must hold the product, with the name, street, house number, zip, state, country and email of the task. A cart alone scores partial credit and fails. | `WS7 ...` |
+| WS8 | The score drifts from upstream's. | Answers share 0.8, visits (and carts, for a checkout) 0.2; success is the exact match, not the score. | `WS8 ...` |
+| WS9 | A visit counts for a failed request, or for the same slug on another shop. | A visit is a successful GET of a gold product page on its shop. | `WS9 ...` |
+| WS10 | `check()` says ready when a shop is down or no key exists, or it makes a key file. | Not ready, with the shop and the fix; it writes nothing. | `WS10 ...` |
+| WS11 | A case's proxies stay up, so the next case cannot bind the shop ports. | `close()` frees the ports. | `WS11 ...` |
+| WS12 | The real shops do not score a scripted agent. | The live test (`FOXBENCH_WEBMALL_LIVE=1`) runs a perfect agent on a cart task and a checkout task against the real shops, and noop and a wrong agent on the same. | `WS12 ...` |
+
 ## LLM judges (`src/bench/judge.ts`)
 
 Some benchmarks score with an LLM: Online-Mind2Web's WebJudge, rubric checks,
