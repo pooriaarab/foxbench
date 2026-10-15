@@ -19,6 +19,8 @@ import { DEFAULT_USER_MODEL } from "./user.js";
 import { tau2Benchmark } from "./tau2/index.js";
 import { webarenaVerified } from "./wav/index.js";
 import { waiBenchmark } from "./wai/index.js";
+import { mind2web2Benchmark } from "./mind2web2.js";
+import { odysseysBenchmark } from "./odysseys.js";
 import { webgamesBenchmark } from "./webgames.js";
 
 const foxbench = foxbenchBenchmark();
@@ -41,6 +43,8 @@ export const benchmarks: Benchmark[] = [
   gaiaBenchmark(),
   onlineMind2webBenchmark(),
   browsecompBenchmark(),
+  odysseysBenchmark(),
+  mind2web2Benchmark(),
 ];
 
 export const benchmarkById = (id: string): Benchmark | undefined => benchmarks.find((b) => b.id === id);

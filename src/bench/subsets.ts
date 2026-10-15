@@ -5,6 +5,7 @@ import browsecomp from "./subsets/browsecomp.json" with { type: "json" };
 import browsesafe from "./subsets/browsesafe.json" with { type: "json" };
 import foxbench from "./subsets/foxbench.json" with { type: "json" };
 import miniwob from "./subsets/miniwob.json" with { type: "json" };
+import odysseys from "./subsets/odysseys.json" with { type: "json" };
 import tau2Airline from "./subsets/tau2-airline.json" with { type: "json" };
 import tau2Retail from "./subsets/tau2-retail.json" with { type: "json" };
 import webarenaVerified from "./subsets/webarena-verified.json" with { type: "json" };
@@ -21,6 +22,7 @@ const LISTS: SubsetLists = {
   "tau2-retail": tau2Retail,
   "tau2-airline": tau2Airline,
   browsecomp,
+  odysseys,
 };
 
 /** The cases of a subset, from a benchmark's full list. Throws when a list names a case the benchmark lacks (L5). */
