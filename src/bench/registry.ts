@@ -27,8 +27,8 @@ export const benchmarks: Benchmark[] = [
   browsesafeBenchmark(),
   waiBenchmark(),
   webarenaVerified(),
+  assistantbenchBenchmark(),
 ];
-export const benchmarks: Benchmark[] = [foxbench, miniwobBenchmark, agentdojoBenchmark, webgamesBenchmark(), eiaBenchmark(), browsesafeBenchmark(), waiBenchmark(), assistantbenchBenchmark()];
 
 export const benchmarkById = (id: string): Benchmark | undefined => benchmarks.find((b) => b.id === id);
 
