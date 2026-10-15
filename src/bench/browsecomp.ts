@@ -57,6 +57,7 @@ extracted_final_answer: <the final answer, or None>
 reasoning: <one or two sentences comparing it with the correct answer>
 correct: "yes" or "no"`;
 
+const url = (ctx: BenchContext) => ctx.env.FOXBENCH_BROWSECOMP_URL ?? DEFAULT_URL;
 const escape = (s: string) => s.replace(/[&<>"]/g, (c) => `&#${c.charCodeAt(0)};`);
 
 /** A local start page with the question and a search form. */
@@ -74,7 +75,6 @@ const started = new WeakMap<Episode, Row>();
 
 export const browsecompBenchmark = (o: { sha256?: string } = {}): Benchmark => {
   const pin = o.sha256 ?? BROWSECOMP_SHA256;
-  const url = (ctx: BenchContext) => ctx.env.FOXBENCH_BROWSECOMP_URL ?? DEFAULT_URL;
   const file = (ctx: BenchContext) => join(ctx.cacheDir, `browsecomp-${pin.slice(0, 12)}`, "browse_comp_test_set.csv");
   const verified = (text: string) => {
     if (createHash("sha256").update(text).digest("hex") !== pin) throw new Error(`the BrowseComp file differs from the pinned SHA-256 ${pin.slice(0, 12)}`);
@@ -150,7 +150,7 @@ export const browsecompBenchmark = (o: { sha256?: string } = {}): Benchmark => {
     down: async () => {},
     baselines: [
       { agent: "OpenAI Deep Research", subset: "full", score: 0.515, source: "https://arxiv.org/abs/2504.12516" },
-      { agent: "Tongyi DeepResearch 30B-A3B (open)", subset: "full", score: 0.434, source: "https://tongyi-agent.github.io/blog/introducing-tongyi-deep-research/", vendorReported: true },
+      { agent: "Tongyi DeepResearch 30B-A3B (open)", subset: "full", score: 43.4 / 100, source: "https://tongyi-agent.github.io/blog/introducing-tongyi-deep-research/", vendorReported: true },
       { agent: "Claude Opus 4.6, multi-agent harness", subset: "full", score: 0.868, source: "https://www.anthropic.com/news/claude-opus-4-6", vendorReported: true },
     ],
   };

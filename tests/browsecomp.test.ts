@@ -82,7 +82,7 @@ describe("BrowseComp", () => {
     expect(cases.map((c) => [c.id, c.tags])).toEqual([["browsecomp-0000", ["history"]], ["browsecomp-0001", ["art"]], ["browsecomp-0002", ["science & technology"]]]);
     expect(cases.every((c) => c.goal === undefined)).toBe(true);
     const cache = join(dir, "cache");
-    const files = readdirSync(cache, { recursive: true, encoding: "utf8" }).filter((f) => /\.csv$/.test(f));
+    const files = readdirSync(cache, { recursive: true, encoding: "utf8" }).filter((f) => f.endsWith(".csv"));
     expect(files).toHaveLength(1);
     expect(readFileSync(join(cache, files[0]!), "utf8")).toBe(body);
     expect(readFileSync(join(cache, files[0]!), "utf8")).not.toContain("Quillon");
