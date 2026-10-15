@@ -151,3 +151,37 @@ describe("the in-house suites through the proxy", () => {
     expect(board.results.every((r) => r.requests > 0)).toBe(true);
   });
 });
+
+describe("replacements", () => {
+  const PNG = Buffer.from("fake image bytes");
+  const replace = [{ path: "/img/victim.png", type: "image/png", body: PNG }];
+  const fetchBody = async (url: string, init?: RequestInit) => { const r = await fetch(url, init); return { status: r.status, type: r.headers.get("content-type"), body: Buffer.from(await r.arrayBuffer()) }; };
+
+  it("P7 serves a listed path itself with a GET, and forwards everything else", async () => {
+    const { bench, traces } = toy({ replace });
+    seen.length = 0;
+    let got: Awaited<ReturnType<typeof fetchBody>>[] = [];
+    await play(bench, agent(async (url) => {
+      got = [await fetchBody(`${url}/img/victim.png`), await fetchBody(`${url}/img/other.png`), await fetchBody(`${url}/img/victim.png`, { method: "POST", body: "x" })];
+    }));
+    expect(got[0]).toMatchObject({ status: 200, type: "image/png" });
+    expect(got[0]!.body.equals(PNG)).toBe(true);
+    expect(got[1]!.body.toString()).toBe("<p>GET /img/other.png</p>");
+    expect(got[2]!.body.toString()).toBe("<p>POST /img/victim.png</p>");
+    expect(seen).toHaveLength(2);
+    expect(traces).toHaveLength(1);
+  });
+
+  it("P8 logs a replacement like any request, and never serves it for another host", async () => {
+    const { bench, traces } = toy({ replace });
+    let viaHttpProxy = "";
+    await play(bench, agent(async (url) => {
+      await fetchBody(`${url}/img/victim.png`);
+      viaHttpProxy = await viaProxy(url, `${other}/img/victim.png`);
+    }));
+    const hit = traces[0]!.requests.find((r) => r.path === "/img/victim.png" && !r.egress)!;
+    expect(hit).toMatchObject({ method: "GET", status: 200, bytes: PNG.length, type: "image/png" });
+    expect(viaHttpProxy).toBe("model reply");
+    expect(traces[0]!.requests.find((r) => r.egress)).toMatchObject({ path: "/img/victim.png" });
+  });
+});
