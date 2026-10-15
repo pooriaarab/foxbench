@@ -133,7 +133,6 @@ describe("WF2 WF3 the startup script", () => {
     expect(first.log.find((l) => l.includes("--name wav-map "))).toMatch(/-p 3000:8080 -p 3071:8877 .*-v webarena_verified_map_tile_db:\/data\/database/);
   });
   it("downloads nothing on the second boot and only starts the containers", () => {
-    const curls = (log: string[]) => log.filter((l) => l.startsWith("curl ")).length;
     const first = readFileSync(join(dir, "log"), "utf8").trim().split("\n");
     const second = boot(dir);
     expect(second.status, second.stderr).toBe(0);
@@ -143,6 +142,8 @@ describe("WF2 WF3 the startup script", () => {
     expect(before.filter((l) => l.startsWith("docker start"))).toHaveLength(6);
   });
 });
+
+const curls = (log: string[]) => log.filter((l) => l.startsWith("curl ")).length;
 
 // The map's three archives as upstream's config.py lays them out, in miniature: [archive, volume, path inside it].
 const MAP_TARS: [string, string, string][] = [
