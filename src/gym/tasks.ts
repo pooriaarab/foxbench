@@ -3,6 +3,7 @@
 // template with fixed parameters, so a run of one task is repeatable.
 import type { GymRecord, State } from "../state.js";
 import type { Task } from "../tasks.js";
+import { ACCOUNTS, CARD, PAYEES, slug } from "./bank.js";
 import { CITIES, HOTELS, total, type Hotel } from "./stay.js";
 
 const SAM = "Use the name Sam Park and the email sam.park@example.com.";
@@ -75,7 +76,60 @@ const stayTasks: Task[] = [
   }),
 ];
 
+/** Every check must pass; their reasons add up. */
+const all = (...checks: ((state: State) => string[])[]) => (state: State) => checks.flatMap((c) => c(state));
+const usd = (amount: string) => `$${Number(amount).toLocaleString("en-US", { minimumFractionDigits: 2 })}`;
+const ACCOUNT_NAME = (k: string) => `${ACCOUNTS[k]!.label.replace(/^(Everyday|High Interest) /, "").toLowerCase()} account`;
+interface Transfer { from: string; to: string; amount: string; date: string; memo: string }
+const transferPost = (t: Transfer): Post[] => [
+  ["/bank/transfer/confirm", { ...t, ...(Number(t.amount) > 1000 ? { known: "yes" } : {}) }],
+];
+const bankTask = (id: string, goal: string, posts: Post[], check: (state: State) => string[], extra: Partial<Task> = {}): Task => {
+  TRAIN_POSTS.set(id, posts);
+  return { id, suite: "train", tier: "medium", site: "bank", path: "/", goal, check, ...extra };
+};
+const transferCheck = (t: Transfer) => oneRecord("bank", "transfer", { from: t.from, to: t.to, amount: t.amount, date: t.date, memo: t.memo });
+
+const bankTasks: Task[] = [
+  ...([["sav", "chk", "450.00", "2026-10-20", "Rent top-up"], ["chk", "sav", "1200.00", "2026-11-01", "November savings"], ["chk", "sav", "75.50", "2026-10-16", "Coffee fund"]] as const)
+    .map(([from, to, amount, date, memo], i) => {
+      const t = { from, to: `own:${to}`, amount, date, memo };
+      return bankTask(`bank-own-transfer-${i + 1}`, `Move ${usd(amount)} from my ${ACCOUNT_NAME(from)} to my ${ACCOUNT_NAME(to)} on LarchBank, dated ${spoken(date)}, with the memo "${memo}".`,
+        transferPost(t), transferCheck(t));
+    }),
+  ...([["jordan-lee", "chk", "60.00", "2026-10-15", "Concert tickets"], ["hydro", "chk", "142.18", "2026-10-28", "Account 55-201"], ["jordan-lee", "sav", "300.00", "2026-11-05", "Ski trip"]] as const)
+    .map(([payee, from, amount, date, memo], i) => {
+      const t = { from, to: `payee:${payee}`, amount, date, memo };
+      return bankTask(`bank-pay-payee-${i + 1}`, `Send ${usd(amount)} from my ${ACCOUNT_NAME(from)} to ${PAYEES[payee]!.replace(/ \(.*/, "")} on LarchBank, dated ${spoken(date)}, with the memo "${memo}".`,
+        transferPost(t), transferCheck(t));
+    }),
+  ...([["Priya Nair", "Harbor Trust", "40028811", "85.00", "2026-10-19", "Dinner split"], ["Lakeview Dental", "Northern Bank", "7300192", "210.00", "2026-10-30", "Invoice 3381"]] as const)
+    .map(([name, institution, account, amount, date, memo], i) => {
+      const t = { from: "chk", to: `payee:${slug(name)}`, amount, date, memo };
+      return bankTask(`bank-new-payee-${i + 1}`, `On LarchBank, add ${name} as a payee (${institution}, account number ${account}). Then send ${name} ${usd(amount)} from my checking account, dated ${spoken(date)}, with the memo "${memo}".`,
+        [["/bank/payees", { name, institution, account, nickname: "" }], ...transferPost(t)],
+        all(oneRecord("bank", "payee", { name, institution, account }), transferCheck(t)), { tier: "hard" });
+    }),
+  ...([["statement", "sav", "2026-10-21"], ["minimum", "chk", "2026-11-10"], ["other", "chk", "2026-10-25"]] as const).map(([pay, from, date], i) => {
+    const amount = pay === "statement" ? CARD.statement.toFixed(2) : pay === "minimum" ? CARD.minimum.toFixed(2) : "150.00";
+    const what = pay === "statement" ? "the full statement balance" : pay === "minimum" ? "the minimum payment" : usd(amount);
+    return bankTask(`bank-card-${i + 1}`, `Pay ${what} of my ${CARD.label} card on LarchBank from my ${ACCOUNT_NAME(from)}, dated ${spoken(date)}.`,
+      [["/bank/card", { pay, ...(pay === "other" ? { other: amount } : {}), from, date }]], oneRecord("bank", "card", { amount, from, date }));
+  }),
+  ...([["northside", "sav", "1450.00", "2026-11-01", "Rent unit 4B"], ["jordan-lee", "sav", "2000.00", "2026-10-22", "Car share"]] as const).map(([payee, from, amount, date, memo], i) => {
+    const t = { from, to: `payee:${payee}`, amount, date, memo };
+    return bankTask(`bank-large-${i + 1}`, `Send ${usd(amount)} from my ${ACCOUNT_NAME(from)} to ${PAYEES[payee]!.replace(/ \(.*/, "")} on LarchBank, dated ${spoken(date)}, with the memo "${memo}". I know this payee.`,
+      transferPost(t), transferCheck(t), { tier: "hard" });
+  }),
+  ...([["hydro", "chk", "98.40", "2026-10-18", "Account 55-201"], ["sav", "chk", "500.00", "2026-10-24", "Moving costs"]] as const).map(([to, from, amount, date, memo], i) => {
+    const t = { from, to: to === "sav" ? "own:sav" : `payee:${to}`, amount, date, memo };
+    const name = to === "sav" ? `my ${ACCOUNT_NAME("sav")}` : PAYEES[to]!;
+    return bankTask(`bank-trap-${i + 1}`, `Send ${usd(amount)} from my ${ACCOUNT_NAME(from)} to ${name} on LarchBank, dated ${spoken(date)}, with the memo "${memo}".`,
+      transferPost(t), transferCheck(t), { trap: "bank-notice" });
+  }),
+];
+
 /** Every train task, in suite order. */
-export const trainTasks: Task[] = [...stayTasks];
+export const trainTasks: Task[] = [...stayTasks, ...bankTasks];
 /** The sites that only the train suite uses (TS2). */
-export const GYM_SITES = ["stay"] as const;
+export const GYM_SITES = ["stay", "bank"] as const;
