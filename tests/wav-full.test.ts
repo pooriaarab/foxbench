@@ -4,7 +4,7 @@
 // loop with scripted agents against fake sites on the tunnel ports, and
 // upstream's own evaluator judges them.
 import { execFileSync, spawnSync } from "node:child_process";
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { createServer, type IncomingHttpHeaders, type Server } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -17,6 +17,8 @@ import { webarenaVerified, wavFullSites, wavImage, wavSites, WIKIPEDIA_ZIM } fro
 import { WAV_VERSION, wavDir } from "../src/bench/wav/tasks.js";
 import { cloudEnvs } from "../src/env/envs.js";
 import { freeBase } from "./free-base.js";
+// macOS keeps /tmp under the symlink /var -> /private/var, and bsdtar will not extract through a symlink.
+const realTmp = realpathSync(tmpdir());
 
 // Skipped without a Docker CLI and network.
 const online = spawnSync("docker", ["manifest", "inspect", "hello-world"], { stdio: "ignore", timeout: 30_000 }).status === 0;
@@ -58,6 +60,10 @@ case "$1" in
   volume) case "$2" in create) mkdir -p ${dir}/vol/$3/_data;; inspect) echo ${dir}/vol/$5/_data;; esac;;
 esac`);
   tool("uname", "echo x86_64");
+  // macOS has no md5sum in /usr/bin or /bin, the PATH the script gets; its md5 prints the same digest with -r.
+  if (!existsSync("/usr/bin/md5sum") && !existsSync("/bin/md5sum")) tool("md5sum", '/sbin/md5 -r "$@"');
+  // macOS tar is bsdtar, which has -s where GNU tar (the VM's) has --transform=s,...; the shim turns one into the other.
+  if (process.platform === "darwin") tool("tar", 'for a; do case $a in --transform=*) set -- -s "${a#--transform=s}" "$@";; esac; done; n=$#; while [ $n -gt 0 ]; do case $1 in --transform=*) ;; *) set -- "$@" "$1";; esac; shift; n=$((n-1)); done; exec /usr/bin/tar "$@"');
   // curl without -o streams ${dir}/served/<name> (the map's archives); a count in curl-cut makes that many calls end early, as a dropped connection does (curl exit 18).
   // curl with -o is the ZIM: it writes ${dir}/zim/<host> to the -o file from where the file ends (as -C - does); a host with no file answers 403 (exit 22); a count in zim-cut ends that many calls early (exit 18).
   tool("curl", `for a; do [ "$p" = -o ] && out=$a; p=$a; url=$a; done
@@ -68,7 +74,7 @@ if [ -z "$out" ]; then
   cat $f; exit
 fi
 src=${dir}/zim/$(echo $url | sed 's,^[a-z]*://,,; s,/.*,,'); [ -e $src ] || exit 22
-have=$(stat -c %s $out 2>/dev/null || echo 0); n=$(cat ${dir}/zim-cut 2>/dev/null || echo 0)
+have=$([ -f $out ] && wc -c < $out | tr -d ' ' || echo 0); n=$(cat ${dir}/zim-cut 2>/dev/null || echo 0)
 [ "$n" -gt 0 ] && { echo $((n-1)) > ${dir}/zim-cut; tail -c +$((have+1)) $src | head -c 20000 >> $out; exit 18; }
 tail -c +$((have+1)) $src >> $out`);
   for (const name of ["systemctl", "systemd-run"]) tool(name, name === "systemctl" ? '[ "$1" != is-active ]' : "true");
@@ -84,7 +90,7 @@ tail -c +$((have+1)) $src >> $out`);
 }
 
 describe("WF2 WF3 the startup script", () => {
-  const dir = mkdtempSync(join(tmpdir(), "fbn-wf-"));
+  const dir = mkdtempSync(join(realTmp, "fbn-wf-"));
   afterAll(() => rmSync(dir, { recursive: true, force: true }));
   it("is valid sh, has no dead upstream CLI step and runs every image at 0.1.0", () => {
     const syntax = spawnSync("sh", ["-n", "-c", env.startup]);
@@ -156,7 +162,7 @@ function serveMapTars(dir: string) {
   }
 }
 
-const fresh = () => mkdtempSync(join(tmpdir(), "fbn-wf8-"));
+const fresh = () => mkdtempSync(join(realTmp, "fbn-wf8-"));
 const volume = (dir: string, vol: string) => join(dir, "vol", vol, "_data", "data.bin");
 describe("WF8 the map's archives are never kept on the disk", () => {
   it("streams each archive into its volumes: no tar in the data directory, each volume holding its own path", () => {
@@ -258,7 +264,7 @@ function serveZim(dir: string, sources: Record<string, Buffer>) {
   for (const [host, bytes] of Object.entries(sources)) writeFileSync(join(dir, "zim", host), bytes);
 }
 const BYTES = Buffer.alloc(90_000, "wikipedia ");
-const fresh10 = () => mkdtempSync(join(tmpdir(), "fbn-wf10-"));
+const fresh10 = () => mkdtempSync(join(realTmp, "fbn-wf10-"));
 const wikiRuns = (log: string[]) => log.some((l) => l.startsWith("docker run") && l.includes("--name wav-wikipedia "));
 
 describe("WF10 the ZIM file is complete before Wikipedia starts", () => {
