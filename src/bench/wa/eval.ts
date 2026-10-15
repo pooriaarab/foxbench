@@ -3,7 +3,7 @@
 // EvaluatorComb does. WebArena-Lite and WebChoreArena share them. The fuzzy
 // cases go to the configured Claude judges; program_html reads a page that the
 // caller opens in a judge browser (page.ts).
-import { judgeWith, type Judge, type JudgeResult } from "../judge.js";
+import { judgeWith, type Judge, type JudgeAsk, type JudgeImage, type JudgeResult } from "../judge.js";
 
 type Contents = Record<string, string | string[]>;
 export interface WaTarget {
@@ -38,7 +38,11 @@ export interface WaFacts {
   page?: () => Promise<WaPage>;
   judges: Judge[];
   /** `func:` helpers beyond the ported ones, by name. `__page__` comes through as the judge browser's page. */
-  helpers?: Record<string, (...args: (string | WaPage | undefined)[]) => Promise<string> | string>;
+  helpers?: Record<string, (...args: (string | WaPage | undefined)[]) => Promise<string | number> | string | number>;
+  /** Evaluators for eval types beyond the three ported ones (VWA's page_image_query), by type name. */
+  evaluators?: Record<string, (run: Run) => Promise<void>>;
+  /** Loads an image by URL for a judge; VWA's image checks need it. */
+  fetchImage?: (url: string) => Promise<JudgeImage>;
   /** How long program_html waits after loading a page; upstream sleeps 3 s. */
   settleMs?: number;
 }
@@ -63,6 +67,17 @@ export function tokenize(s: string): string[] {
 }
 
 const exactMatch = (ref: string, pred: string) => clean(pred) === clean(ref);
+
+/** Upstream's str_2_int: an integer with commas allowed; anything else is none. */
+const toInt = (s: string) => (/^[+-]?\d+$/.test(s.trim().replaceAll(",", "")) ? Number(s.trim().replaceAll(",", "")) : undefined);
+/** Upstream's compare_inequality, with its tolerance and its order of operators ("<" and ">" are lenient by the tolerance). */
+function inequality(value: number, rule: string): boolean {
+  const tol = 1e-8;
+  const ops: [string, (y: number) => boolean][] = [["<=", (y) => value <= y + tol], [">=", (y) => value >= y - tol], ["==", (y) => Math.abs(value - y) <= tol], ["<", (y) => value < y + tol], [">", (y) => value > y - tol]];
+  const hit = ops.find(([op]) => rule.includes(op));
+  if (!hit) throw new Error(`invalid inequality ${rule}`);
+  return hit[1](Number(rule.split(hit[0])[1]!.trim()));
+}
 function mustInclude(ref: string, pred: string): boolean {
   const r = clean(ref);
   const p = clean(pred);
@@ -101,7 +116,7 @@ export class Run {
   constructor(readonly task: WaTask, readonly facts: WaFacts) {}
   fail(reason: string) { this.reasons.push(reason); }
   /** One judge call; each judge's results over a case's calls are merged into one row. */
-  async ask(q: { system: string; prompt: string }, parse: (r: string) => { success: boolean; reasons: string[] }): Promise<boolean> {
+  async ask(q: JudgeAsk, parse: (r: string) => { success: boolean; reasons: string[] }): Promise<boolean> {
     this.llm = true;
     const v = await judgeWith(this.facts.judges, q, parse);
     for (const j of v.judges ?? []) {
@@ -111,8 +126,9 @@ export class Run {
     if (!v.success) this.fail(v.reasons[0] ?? "the judge failed the answer");
     return v.success;
   }
-  /** exact_match, must_include or fuzzy_match of `pred` against `contents`, as one string_match or program_html target does. */
-  async contents(contents: Contents, pred: string, what: string): Promise<void> {
+  /** exact_match, must_include or fuzzy_match of `given` against `contents`, as one string_match or program_html target does. A number is a helper's (VWA's price) and is compared as one; `question` is what a fuzzy judge is told the task was. */
+  async contents(contents: Contents, given: string | number, what: string, question = this.task.intent): Promise<void> {
+    const pred = String(given);
     // Nothing to compare: a judge is never asked about an empty answer or page.
     if (!pred.trim()) return this.fail(`${what}: the answer is empty`);
     for (const [approach, value] of Object.entries(contents)) {
@@ -122,10 +138,17 @@ export class Run {
         for (const entry of value as string[]) if (!entry.split(" |OR| ").some((alt) => mustInclude(alt, pred))) this.fail(`${what}: does not include "${entry}"`);
       } else if (approach === "must_exclude") {
         for (const entry of value as string[]) if (mustInclude(entry, pred)) this.fail(`${what}: includes "${entry}"`);
+      } else if (approach === "one_of") {
+        if (!(value as string[]).some((entry) => pred.includes(clean(entry)))) this.fail(`${what}: none of ${(value as string[]).join(", ")}`);
+      } else if (approach === "required_values") {
+        const n = typeof given === "number" ? given : toInt(pred);
+        if (n === undefined) this.fail(`${what}: "${pred.slice(0, 40)}" is not an integer`);
+        else for (const entry of value as string[]) if (!entry.split(" |OR| ").some((rule) => inequality(n, rule))) this.fail(`${what}: ${n} is not ${entry}`);
       } else if (approach === "fuzzy_match" && value === "N/A") {
-        if (!exactMatch("N/A", pred)) await this.ask(uaAsk(pred, this.task.eval.string_note ?? "", this.task.intent), parseUa);
+        if (!exactMatch("N/A", pred)) await this.ask(uaAsk(pred, this.task.eval.string_note ?? "", question), parseUa);
       } else if (approach === "fuzzy_match") {
-        await this.ask(fuzzyAsk(pred, (value as string[]).join(", "), this.task.intent), parseFuzzy);
+        // A program_html target gives one string whose alternatives are each asked; a list is asked as one reference.
+        for (const ref of Array.isArray(value) ? [value.join(", ")] : value.split(" |OR| ")) await this.ask(fuzzyAsk(pred, ref, question), parseFuzzy);
       } else {
         this.fail(`harness: unsupported ${what} approach ${approach}`);
       }
@@ -147,7 +170,7 @@ function urlMatch(run: Run) {
 }
 
 /** Upstream's `func:` expressions are Python calls with string arguments; `__page__` is the judge browser. */
-export async function callFunc(expr: string, helpers: WaFacts["helpers"], page: WaPage | undefined): Promise<string> {
+export async function callFunc(expr: string, helpers: WaFacts["helpers"], page: WaPage | undefined): Promise<string | number> {
   const m = /^(\w+)\((.*)\)$/s.exec(expr.trim());
   if (!m) throw new Error(`unreadable func ${expr}`);
   const [, name, rest] = m;
@@ -177,21 +200,25 @@ async function programHtml(run: Run) {
     const what = `program_html ${i + 1}`;
     try {
       if ((target.url === "last" || target.url.includes("__last_url__")) && !facts.finalUrl) { run.fail(`${what}: the agent opened no page`); continue; }
-      const target_url = target.url.startsWith("func:") ? await callFunc(target.url.slice(5).replaceAll("__last_url__", facts.finalUrl!), facts.helpers, undefined) : target.url;
+      const target_url = target.url.startsWith("func:") ? String(await callFunc(target.url.slice(5).replaceAll("__last_url__", facts.finalUrl!), facts.helpers, undefined)) : target.url;
       const p = await open();
       if (!p) { run.fail(`harness: ${what} needs the judge browser`); continue; }
       await p.goto(target_url === "last" ? facts.finalUrl! : target_url);
       await new Promise((r) => setTimeout(r, facts.settleMs ?? 3000));
-      let got: string;
+      let got: string | number;
       const loc = target.locator.trim();
       if (!loc) got = await p.content();
       else if (loc.startsWith("document.") || loc.startsWith("[...document.")) {
         for (const prep of target.prep_actions ?? []) await p.evaluate(`(() => ${prep})()`).catch(() => {});
         // A page or locator that gives nothing reads as an empty string (upstream's "the page is wrong").
         got = String((await p.evaluate(`(() => ${loc})()`).catch(() => "")) || "");
+      } else if (loc.startsWith("lambda:")) {
+        // Upstream strips the characters of "lambda:" from the left, then runs the expression; a falsy result means the page is wrong.
+        got = (await p.evaluate(loc.replace(/^[lambd:]+/, "")).catch(() => "")) as string;
+        if (!got) { run.fail(`${what}: the locator found nothing`); continue; }
       } else if (loc.startsWith("func:")) got = await callFunc(loc.slice(5), facts.helpers, p);
       else { run.fail(`harness: unsupported ${what} locator ${loc.slice(0, 40)}`); continue; }
-      await run.contents(target.required_contents, got, what);
+      await run.contents(target.required_contents, got, what, "NOT USED");
     } catch (error) {
       run.fail(`harness: ${what}: ${error instanceof Error ? error.message : String(error)}`);
     }
@@ -205,6 +232,7 @@ export async function scoreWa(task: WaTask, facts: WaFacts): Promise<WaScore> {
     if (type === "string_match") await run.contents(task.eval.reference_answers ?? {}, clean(facts.answer ?? ""), "string_match");
     else if (type === "url_match") urlMatch(run);
     else if (type === "program_html") await programHtml(run);
+    else if (facts.evaluators?.[type]) await facts.evaluators[type](run);
     else run.fail(`harness: unsupported eval type ${type}`);
   }
   const judges = [...run.results.values()];

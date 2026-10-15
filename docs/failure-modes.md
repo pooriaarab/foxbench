@@ -343,6 +343,7 @@ llama-server; no test calls a real API.
 | J6 | The board does not say which model judged, so a Claude-judged score is read as the official judge's score. | `judgedBy` is `llm:<model>`; the fingerprint lists each judge's name, model and `cloud` or `local`; the Markdown says LLM-judged scores differ from the official judge. | `J6 ...` |
 | J7 | The API key leaks into a board, a log or an error message. | The key is read from the environment only and is scrubbed from every judge error. | `J7 ...` |
 | J8 | The clients send the wrong request: no key header, the wrong model, or the prompt in the wrong field. | The Claude judge sends `x-api-key`, the model from `--judge-model` (default `claude-sonnet-5-5`) and the prompt as the user message; the local judge posts to `/v1/chat/completions`. | `J8 ...` |
+| J9 | A judge is asked about an image and is shown none, or the local judge (text only) is asked and guesses. | `JudgeAsk.images` goes to the Claude judge as image blocks before the prompt. The local judge refuses with `the local judge takes no images`, so that verdict fails with a `judge: local:` reason. | `J9 ...` |
 
 ## WebArena-Verified sites (`wav-core`, `src/bench/wav/`)
 
@@ -937,9 +938,30 @@ fake judge; `e2e/wa-judge.mjs` runs the judge browser on a real Firefox.
 | WE6 | `program_html` reads the agent's claim, or a locator that throws counts as a pass. | Each target is opened in the judge browser (`last` is the final URL), the JS locator runs there (an empty locator reads the page HTML), and `required_contents` are checked on the result. A locator that throws, or no page, gives an empty string and fails. | `WE6 ...` |
 | WE7 | A `func:` URL or locator runs code foxbench does not know. | `reddit_get_post_url` and `gitlab_get_project_memeber_role` are ported; a helper the caller passes is run; any other name fails the case with its name. `__last_url__` is the final URL. | `WE7 ...` |
 | WE8 | One failing evaluator is outvoted by the others. | The score is the product over `eval_types`: one failing target or answer fails the case. | `WE8 ...` |
-| WE9 | An approach the port does not know (`required_values`, `one_of`) is skipped, and the case passes. | The case fails with `harness: unsupported ...` and the approach's name. | `WE9 ...` |
+| WE9 | An approach the port does not know is skipped, and the case passes. | The case fails with `harness: unsupported ...` and the approach's name. `required_values` and `one_of` are known since the VWA evaluators (VE1). | `WE9 ...` |
 | WE10 | The judge browser is the agent's, or stays open, or needs a built extension. | It is its own headless Firefox with a stub extension written into the cache, closed after the case. `noop` opens nothing and scores 0 on every kind. | `WE10 ...` |
 | WE11 | `must_exclude` passes while the text is on the page (WASP checks that a project or post is gone this way). | Every entry must be absent, matched as `must_include` matches (a one-word entry as a whole token). An empty page or locator fails, as for every approach (WE6). | `WE11 ...` |
+
+## The VisualWebArena evaluators (`src/bench/vwa/eval.ts`, `src/bench/wa/eval.ts`)
+
+VisualWebArena scores with WebArena's three evaluator types plus
+`page_image_query`, and its tasks call more `func:` helpers. The logic is ported
+from `evaluation_harness/evaluators.py` and `helper_functions.py` at `89f5af2`
+(MIT, fetched at run time, never committed). Upstream answers a
+`page_image_query` with BLIP-2 captions and an SSIM match; foxbench asks the
+Claude judge with the page's images attached instead, so those cases are
+`judge: llm` and the board names the judge model: a score here is not
+upstream's column. `tests/vwa-eval.test.ts` runs the evaluators on scripted
+pages with a fake judge.
+
+| # | Failure mode | Wanted behaviour | Test |
+|---|---|---|---|
+| VE1 | `required_values` or `one_of` is skipped, or a count such as "1,500" is read wrong, or an inequality is read with the wrong operator. | `required_values` parses the answer as an integer (commas allowed; anything else fails) and every entry must hold, each by any ` \|OR\| ` rule, with upstream's operators and tolerance. A helper's number is compared as a number. `one_of` passes when any entry is in the cleaned answer. | `VE1 ...` |
+| VE2 | A `lambda:` locator is unsupported, or a falsy result passes. | The expression runs in the judge browser; a falsy result or an error fails the target. | `VE2 ...` |
+| VE3 | A helper reads a page wrongly (the newest comment, the order's quantity), or an unknown helper is skipped. | The reddit, order, price and review helpers read the page as upstream's do; the Magento REST ones use the admin token. An unknown helper fails the case with its name (WE7). | `VE3 ...` |
+| VE4 | A `page_image_query` question passes with no judge, with no image, on a refusal, or on the wrong image. | The judge is shown the page's images (at most 20, in the class's `img` elements or all of them) and answers per image; the case passes when any answer holds the expected text. No judge, no image, an image that does not load, an unknown image class or the local judge fails it with a reason. | `VE4 ...` |
+| VE5 | An image match passes on a different photo, or on no judge. | The judge is shown the references, then the page images, and must say `match`; `no match` or any other reply fails. A reference that does not load fails with a `harness:` reason. | `VE5 ...` |
+| VE6 | An image is sent to the Claude API that it refuses (over 5 MB, an AVIF, an HTML error page). | `fetchImage` reads the type from the bytes and refuses a missing, oversized or non-PNG/JPEG/GIF/WebP file with the URL in the reason. | `VE6 ...` |
 
 ## WASP (`src/bench/wasp/`)
 
