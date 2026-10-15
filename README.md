@@ -423,7 +423,7 @@ other zones in name order, says which it used and keeps it in the env state;
   A Spot VM can be taken back during that download: use
   `foxbench env up wav-full --no-spot --max-run-duration 10h`.
 
-- `vwa`: VisualWebArena's start state on an n2-standard-8 with 100 GB: the
+- `vwa`: VisualWebArena's start state on an n2-standard-8 with 500 GB: the
   WebArena-Verified shopping (7770) and reddit (9999) images, and Classifieds
   (9980) from the compose zip that VWA publishes on archive.org (checked
   against its SHA-1 at boot). Each port is tunnelled to that port plus 20000.

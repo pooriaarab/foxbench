@@ -106,13 +106,13 @@ systemd-run --unit=foxbench-smoke python3 -m http.server 8080 --directory /srv/f
   },
   {
     // VisualWebArena: the WebArena-Verified shopping and reddit images (about 45 GB pulled, 22 GB unpacked) and
-    // Classifieds (MySQL, an 84 MB data file). Its Wikipedia tasks need wav-full's Wikipedia, not this env.
+    // Classifieds (one 72 GB layer pulled, 155 GB unpacked, plus MySQL and an 84 MB data file). Its Wikipedia tasks need wav-full's Wikipedia, not this env.
     name: "vwa",
     machineType: "n2-standard-8",
-    diskGb: 100,
+    diskGb: 500,
     ports: vwaTunnel,
-    // The first boot installs Docker, pulls the images and loads the Classifieds data.
-    bootMinutes: 45,
+    // The first boot installs Docker, pulls the images (the Classifieds one alone takes 25 minutes or more) and loads the Classifieds data.
+    bootMinutes: 150,
     startup: vwaStartup(),
   },
 ];
