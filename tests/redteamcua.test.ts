@@ -11,7 +11,8 @@ describe("RedTeamCUA skip row", () => {
   it("RT1 --suite redteamcua gives one skip row and runs no case", async () => {
     expect(resolveSuites("redteamcua").map((r) => r.benchmark.id)).toEqual(["redteamcua"]);
     let ran = 0;
-    const adapter = { ...noopAdapter, async runTask(...args: Parameters<typeof noopAdapter.runTask>) { ran++; return noopAdapter.runTask(...args); } };
+    const noop = noopAdapter();
+    const adapter = { ...noop, async runTask(...args: Parameters<typeof noop.runTask>) { ran++; return noop.runTask(...args); } };
     const board = await runBenchmarks({ adapter, runs: [{ benchmark: redteamcuaBenchmark(), subset: "full" }] });
     expect(board.skipped.map((s) => s.benchmark)).toEqual(["redteamcua"]);
     expect(board.results).toEqual([]);
