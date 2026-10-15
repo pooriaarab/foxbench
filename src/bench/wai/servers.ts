@@ -23,11 +23,11 @@ const freePort = (): Promise<number> => new Promise((resolve, reject) => {
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 /** Copies the app, starts its server and waits until it answers; throws after `timeoutMs`. */
-export async function startApp(upstream: string, stage: string, app: string, env: NodeJS.ProcessEnv, timeoutMs: number): Promise<AppServer> {
+export async function startApp(python: string, upstream: string, stage: string, app: string, env: NodeJS.ProcessEnv, timeoutMs: number): Promise<AppServer> {
   const dir = join(stage, app);
   cpSync(join(upstream, "apps", app), dir, { recursive: true, filter: (src) => { const rel = relative(join(upstream, "apps", app), src); return !rel || rel.includes(sep) || !hidden(rel); } });
   const port = await freePort();
-  const proc = spawn("python3", ["-I", "server.py", "--port", String(port)], { cwd: dir, env, stdio: "ignore" });
+  const proc = spawn(python, ["-I", "server.py", "--port", String(port)], { cwd: dir, env, stdio: "ignore" });
   const exited = new Promise<never>((_, reject) => proc.once("exit", (code) => reject(new Error(`${app} server exited with ${code}`))));
   const answered = (async () => {
     for (const deadline = Date.now() + timeoutMs; Date.now() < deadline; await sleep(100)) {

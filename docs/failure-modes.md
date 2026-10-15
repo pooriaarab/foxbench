@@ -368,6 +368,27 @@ model, and the real test split from the cache.
 | BS9 | The board does not say which detector and version it scored. | The board names the detector and its version (`foxshield 0.1.6`), read from the installed package. | `BS9 ...` |
 | BS10 | A quick run sees only benign pages, or two quick runs see different pages. | `quick` is 20 fixed ids, 10 injected and 10 benign. | `BS10 ...` |
 
+## The Python environment (`src/bench/python.ts`)
+
+Benchmarks that run Python (WebArena-Infinity's servers and verifiers) get an
+interpreter from `pythonEnv()`: a virtualenv in `<cache>/python/<hash>`, made
+by `python3 -m venv`, or `uv venv` when uv is on PATH, with the pinned
+requirements installed. The hash is of the requirement list, so a new pin makes
+a new environment. The system Python is never written to; a Mac whose
+`/usr/bin/python3` has no `requests` is the case this is for. The tests are in
+`tests/python.test.ts`.
+
+| # | Failure mode | Wanted behaviour | Test |
+|---|---|---|---|
+| PY1 | python3 is not installed, and the run dies with a bare ENOENT. | `pythonEnv()` throws "python3 is not installed". Nothing is left in the cache. | `PY1 ...` |
+| PY2 | The venv cannot be built (no `ensurepip`, a failed install, no network), and a broken one is kept. | The error carries the tail of the tool's output. The build directory is removed, so the next run tries again. | `PY2 ...` |
+| PY3 | A run killed mid-build leaves a half-built venv that a later run reuses and then fails on `import requests`. | A build happens in `.build-*` and is renamed to `<hash>` only when whole, with a `.ready` file written last. A `<hash>` without `.ready` is rebuilt. Stale `.build-*` directories are removed. | `PY3 ...` |
+| PY4 | Two runs build at once, and one reads the other's half-built tree or the rename fails. | Each builds in its own `.build-*`. The first rename wins; the other deletes its copy and uses the winner's. Both return the same interpreter. | `PY4 ...` |
+| PY5 | Every run rebuilds, or needs python3 and the network again. | A ready environment is returned as is. | `PY5 ...` |
+| PY6 | A new pin reuses the old environment. | The directory name is the hash of the requirement list. | `PY6 ...` |
+| PY7 | uv is on PATH and the environment is made with `python3 -m venv` anyway, or uv's venv has no pip and the install fails. | With uv on PATH, `uv venv` makes the environment and `uv pip install --python` fills it. | `PY7 ...` |
+| PY8 | `check()` says not ready because the system python has no `requests`, or says ready when a venv can never be made. | `check()` makes nothing. It is not ready only when python3 is missing, or when it has no `venv` and `ensurepip` and uv is not on PATH. | `WI9 ...` |
+
 ## WebArena-Infinity (`src/bench/wai/`)
 
 WebArena-Infinity is generated web apps. Each app has a stdlib `server.py`
@@ -389,7 +410,7 @@ task's own.
 | WI6 | The judge reads the agent's claim, or a verifier that throws or hangs counts as a pass. | The verdict is the verifier's `(passed, message)` and nothing else. A throw, a timeout or no answer is a fail with the reason. A wrong agent that claims `done` fails. | `WI6 ...` |
 | WI7 | A task names a verifier outside its app, so the judge runs other code. | The verifier path must stay inside the app's directory, else the case fails with a `harness:` reason. | `WI7 ...` |
 | WI8 | An app server stays up after the run, or a start that never answers hangs the run. | `down` stops every server and removes the copy. A server that does not answer in 10 s fails the case. | `WI8 ...` |
-| WI9 | `check()` fetches, or says ready when python3, git or `requests` (the verifiers import it) is missing. | `check()` fetches nothing. It is not ready, with the fix, when a tool is missing. | `WI9 ...` |
+| WI9 | `check()` fetches, or says ready when python3 or git is missing. | `check()` fetches nothing. It is not ready, with the fix, when a tool is missing. The verifiers' `requests` comes from the venv of PY1-PY8, not the system python. | `WI9 ...` |
 
 ## Agent presets (`foxbench.agents.json`)
 
