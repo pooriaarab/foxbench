@@ -445,6 +445,18 @@ are in `tests/tau2-retail.test.ts` and run tau2's real code through `uv`.
 | T7 | tau2 prints at import time and breaks the bridge's line protocol, or the bridge dies and the site hangs. | The bridge writes replies to its own copy of stdout and sends tau2's prints to stderr. A dead bridge fails each call at once, and the page answers 502. | `T7 ...` |
 | T8 | Text from the database (names, addresses) breaks the page or injects markup. | Every value is HTML-escaped. | `T8 ...` |
 
+tau2 airline is a second desk on the same parts (`src/bench/tau2/desk.ts`):
+customers, reservations, flight search and status, airports, and forms for
+booking, cancelling, flights, baggage, passengers and certificates. Lists
+(flights, passengers, payments) are rows of fields. The tests are in
+`tests/tau2-airline.test.ts`.
+
+| # | Failure mode | Wanted behaviour | Test |
+|---|---|---|---|
+| T18 | An airline form does something its tau2 tool does not. | The gold actions of all 50 airline tasks through the pages make the gold write calls, with the same outcome as tau2's own call. | `T18 ...` |
+| T19 | A page view writes, or the change forms start empty, so an agent that changes one flight drops the others. | Each page view is at most one read call. The change forms start from the reservation's flights, cabin and passengers. | `T19 ...` |
+| T20 | A blank row becomes an empty passenger or flight, or a number arrives as text, so tau2 sees other arguments than its gold ones. | Rows whose first field is blank are left out. Bags and amounts are numbers. | `T20 ...` |
+
 ### The task loader
 
 | # | Failure mode | Wanted behaviour | Test |

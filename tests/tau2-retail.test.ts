@@ -8,7 +8,8 @@ import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { benchContext } from "../src/bench/registry.js";
 import { fetchTau2, startBridge, TAU2_REF, tau2Dir, type Tau2Bridge } from "../src/bench/tau2/bridge.js";
-import { RETAIL_WRITES, startRetailSite, type Tau2Site } from "../src/bench/tau2/retail.js";
+import type { Tau2Site } from "../src/bench/tau2/desk.js";
+import { RETAIL_WRITES, startRetailSite } from "../src/bench/tau2/retail.js";
 
 interface Action { name: string; arguments: Record<string, unknown> }
 type Args = Record<"email" | "first_name" | "last_name" | "zip" | "user_id" | "order_id" | "product_id" | "item_id" | "expression" | "reason" | "payment_method_id" | "summary", string> & { item_ids: string[]; new_item_ids: string[] };
