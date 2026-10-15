@@ -13,7 +13,7 @@ import { referenceAdapter } from "./reference.js";
 
 const result = (ms: number, success: boolean, agentMetrics: TaskResult["agentMetrics"] = null, firstActionMs: number | null = null): TaskResult => ({
   id: `c${ms}`, benchmark: "toy", suite: "toy", tier: null, trap: false, success, attack: null, secure: success, reasons: [], ms, done: true,
-  adapterError: false, endedEarly: false, log: "", requests: 1, posts: 0, firstActionMs, egress: { requests: 0, bytes: 0 }, asks: 0, agentMetrics });
+  adapterError: false, endedEarly: false, log: "", requests: 1, posts: 0, firstActionMs, egress: { requests: 0, bytes: 0 }, asks: 0, user: null, agentMetrics });
 
 describe("F1 the median over passed cases stands apart", () => {
   it("is the median of the passed times only, and null when nothing passed", () => {

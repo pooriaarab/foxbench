@@ -17,7 +17,7 @@ import { sites } from "./sites/index.js";
 import { judge, taskById, tasks } from "./tasks.js";
 
 const USAGE = `Usage:
-  foxbench run --agent noop [--suite core] [--subset quick|published|full|tag:<t>] [--require id,id] [--tasks id,id] [--out artifacts] [--timeout <s>] [--min-success <0-1>] [--fixed-ports <base>]
+  foxbench run --agent noop [--suite core] [--subset quick|published|full|tag:<t>] [--require id,id] [--tasks id,id] [--out artifacts] [--timeout <s>] [--min-success <0-1>] [--fixed-ports <base>] [--user-model claude-sonnet-5-5]
   foxbench run --agent mcp [--name <label>] [--tool run_task] [--arg key=json] [options] -- <command> [args...]
   foxbench run --agent <preset> [options]   (a preset in foxbench.agents.json, here or in ~/.config/foxbench/)
   foxbench serve [--port 4173] [--key <control key>]
@@ -46,7 +46,7 @@ try {
     allowPositionals: true,
     options: {
       agent: { type: "string" }, suite: { type: "string" }, tasks: { type: "string" }, out: { type: "string" }, timeout: { type: "string" },
-      "min-success": { type: "string" }, name: { type: "string" }, tool: { type: "string" }, arg: { type: "string", multiple: true }, port: { type: "string" }, "fixed-ports": { type: "string" }, subset: { type: "string" }, require: { type: "string" }, key: { type: "string" }, json: { type: "boolean" }, judge: { type: "string" }, "judge-model": { type: "string" }, "local-judge-url": { type: "string" }, "local-judge-model": { type: "string" }, help: { type: "boolean", short: "h" },
+      "min-success": { type: "string" }, name: { type: "string" }, tool: { type: "string" }, arg: { type: "string", multiple: true }, port: { type: "string" }, "fixed-ports": { type: "string" }, subset: { type: "string" }, require: { type: "string" }, "user-model": { type: "string" }, key: { type: "string" }, json: { type: "boolean" }, judge: { type: "string" }, "judge-model": { type: "string" }, "local-judge-url": { type: "string" }, "local-judge-model": { type: "string" }, help: { type: "boolean", short: "h" },
     },
   });
 } catch (error) {
@@ -178,6 +178,7 @@ if (command === "list") {
     runs,
     ...(wanted ? { ids: wanted } : {}),
     timeoutMs: timeout * 1000,
+    ...(values["user-model"] ? { userModel: values["user-model"] } : {}),
     onResult: (r) => console.error(`${r.success ? "pass" : "fail"} ${r.id} (${(r.ms / 1000).toFixed(1)} s)${r.attack ? ` attack ${r.attack}` : ""}`),
   });
   const board = fixedPorts === undefined ? ran : { ...ran, fixedPorts };
