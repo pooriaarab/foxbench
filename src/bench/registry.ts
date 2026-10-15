@@ -21,6 +21,7 @@ import { DEFAULT_USER_MODEL } from "./user.js";
 import { tau2Benchmark } from "./tau2/index.js";
 import { choreBenchmark } from "./wa/chore.js";
 import { liteBenchmark } from "./wa/lite.js";
+import { vwaBenchmark } from "./vwa/index.js";
 import { webarenaVerified } from "./wav/index.js";
 import { waiBenchmark } from "./wai/index.js";
 import { mind2web2Benchmark } from "./mind2web2.js";
@@ -75,6 +76,7 @@ export const benchmarks: Benchmark[] = [
   doomarenaBenchmark(),
   liteBenchmark(),
   choreBenchmark(),
+  vwaBenchmark(),
 ];
 
 export const benchmarkById = (id: string): Benchmark | undefined => benchmarks.find((b) => b.id === id);
