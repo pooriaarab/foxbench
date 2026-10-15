@@ -1,6 +1,6 @@
 // The cloud environments `foxbench env up` can make. Each one is a VM made
 // from a startup script, plus the VM ports the tunnel brings to 127.0.0.1.
-import { TUNNEL_OFFSET, wavSites, wavStartup } from "../bench/wav/index.js";
+import { RESET_PORT, TUNNEL_OFFSET, wavSites, wavStartup } from "../bench/wav/index.js";
 
 export interface CloudEnv {
   name: string;
@@ -38,7 +38,7 @@ systemd-run --unit=foxbench-smoke python3 -m http.server 8080 --directory /srv/f
     name: "wav-core",
     machineType: "n2-standard-8",
     diskGb: 200,
-    ports: wavSites.flatMap((s) => [s.port, s.ctrlPort]).map((remote) => ({ remote, local: remote + TUNNEL_OFFSET })),
+    ports: [...wavSites.flatMap((s) => [s.port, s.ctrlPort]), RESET_PORT].map((remote) => ({ remote, local: remote + TUNNEL_OFFSET })),
     // The first boot installs Docker and pulls the four site images (about 60 min on n2-standard-8; GitLab is last).
     bootMinutes: 90,
     startup: wavStartup(),

@@ -3,14 +3,20 @@
 // tag. One site table drives the VM's startup script, the tunnel ports and
 // check(). The agent sees each site on its own port through the recording
 // proxy; the proxy forwards to the tunnel on that port plus TUNNEL_OFFSET.
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { request, type IncomingHttpHeaders } from "node:http";
+import { join } from "node:path";
 import { startProxy, type RecordingProxy } from "../proxy.js";
 import { pickSubset } from "../subsets.js";
-import type { Benchmark, BenchContext, Episode, Readiness } from "../types.js";
-import { fillPrompt, loadPrompts, loadTasks, parseStartUrl, promptName, toCase, uvMissing, type WavTask } from "./tasks.js";
+import type { Benchmark, BenchContext, Env, Episode, Readiness } from "../types.js";
+import { startHar, type HarRecorder } from "./har.js";
+import { judgeCase } from "./judge.js";
+import { fillPrompt, loadPrompts, loadTasks, parseStartUrl, promptName, toCase, uvMissing, wavDir, type WavTask } from "./tasks.js";
 
 export const WAV_TAG = "0.1.0";
 export const TUNNEL_OFFSET = 10000;
+/** The VM port of the reset service, which recreates a site's container from its image (WJ6). */
+export const RESET_PORT = 8870;
 const PROBE_MS = 10_000;
 
 export interface WavSite {
@@ -53,13 +59,45 @@ run() {
   docker run -d --name "$name" --restart unless-stopped "$@" "$image"
 }
 ${run.join("\n")}
+mkdir -p /opt/foxbench
+cat > /opt/foxbench/wav-reset.py <<'PY'
+${RESET_SERVICE}PY
+systemctl is-active --quiet wav-reset || systemd-run --unit=wav-reset python3 /opt/foxbench/wav-reset.py
 `;
 }
+
+// POST /reset/<site> recreates wav-<site> with the ports, base URL and shm size it ran with.
+// The sites keep their data in the image, so a new container is the start state.
+const RESET_SERVICE = `import http.server, json, subprocess
+
+def recreate(name):
+    info = json.loads(subprocess.run(["docker", "inspect", name], check=True, capture_output=True, text=True).stdout)[0]
+    args = ["docker", "run", "-d", "--name", name, "--restart", "unless-stopped", "--shm-size", str(info["HostConfig"]["ShmSize"])]
+    for port, binds in (info["HostConfig"]["PortBindings"] or {}).items():
+        args += [a for b in binds for a in ("-p", f"{b['HostPort']}:{port.split('/')[0]}")]
+    args += [a for e in info["Config"]["Env"] if e.startswith("WA_ENV_CTRL_EXTERNAL_SITE_URL=") for a in ("-e", e)]
+    subprocess.run(["docker", "rm", "-f", name], check=True, capture_output=True)
+    subprocess.run(args + [info["Config"]["Image"]], check=True, capture_output=True)
+
+class Reset(http.server.BaseHTTPRequestHandler):
+    def do_POST(self):
+        site = self.path.removeprefix("/reset/")
+        if site not in (${wavSites.map((s) => `"${s.id}"`).join(", ")}):
+            return self.send_error(404)
+        try:
+            recreate("wav-" + site)
+            self.send_response(200)
+        except Exception as e:
+            self.send_response(500, str(e)[:200])
+        self.end_headers()
+
+http.server.ThreadingHTTPServer(("0.0.0.0", ${RESET_PORT}), Reset).serve_forever()
+`;
 
 /** Each site's URL and env-ctrl URL on the tunnel, or on FOXBENCH_WAV_HOST. */
 export function wavUrls(env: NodeJS.ProcessEnv, offset = TUNNEL_OFFSET) {
   const host = env.FOXBENCH_WAV_HOST || "127.0.0.1";
-  return wavSites.map((s) => ({ site: s, url: `http://${host}:${s.port + offset}`, ctrl: `http://${host}:${s.ctrlPort + offset}` }));
+  return wavSites.map((s) => ({ site: s, url: `http://${host}:${s.port + offset}`, ctrl: `http://${host}:${s.ctrlPort + offset}`, reset: `http://${host}:${RESET_PORT + offset}/reset/${s.id}` }));
 }
 
 type SiteUrl = ReturnType<typeof wavUrls>[number];
@@ -121,7 +159,34 @@ async function probe(url: string, ctrl: string, health: string): Promise<string 
 }
 
 /** `offset` moves the tunnel ports, for tests. */
-export const webarenaVerified = (options: { offset?: number } = {}): Benchmark => ({
+interface WavEnv {
+  ctx: BenchContext;
+  sites: SiteUrl[];
+  tasks: Map<string, WavTask>;
+  prompts: Map<string, string>;
+  /** Sites a case sent a request to that may change them; the next case on one resets it first (WJ6). */
+  dirty: Set<string>;
+  /** The marks live in the cache, per host, so the next run resets too. */
+  dirtyFile: string;
+}
+const saveDirty = (env: WavEnv) => writeFileSync(env.dirtyFile, JSON.stringify([...env.dirty]));
+/** Each episode's task and HAR recorders, for its judge. */
+const running = new WeakMap<Episode, { task: WavTask; hars: { site: string; har: HarRecorder }[] }>();
+const READS = ["GET", "HEAD", "OPTIONS"];
+
+/** Recreates a site's container through the env's reset service, then waits for its probe. */
+async function reset(u: SiteUrl, waitMs: number): Promise<void> {
+  const res = await http(u.reset, { method: "POST" });
+  if (res.status !== 200) throw new Error(`${u.site.id}: the reset service returned ${res.status}`);
+  const deadline = Date.now() + waitMs;
+  for (let why = await probe(u.url, u.ctrl, u.site.health); why; why = await probe(u.url, u.ctrl, u.site.health)) {
+    if (Date.now() > deadline) throw new Error(`${u.site.id}: the site was not up ${Math.round(waitMs / 1000)} s after its reset (${why})`);
+    await new Promise((r) => setTimeout(r, Math.min(3000, waitMs / 4)));
+  }
+}
+
+/** `offset` moves the tunnel ports and `resetWaitMs` shortens the wait for a reset, for tests. */
+export const webarenaVerified = (options: { offset?: number; resetWaitMs?: number } = {}): Benchmark => ({
   id: "webarena-verified",
   title: "WebArena-Verified",
   upstream: { repo: "https://github.com/ServiceNow/webarena-verified", ref: "v1.2.3", paper: "https://openreview.net/forum?id=94tlGxmqkN" },
@@ -145,10 +210,14 @@ export const webarenaVerified = (options: { offset?: number } = {}): Benchmark =
   },
   async up(ctx) {
     const { tasks } = await loadTasks(ctx);
-    return { sites: wavUrls(ctx.env, options.offset), tasks: new Map(tasks.map((t) => [String(t.id), t])), prompts: await loadPrompts(ctx, tasks) };
+    const dirtyFile = join(wavDir(ctx), `dirty-${ctx.env.FOXBENCH_WAV_HOST || "127.0.0.1"}-${options.offset ?? TUNNEL_OFFSET}.json`);
+    const dirty = new Set<string>(existsSync(dirtyFile) ? JSON.parse(readFileSync(dirtyFile, "utf8")) : []);
+    const env: WavEnv = { ctx, sites: wavUrls(ctx.env, options.offset), tasks: new Map(tasks.map((t) => [String(t.id), t])), prompts: await loadPrompts(ctx, tasks), dirty, dirtyFile };
+    return env as unknown as Env;
   },
   async start(env, item) {
-    const { sites, tasks, prompts } = env as { sites: SiteUrl[]; tasks: Map<string, WavTask>; prompts: Map<string, string> };
+    const wav = env as unknown as WavEnv;
+    const { sites, tasks, prompts, dirty } = wav;
     const task = tasks.get(item.id);
     if (!task) throw new Error(`webarena-verified has no task ${item.id}`);
     const missing = task.sites.filter((id) => !sites.some((u) => u.site.id === id));
@@ -158,24 +227,47 @@ export const webarenaVerified = (options: { offset?: number } = {}): Benchmark =
     const first = site(starts[0]!.site);
     // Every task's start URLs name all its sites. The run loop's proxy serves the first; each other site gets its own.
     const others = sites.filter((u) => u !== first && starts.some((s) => s.site === u.site.id));
+    for (const u of [first, ...others]) {
+      if (!dirty.has(u.site.id)) continue;
+      await reset(u, options.resetWaitMs ?? 10 * 60_000);
+      dirty.delete(u.site.id);
+      saveDirty(wav);
+    }
     const headers = await Promise.all([first, ...others].map(siteHeaders));
+    // A HAR recorder sits behind each site's proxy and logs the requests as upstream's evaluator reads them (WJ2).
+    const hars: { site: string; har: HarRecorder }[] = [];
     const proxies: RecordingProxy[] = [];
+    const stop = () => Promise.all([...proxies.map((p) => p.close()), ...hars.map((h) => h.har.close())]);
     try {
-      for (const [i, u] of others.entries()) proxies.push(await startProxy(u.url, { port: u.site.port, headers: headers[i + 1]! }));
+      for (const u of [first, ...others]) hars.push({ site: u.site.id, har: await startHar(u.url, `http://127.0.0.1:${u.site.port}`) });
+      for (const [i, u] of others.entries()) proxies.push(await startProxy(hars[i + 1]!.har.origin, { port: u.site.port, headers: headers[i + 1]! }));
     } catch (error) {
-      await Promise.all(proxies.map((p) => p.close()));
+      await stop();
       throw error;
     }
     const startUrls = starts.map((s) => `http://127.0.0.1:${site(s.site).site.port}${s.path}`);
     const episode: Episode = {
-      url: first.url + starts[0]!.path, startPath: starts[0]!.path, port: first.site.port, headers: headers[0]!,
+      url: hars[0]!.har.origin + starts[0]!.path, startPath: starts[0]!.path, port: first.site.port, headers: headers[0]!,
       goal: fillPrompt(prompts.get(promptName(task))!, task.intent, startUrls),
-      close: async () => { await Promise.all(proxies.map((p) => p.close())); },
+      close: async () => { await stop(); },
     };
+    running.set(episode, { task, hars });
     return episode;
   },
-  // Scoring with upstream's evaluators comes with #129.
-  judge: async () => { throw new Error("webarena-verified scoring is not built yet"); },
+  async judge(env, episode, output) {
+    const wav = env as unknown as WavEnv;
+    const { ctx, sites, dirty } = wav;
+    const run = running.get(episode);
+    if (!run) throw new Error("webarena-verified did not start this episode");
+    for (const { site, har } of run.hars) if (har.entries.some((e) => !READS.includes(e.request.method))) dirty.add(site);
+    saveDirty(wav);
+    const entries = run.hars.flatMap((h) => h.har.entries).toSorted((a, b) => a.startedDateTime.localeCompare(b.startedDateTime));
+    const urls = Object.fromEntries(sites.map((u) => [`__${u.site.id.toUpperCase()}__`, `http://127.0.0.1:${u.site.port}${u.site.base ?? ""}`]));
+    const score = await judgeCase(ctx, run.task.id, entries, output.answer, urls);
+    const success = score.status === "success";
+    return { success, score: score.score, attack: null, judgedBy: "programmatic",
+      reasons: success ? [] : (score.messages.length ? score.messages : [`upstream's evaluator says ${score.status}`]).slice(0, 5).map((m) => m.slice(0, 400)) };
+  },
   // The VM stops only through foxbench env down.
   down: async () => {},
   baselines: [],

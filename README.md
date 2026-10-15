@@ -378,6 +378,9 @@ with your own login. Give the project, zone and account with `--project`,
   the agent sees the site port itself, through the recording proxy. The VM
   pulls the images through Cloud NAT, which takes about 15 minutes, and GitLab
   then boots for a few more. `foxbench doctor` says when every site is ready.
+  A small reset service on VM port 8870 (tunnelled to 18870) recreates a
+  site's container from its image; foxbench calls it before a case on a site
+  that an earlier case posted to.
   To use local Docker instead, publish each container on the tunnel ports,
   for example `docker run -d -p 17770:80 -p 17771:8877 -e
   WA_ENV_CTRL_EXTERNAL_SITE_URL=http://127.0.0.1:7770
