@@ -726,6 +726,26 @@ Face endpoint (`HF_ENDPOINT`) with a synthetic dataset, and the real scorer.
 | Q6 | A task with an attached file cannot be solved, because the agent never sees the file. | The start page links the attachment, served from the cache through the recording proxy. | `Q6 ...` |
 | Q7 | The scorer runs from inside the fetched files. | The helper lives in foxbench's own cache directory and runs with `uv run --isolated` and `python -I`; the scorer is loaded by path. | `Q7 ...` |
 
+## Online-Mind2Web (`src/bench/online-mind2web.ts`)
+
+Online-Mind2Web is 300 tasks on 136 live sites. Its task list is gated on
+Hugging Face (auto-approved), so it runs through the user's own `HF_TOKEN`
+and stays in the cache. Its official judge is WebJudge with o4-mini; here a
+WebJudge-style rubric runs through the judge interface: first the task's key
+points, then the outcome from the key points, the agent's answer and action
+history, and the proxy trace. The tests in `tests/online-mind2web.test.ts`
+use a fake Hugging Face endpoint and fake judges.
+
+| # | Failure mode | Wanted behaviour | Test |
+|---|---|---|---|
+| M2W1 | The task list moves upstream (tasks are replaced every few months), so two runs score different tasks under one name. | The list is fetched at a pinned dataset revision into the cache; nothing is committed. | `M2W1 ...` |
+| M2W2 | No token or no access makes every case fail, or the run starts with no judge. | `check()` is not ready with the fix; with no judge the run loop gives a skip row (J2). | `M2W2 ...` |
+| M2W3 | The difficulty tags are lost or guessed differently from the paper. | Upstream's level when the row has one, else the paper's rule on the reference length: 5 or fewer easy, 6-10 medium, 11 or more hard. | `M2W3 ...` |
+| M2W4 | The judge passes an agent that did nothing, or cannot tell a right answer from a wrong one because it never sees the evidence. | Each judge gets the key-points step, then the outcome step with the key points, the agent's answer, its action history and the trace. With a fair fake judge, `noop` and a wrong agent pass 0 and a perfect agent passes all. | `M2W4 ...` |
+| M2W5 | The Claude-judged number is read as the official WebJudge number. | `judgedBy` names the model; the board's judge table and the fingerprint name each judge; the baselines say they were judged by people or by WebJudge. | `M2W5 ...` |
+| M2W6 | A judge reply without a verdict counts as a pass or crashes the run. | The case fails with a `judge:` reason (J5). | `M2W6 ...` |
+| M2W7 | The agent starts somewhere else than the task's site. | The start page links the task's website and the goal names it. | `M2W7 ...` |
+
 ## AMO release build and listed submission (`scripts/amo-listing.mjs`)
 
 `pnpm check:amo` reads `dist-ext/`, which is what `release.yml` signs. Each
