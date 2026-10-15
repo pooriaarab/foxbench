@@ -3,6 +3,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { SUITES } from "../tasks.js";
 import { agentdojoBenchmark } from "./agentdojo/index.js";
+import { browsecompBenchmark } from "./browsecomp.js";
 import { assistantbenchBenchmark } from "./assistantbench.js";
 import { travelBenchmark } from "./agentdojo/travel.js";
 import { workspaceBenchmark } from "./agentdojo/workspace.js";
@@ -39,6 +40,7 @@ export const benchmarks: Benchmark[] = [
   tau2Benchmark("airline"),
   gaiaBenchmark(),
   onlineMind2webBenchmark(),
+  browsecompBenchmark(),
 ];
 
 export const benchmarkById = (id: string): Benchmark | undefined => benchmarks.find((b) => b.id === id);
