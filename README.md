@@ -388,6 +388,21 @@ gcloud compute firewall-rules create foxbench-iap --network=default \
   --direction=INGRESS --action=allow --rules=tcp --source-ranges=35.235.240.0/20 --target-tags=foxbench
 ```
 
+An env whose startup script downloads (wav-core pulls Docker and the site
+images) also needs outbound internet. With no external IP, that is a Cloud
+NAT on the VM's subnet, once per region:
+
+```bash
+gcloud compute routers create foxbench-nat-router --network=default --region=<region>
+gcloud compute routers nats create foxbench-nat --router=foxbench-nat-router \
+  --region=<region> --auto-allocate-nat-external-ips --nat-custom-subnet-ip-ranges=default
+```
+
+The first `env up wav-core` takes about an hour, most of it the image
+downloads. The shopping and Reddit sites can take a few more minutes to
+serve their first page after env-ctrl says they are healthy; run
+`foxbench doctor` until it says ready.
+
 ### The extension
 
 `extension/` is a small extension for people who want to try the tasks by

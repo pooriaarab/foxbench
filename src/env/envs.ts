@@ -10,6 +10,8 @@ export interface CloudEnv {
   ports: { remote: number; local: number }[];
   /** Runs as root on boot. The VM has no external IP; it reaches the internet only through Cloud NAT. */
   startup: string;
+  /** How long `up` waits for the first port to answer: the startup script's time to serve. */
+  bootMinutes: number;
 }
 
 export const cloudEnvs: CloudEnv[] = [
@@ -19,6 +21,7 @@ export const cloudEnvs: CloudEnv[] = [
     machineType: "e2-micro",
     diskGb: 10,
     ports: [{ remote: 8080, local: 18080 }],
+    bootMinutes: 5,
     startup: `#!/bin/sh
 set -e
 mkdir -p /srv/foxbench
@@ -36,6 +39,8 @@ systemd-run --unit=foxbench-smoke python3 -m http.server 8080 --directory /srv/f
     machineType: "n2-standard-8",
     diskGb: 200,
     ports: wavSites.flatMap((s) => [s.port, s.ctrlPort]).map((remote) => ({ remote, local: remote + TUNNEL_OFFSET })),
+    // The first boot installs Docker and pulls the four site images (about 60 min on n2-standard-8; GitLab is last).
+    bootMinutes: 90,
     startup: wavStartup(),
   },
 ];

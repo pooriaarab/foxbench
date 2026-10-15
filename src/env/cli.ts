@@ -16,7 +16,6 @@ const USAGE = `Usage:
   foxbench env status [<env>] [gcp options]
 GCP options: --project (FOXBENCH_GCP_PROJECT), --zone (FOXBENCH_GCP_ZONE), --account (FOXBENCH_GCP_ACCOUNT).
 Envs: ${cloudEnvs.map((e) => e.name).join(", ")}.`;
-const TUNNEL_WAIT_MS = 5 * 60_000;
 
 interface State {
   env: string;
@@ -48,8 +47,8 @@ function portFree(port: number): Promise<boolean> {
 }
 
 /** Restarts the tunnel until gcloud says it listens: its test fails while the VM boots. */
-async function openTunnel(gcp: Gcp, vm: string, port: { remote: number; local: number }, log: string): Promise<number> {
-  const deadline = Date.now() + TUNNEL_WAIT_MS;
+async function openTunnel(gcp: Gcp, vm: string, port: { remote: number; local: number }, log: string, minutes: number): Promise<number> {
+  const deadline = Date.now() + minutes * 60_000;
   while (Date.now() < deadline) {
     const pid = startTunnel(gcp, vm, port, log);
     while (alive(pid) && Date.now() < deadline) {
@@ -61,7 +60,7 @@ async function openTunnel(gcp: Gcp, vm: string, port: { remote: number; local: n
     if (alive(pid)) process.kill(-pid);
     else await sleep(5000);
   }
-  throw new Error(`The tunnel to ${vm}:${port.remote} did not open in ${TUNNEL_WAIT_MS / 60_000} minutes. See ${log}. Run foxbench env down to delete the VM.`);
+  throw new Error(`The tunnel to ${vm}:${port.remote} did not open in ${minutes} minutes. See ${log}. Run foxbench env down to delete the VM.`);
 }
 
 async function up(gcp: Gcp, name: string, spot: boolean, maxRun: string): Promise<void> {
@@ -78,7 +77,7 @@ async function up(gcp: Gcp, name: string, spot: boolean, maxRun: string): Promis
   writeFileSync(stateFile(name), JSON.stringify(state, null, 2));
   for (const port of env.ports) {
     const log = join(stateDir(), `${name}.${port.local}.log`);
-    state.tunnels.push({ ...port, pid: await openTunnel(gcp, vm, port, log), log });
+    state.tunnels.push({ ...port, pid: await openTunnel(gcp, vm, port, log, env.bootMinutes), log });
     writeFileSync(stateFile(name), JSON.stringify(state, null, 2));
   }
   console.log(`${name} is up on ${vm} (${spot ? "Spot" : "standard"}, deleted after ${maxRun}).`);
