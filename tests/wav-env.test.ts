@@ -3,6 +3,7 @@
 // and fake sites on the tunnel ports, moved by an offset so a local Docker
 // run of the real containers does not clash.
 import { createServer, type Server } from "node:http";
+import { networkInterfaces } from "node:os";
 import { afterEach, describe, expect, it } from "vitest";
 import { benchContext, benchmarkById } from "../src/bench/registry.js";
 import { webarenaVerified, wavSites } from "../src/bench/wav/index.js";
@@ -106,9 +107,12 @@ describe("WV6 a probe that hangs", () => {
 
 describe("WV7 FOXBENCH_WAV_HOST", () => {
   it("probes the containers on that host", async () => {
-    await fake("127.0.0.2");
+    // A host other than 127.0.0.1 that every OS can bind: macOS does not route 127.0.0.2.
+    const host = Object.values(networkInterfaces()).flat().find((i) => i && i.family === "IPv4" && !i.internal)?.address;
+    if (!host) throw new Error("this machine has no non-loopback IPv4 address for WV7");
+    await fake(host);
     expect((await webarenaVerified({ offset: OFFSET }).check(ctx())).ready).toBe(false);
-    expect(await webarenaVerified({ offset: OFFSET }).check(ctx({ FOXBENCH_WAV_HOST: "127.0.0.2" }))).toEqual({ ready: true });
+    expect(await webarenaVerified({ offset: OFFSET }).check(ctx({ FOXBENCH_WAV_HOST: host }))).toEqual({ ready: true });
   });
 });
 
