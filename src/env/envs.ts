@@ -65,12 +65,13 @@ systemd-run --unit=foxbench-smoke python3 -m http.server 8080 --directory /srv/f
   {
     // WebMall: 4 WooCommerce shops, Elasticsearch and the start page. The first boot fetches 3.6 GB of
     // backups from the authors' server, one download at a time (it answers 429 to a second), then restores them.
+    // Measured from GCP: about 260 KB/s, so about 4 hours.
     name: "webmall",
     machineType: "e2-standard-4",
     diskGb: 40,
     ports: webmallSites.map((s) => ({ remote: s.port + WEBMALL_OFFSET, local: s.port + WEBMALL_OFFSET })),
     startup: webmallStartup(),
-    bootMinutes: 180,
+    bootMinutes: 300,
     local: (cacheDir) => webmallScript({ bind: "127.0.0.1", dir: join(cacheDir, `webmall-${WEBMALL_REF.slice(0, 12)}`) }),
   },
   {

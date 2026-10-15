@@ -185,3 +185,17 @@ describe("V11 a taken local port", () => {
     }
   });
 });
+
+describe("V14 no two envs share a local port", () => {
+  it("gives each local port to one env", async () => {
+    const { cloudEnvs } = await import("../src/env/envs.js");
+    const owner = new Map<number, string>();
+    const clashes: string[] = [];
+    for (const cloud of cloudEnvs) for (const { local } of cloud.ports) {
+      const other = owner.get(local);
+      if (other && other !== cloud.name) clashes.push(`${local}: ${other} and ${cloud.name}`);
+      owner.set(local, cloud.name);
+    }
+    expect(clashes).toEqual([]);
+  });
+});

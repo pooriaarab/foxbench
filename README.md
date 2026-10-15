@@ -405,9 +405,9 @@ with your own login. Give the project, zone and account with `--project`,
   that case fails at once with `harness: port <n> is in use ...`; it never waits.
 - `suitecrm`: SuiteCRM 8.8.1 and MariaDB 11.4.7 (`bitnamilegacy` images) on an
   e2-standard-4 with 30 GB, for ST-WebAgentBench's SuiteCRM tasks. SuiteCRM on
-  VM port 8080 is tunnelled to 18081; the agent sees `http://127.0.0.1:8080`
+  VM port 8080 is tunnelled to 18181; the agent sees `http://127.0.0.1:8080`
   through the recording proxy. The boot loads upstream's demo data (fetched at
-  a pinned commit) once. A reset service on VM port 8871 (tunnelled to 18871)
+  a pinned commit) once. A reset service on VM port 8871 (tunnelled to 18971)
   restores the seeded database on `POST /reset`. Log in as `user` / `bitnami`.
 - `webmall`: the WebMall shops, below.
 
@@ -457,8 +457,15 @@ foxbench env down webmall [--provider docker]
 
 Local mode needs Docker with the compose plugin, `curl`, `tar` and 8 GB of RAM.
 The first `up` waits for the download; a later one only starts the containers.
-`down` keeps the volumes (`foxbench_webmall_*`). On a VM `up` waits up to 3
-hours for the tunnel. The shops' URLs are `http://127.0.0.1:808x`.
+`down` keeps the volumes (`foxbench_webmall_*`). The shops' URLs are
+`http://127.0.0.1:808x`.
+
+On a GCP VM the first boot is slow: the authors' server sent the backups at
+about 260 KB/s to a GCP VM (measured on 2026-10-15), one file at a time, so
+the 3.6 GB take about 4 hours. `up` waits up to 5 hours for the tunnel. Pass
+`--max-run-duration 8h` on the first GCP run, or the VM deletes itself before
+the restore finishes. Local mode with the backups in the cache starts in under
+2 minutes.
 
 ### The extension
 
