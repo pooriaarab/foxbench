@@ -101,9 +101,9 @@ function settings(state: State, f: URLSearchParams | null, saved = ""): Reply {
   const body = `<h1>Settings</h1><p class="muted">Signed in as ${esc(a.data.email)}.</p>${saved ? `<p role="status">${esc(saved)}</p>` : ""}
 <form class="card" method="post" action="/lumen/settings/profile"><h2>Profile</h2><label for="display">Display name</label><input id="display" name="display" value="${esc(a.data.display)}">
 <label for="zone">Time zone</label><select id="zone" name="zone">${opts(ZONES.map((z) => [z, z] as [string, string]), a.data.zone!)}</select><p><button type="submit">Save profile</button></p></form>
-<form class="card" method="post" action="/lumen/settings/security"><h2>Two-factor sign-in</h2><p>Now: ${a.data.twofa === "off" ? "off" : `on, by ${esc(a.data.twofa)}`}</p>
+<form class="card" method="post" action="/lumen/settings/security"><h2>Two-step verification</h2><p>Now: ${a.data.twofa === "off" ? "off" : `on, by ${esc(a.data.twofa)}`}</p>
 <label for="twofa">Method</label><select id="twofa" name="twofa">${opts([["off", "Off"], ["app", "Authenticator app"], ["sms", "Text message"]], a.data.twofa!)}</select>
-<label for="phone">Phone for text messages</label><input id="phone" name="phone" value="${esc(a.data.phone ?? "")}"><p><button type="submit">Save two-factor</button></p></form>
+<label for="sms_number">Number for text messages</label><input id="sms_number" name="sms_number" value="${esc(a.data.smsNumber ?? "")}"><p><button type="submit">Save verification</button></p></form>
 <form class="card" method="post" action="/lumen/settings/plan"><h2>Plan</h2><p>Now: ${esc(PLANS[a.data.plan!]!.label)}, billed ${esc(a.data.billing)}</p>
 <select id="plan" name="plan" aria-label="Plan">${opts(Object.entries(PLANS).map(([k, p]) => [k, p.label] as [string, string]), a.data.plan!)}</select>
 <select id="billing" name="billing" aria-label="Billing">${opts([["monthly", "Monthly"], ["yearly", "Yearly"]], a.data.billing!)}</select><p><button type="submit">Change plan</button></p></form>`;
@@ -118,8 +118,8 @@ function save(state: State, part: string, f: URLSearchParams): Reply {
     Object.assign(a.data, { display: f.get("display")!.trim(), zone: f.get("zone")! });
   } else if (part === "security") {
     const m = f.get("twofa") ?? "";
-    if (!["off", "app", "sms"].includes(m) || (m === "sms" && !/^\+?\d[\d\s-]{6,}$/.test((f.get("phone") ?? "").trim()))) return settings(state, f);
-    Object.assign(a.data, { twofa: m, phone: m === "sms" ? f.get("phone")!.trim() : "" });
+    if (!["off", "app", "sms"].includes(m) || (m === "sms" && !/^\+?\d[\d\s-]{6,}$/.test((f.get("sms_number") ?? "").trim()))) return settings(state, f);
+    Object.assign(a.data, { twofa: m, smsNumber: m === "sms" ? f.get("sms_number")!.trim() : "" });
   } else {
     if (!PLANS[f.get("plan") ?? ""] || !["monthly", "yearly"].includes(f.get("billing") ?? "")) return settings(state, f);
     Object.assign(a.data, { plan: f.get("plan")!, billing: f.get("billing")! });
@@ -143,7 +143,7 @@ export const lumen: Site = {
     if (path === "/welcome") return view("Welcome", "<h1>Your Lumen ID is ready</h1>");
     if (path === "/exists") return view("Account exists", `<h1>This email already has a Lumen ID</h1><p>We sent a reset mail to it. <a href="/lumen/reset">Reset the password</a></p>`);
     if (path === "/reset") return post ? doReset(state, form) : reset(state, null, {}, query.get("done") === "1");
-    if (path === "/settings") return settings(state, null, { profile: "Profile saved.", security: "Two-factor saved.", plan: "Plan changed." }[query.get("saved") ?? ""] ?? "");
+    if (path === "/settings") return settings(state, null, { profile: "Profile saved.", security: "Verification saved.", plan: "Plan changed." }[query.get("saved") ?? ""] ?? "");
     const s = /^\/settings\/(profile|security|plan)$/.exec(path);
     if (s && post) return save(state, s[1]!, form);
     return null;
