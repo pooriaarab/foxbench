@@ -889,6 +889,28 @@ forms. The tests are in `tests/gaia2-pages.test.ts`.
 | GP5 | Text from the scenario breaks a page or injects markup. | Every value is HTML-escaped. | `GP5 ...` |
 | GP6 | A wrong form looks as if it worked. | ARE's error shows with status 400; ARE's tool raised before any change. | `GP6 ...` |
 
+## WebVoyager (`src/bench/webvoyager.ts`)
+
+WebVoyager is 643 live-web tasks on 15 sites. Its dates are from 2023-24, so
+Booking and Google Flights reject many of them today. `full` is the 643
+original tasks with a date fix-up for those two sites. `published` is the
+Emergence WebVoyager protocol (arXiv 2603.29020): its 535 templated tasks,
+instantiated by its own date rules, each with its annotation checklist. Both
+repos are fetched at pinned commits into the cache. The Claude judge scores
+each case through the judge interface. The tests in `tests/webvoyager.test.ts`
+use a fake GitHub endpoint (`FOXBENCH_RAW_URL`), a fixed run date and fake judges.
+
+| # | Failure mode | Wanted behaviour | Test |
+|---|---|---|---|
+| WVY1 | The task files move upstream, so two runs score different tasks under one name. | Both repos are fetched at pinned commits into the cache; nothing is committed. | `WVY1 ...` |
+| WVY2 | The case list is wrong: ids that change, or a lost site. | `full` has upstream's ids (`Booking--3`) tagged by site and `original`; `published` has `ev-<id>` from the template's id, tagged by site and `emergence`. | `WVY2 ...` |
+| WVY3 | Past dates make Booking and Google Flights tasks impossible, or the fix-up changes a task that was fine. | On those two sites an explicit year moves to the first future occurrence of the first date, the other years move with it, "today (...)" becomes the run date, and 29 February of a common year becomes 1 March. Other sites and year-less dates are unchanged. | `WVY3 ...` |
+| WVY4 | An Emergence date rule is run as code, or a rule this code does not know leaves a stale date. | The nine published rule shapes are parsed, not evaluated. An unknown rule stops the load with its text. | `WVY4 ...` |
+| WVY5 | The judge passes an agent that did nothing, or never sees the checklist or the golden answer. | The prompt holds the task, the checklist (Emergence) or the golden answer (when upstream marks one), the answer, the action history and the trace. With a fair fake judge, `noop` and a wrong agent pass 0 and a perfect agent passes all. | `WVY5 ...` |
+| WVY6 | The task is done on another site. | The goal names the site, the start page links it, the judge prompt says a task done elsewhere fails and lists the hosts the agent reached. | `WVY6 ...` |
+| WVY7 | A judge reply with no verdict counts as a pass; the Claude-judged number is read as the published one. | The case fails with a `judge:` reason (J5); `judgedBy` names the model; vendor and Emergence baselines say so. | `WVY7 ...` |
+| WVY8 | Live sites change and block bots, so a pass today is a fail next month. | A known limit of live-web benchmarks (plan 6.1): compare only with runs from the same week. | - |
+
 ## AMO release build and listed submission (`scripts/amo-listing.mjs`)
 
 `pnpm check:amo` reads `dist-ext/`, which is what `release.yml` signs. Each
