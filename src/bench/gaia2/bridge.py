@@ -110,7 +110,7 @@ OPS = {
     "call": lambda r: call(r["app"], r["tool"], r["args"]),
     "notifications": lambda r: {"notifications": [{"type": m.message_type.value, "message": m.message, "at": m.timestamp.timestamp() - run["env"].start_time}
                                                   for m in run["env"].notification_system.message_queue.list_view()]},
-    "oracle": lambda r: {"events": [{"app": e.action.app.name, "tool": e.action.function.__name__, "at": e.event_time - run["scenario"].start_time,
+    "oracle": lambda r: {"events": [{"app": e.action.app.name, "tool": e.action.function.__name__, "at": e.event_time - run["scenario"].start_time, "result": plain(e.metadata.return_value),
                                      "args": plain({k: v for k, v in e.get_args().items() if k != "self"})}
                                     for e in run["scenario"].oracle_run_event_log if e.event_type == EventType.AGENT]},
     "judge": lambda r: judge(),

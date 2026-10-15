@@ -38,6 +38,12 @@ function pageStep(s: OracleCall): [string, Record<string, string>] {
     case "Contacts.add_new_contact": return ["/contacts/new", str(a)];
     case "Contacts.edit_contact": return [`/contacts/${a.contact_id}/edit`, str({ ...a.updates, ...Object.fromEntries(Object.keys(a.updates).map((k) => [`was_${k}`, "was"])) })];
     case "Contacts.delete_contact": return [`/contacts/${a.contact_id}/delete`, {}];
+    case "Chats.send_message": case "Messages.send_message": return [`/${s.app.toLowerCase()}/send`, str(a)];
+    case "Chats.send_message_to_group_conversation": case "Messages.send_message_to_group_conversation": return [`/${s.app.toLowerCase()}/${a.conversation_id}/send`, str(a)];
+    case "Chats.create_group_conversation": case "Messages.create_group_conversation": return [`/${s.app.toLowerCase()}/new`, str({ ...a, user_ids: csv(a.user_ids) })];
+    case "Shopping.add_to_cart": return ["/shop/cart/add", str(a)];
+    case "Shopping.checkout": return ["/shop/cart/checkout", str(a)];
+    case "Files.mkdir": case "Files.mv": case "Files.rm": return [`/files/${s.tool}`, str(a)];
     default: return [`/apps/${s.app}/${s.tool}`, { go: "1", ...Object.fromEntries(Object.entries(a).filter(([, v]) => v !== null).map(([k, v]) => [k, typeof v === "string" ? v : JSON.stringify(v)])) }];
   }
 }
@@ -49,10 +55,14 @@ export function pageAgent(oracle: Oracle, mode: "perfect" | "wrong", ids: string
     const t0 = Date.now();
     let calls = oracle.steps.get(queue.shift()!)!;
     if (mode === "wrong") calls = calls.slice(0, -1);
+    // An id ARE's oracle run made (a sent email, a new group) is another id in this run: the page shows it, and later actions use it.
+    const made = new Map<string, string>();
     for (const s of calls) {
       await new Promise((r) => setTimeout(r, Math.max(0, s.at * 1000 - (Date.now() - t0))));
-      const [path, fields] = pageStep(s);
-      await fetch(new URL(path, url), { method: "POST", body: new URLSearchParams(fields) });
+      const args = JSON.parse([...made].reduce((t, [from, to]) => t.replaceAll(from, to), JSON.stringify(s.args)));
+      const [path, fields] = pageStep({ ...s, args });
+      const shown = /<pre>([^<]*)<\/pre>/.exec(await (await fetch(new URL(path, url), { method: "POST", body: new URLSearchParams(fields) })).text())?.[1];
+      if (typeof s.result === "string" && shown) made.set(s.result, shown);
     }
     return { done: true, log: mode };
   } };

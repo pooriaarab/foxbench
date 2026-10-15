@@ -53,7 +53,7 @@ export const fetchData = (ctx: BenchContext, config: string): Promise<string> =>
 });
 
 export interface Gaia2Tool { app: string; name: string; description: string | null; write: boolean; args: { name: string; type: string; description: string | null; required: boolean }[] }
-export interface OracleCall { app: string; tool: string; args: Record<string, unknown>; at: number }
+export interface OracleCall { app: string; tool: string; args: Record<string, unknown>; at: number; /** What ARE's tool returned in its own oracle run: an id there is another id here. */ result: unknown }
 export type Gaia2Bridge = Awaited<ReturnType<typeof startBridge>>;
 
 /** Starts bridge.py under uv, from a directory foxbench owns, never inside the fetched tree. */

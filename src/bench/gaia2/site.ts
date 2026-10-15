@@ -4,13 +4,16 @@
 import { serveCase } from "../serve.js";
 import type { Gaia2Bridge, Gaia2Tool } from "./bridge.js";
 import { calendar } from "./calendar.js";
+import { chats, messages } from "./chats.js";
 import { contacts } from "./contacts.js";
+import { files } from "./files.js";
 import { mail } from "./mail.js";
 import { esc, ToolError, type Api, type Handler } from "./pages.js";
+import { shopping } from "./shopping.js";
 
 /** The apps that have pages of their own; every other app, and every tool, stays on the generic forms. */
-const HANDLERS: Handler[] = [mail, calendar, contacts];
-const page = (title: string, body: string) => `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>${esc(title)}</title></head><body><header><a href="/">Phone</a> · <a href="/mail">Mail</a> · <a href="/calendar">Calendar</a> · <a href="/contacts">Contacts</a> · <a href="/notifications">Notifications</a> · <a href="/apps">All tools</a></header><main><h1>${esc(title)}</h1>${body}</main></body></html>`;
+const HANDLERS: Handler[] = [mail, calendar, contacts, chats, messages, shopping, files];
+const page = (title: string, body: string) => `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>${esc(title)}</title></head><body><header><a href="/">Phone</a> · <a href="/mail">Mail</a> · <a href="/calendar">Calendar</a> · <a href="/contacts">Contacts</a> · <a href="/chats">Chats</a> · <a href="/messages">Messages</a> · <a href="/shop">Shop</a> · <a href="/files">Files</a> · <a href="/notifications">Notifications</a> · <a href="/apps">All tools</a></header><main><h1>${esc(title)}</h1>${body}</main></body></html>`;
 const html = (status: number, title: string, inner: string) => ({ status, body: page(title, inner) });
 /** wait_for_notification moves ARE's clock, so it is a POST although ARE calls it a read. */
 const isWrite = (t: Gaia2Tool) => t.write || t.name === "wait_for_notification";
