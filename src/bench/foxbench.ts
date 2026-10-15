@@ -4,6 +4,7 @@
 import { randomBytes } from "node:crypto";
 import { startServer, type FoxbenchServer } from "../server.js";
 import { sites } from "../sites/index.js";
+import { trainTasks } from "../gym/tasks.js";
 import { judge, tasks, tasksIn, type Task } from "../tasks.js";
 import { pickSubset } from "./subsets.js";
 import type { Benchmark, Case, Episode } from "./types.js";
@@ -23,12 +24,13 @@ export const foxbenchBenchmark = (options: { tasks?: Task[]; fixedPorts?: number
   scoring: "programmatic",
   check: async () => ({ ready: true }),
   async load(_ctx, subset) {
-    // Train tasks never enter full; only a tag loads them.
+    // Train tasks never enter full or a scored tag, though a train task's tier can be "hard"; only tag:train loads them (TS1).
+    if (subset === "tag:train") return trainTasks.map(toCase);
     return pickSubset("foxbench", (options.tasks ?? (subset.startsWith("tag:") ? tasks : tasksIn("all"))).map(toCase), subset);
   },
   up: async () => ({}),
   async start(_env, item) {
-    const pool = options.tasks ?? tasks;
+    const pool = options.tasks ?? [...tasks, ...trainTasks];
     const task = pool.find((t) => t.id === item.id);
     if (!task) throw new Error(`foxbench has no task ${item.id}`);
     const port = options.fixedPorts === undefined ? undefined : options.fixedPorts + Math.max(0, sites.findIndex((s) => s.id === task.site));

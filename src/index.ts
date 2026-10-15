@@ -4,6 +4,7 @@ export type { Ctx, Reply, Site, Startable, ServerOptions, FoxbenchServer } from 
 export { sites } from "./sites/index.js";
 export * from "./state.js";
 export { tasks, taskById, tasksIn, judge, startState, SUITES, TIERS } from "./tasks.js";
+export { trainTasks, GYM_SITES, TRAIN_POSTS } from "./gym/tasks.js";
 export type { Task, Judgement, Suite, Tier } from "./tasks.js";
 export { noopAdapter, parseMetrics } from "./adapter.js";
 export type { Adapter, AgentMetrics, TaskInput, TaskOutput } from "./adapter.js";
