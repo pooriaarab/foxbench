@@ -1,5 +1,6 @@
 // The cloud environments `foxbench env up` can make. Each one is a VM made
 // from a startup script, plus the VM ports the tunnel brings to 127.0.0.1.
+import { SUITECRM_TUNNEL, suitecrmStartup } from "../bench/suitecrm/index.js";
 import { RESET_PORT, TUNNEL_OFFSET, wavSites, wavStartup } from "../bench/wav/index.js";
 
 export interface CloudEnv {
@@ -42,5 +43,16 @@ systemd-run --unit=foxbench-smoke python3 -m http.server 8080 --directory /srv/f
     // The first boot installs Docker and pulls the four site images (about 60 min on n2-standard-8; GitLab is last).
     bootMinutes: 90,
     startup: wavStartup(),
+  },
+  {
+    // ST-WebAgentBench's SuiteCRM tasks. SuiteCRM 8, PHP and MariaDB need about 2 GB of RAM at rest; the
+    // two images take about 1 GB, so 30 GB is room for the dump and the logs.
+    name: "suitecrm",
+    machineType: "e2-standard-4",
+    diskGb: 30,
+    ports: SUITECRM_TUNNEL,
+    // SuiteCRM installs itself on first boot (about 1 min), then the seed loads.
+    bootMinutes: 10,
+    startup: suitecrmStartup(),
   },
 ];
