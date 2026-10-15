@@ -45,6 +45,14 @@ done`);
   program("sha1sum", `echo "sha1sum $(cat)" >> ${log}; ${sha === "match" ? "exit 0" : 'echo "sha1sum: FAILED" >&2; exit 1'}`);
   program("systemctl", `echo "systemctl $*" >> ${log}; [ "$1" = is-active ] && exit 1; exit 0`);
   program("systemd-run", `echo "systemd-run $*" >> ${log}`);
+  // GNU timeout, which the VM has and macOS does not: 124 when the time runs out.
+  program("timeout", `[ "$1" = -k ] && shift 2
+d=\${1%s}; shift
+"$@" & p=$!
+( sleep "$d"; kill -TERM $p ) >/dev/null 2>&1 & w=$!
+wait $p; s=$?
+kill -0 $w 2>/dev/null && { kill $w; exit $s; }
+exit 124`);
   return { dir, bin, log, lines: () => (existsSync(log) ? readFileSync(log, "utf8").trim().split("\n") : []) };
 }
 
