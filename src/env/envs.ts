@@ -2,6 +2,7 @@
 // from a startup script, plus the VM ports the tunnel brings to 127.0.0.1.
 import { join } from "node:path";
 import { SUITECRM_TUNNEL, suitecrmStartup } from "../bench/suitecrm/index.js";
+import { RESET_PORT as MYPC_RESET_PORT, TUNNEL_OFFSET as MYPC_OFFSET, mypcApps, mypcbenchStartup } from "../bench/mypcbench/env.js";
 import { RESET_PORT, TUNNEL_OFFSET, wavSites, wavStartup } from "../bench/wav/index.js";
 import { TUNNEL_OFFSET as WEBMALL_OFFSET, webmallScript, webmallSites, webmallStartup, WEBMALL_REF } from "../bench/webmall/env.js";
 
@@ -13,6 +14,8 @@ export interface CloudEnv {
   ports: { remote: number; local: number }[];
   /** Runs as root on boot. The VM has no external IP; it reaches the internet only through Cloud NAT. */
   startup: string;
+  /** Makes the VM with nested virtualization, for an env that runs QEMU with KVM. */
+  nestedVirt?: boolean;
   /** How long `up` waits for the first port to answer: the startup script's time to serve. */
   bootMinutes: number;
   /** The same environment on local Docker: a script that takes the cache dir. Absent when the env has no local mode. */
@@ -69,5 +72,17 @@ systemd-run --unit=foxbench-smoke python3 -m http.server 8080 --directory /srv/f
     startup: webmallStartup(),
     bootMinutes: 180,
     local: (cacheDir) => webmallScript({ bind: "127.0.0.1", dir: join(cacheDir, `webmall-${WEBMALL_REF.slice(0, 12)}`) }),
+  },
+  {
+    // MyPCBench: the QEMU/KVM desktop image (5 GB compressed, 12 GB unpacked) with 17 apps. Upstream
+    // gives each VM about 8 GB of RAM and 4 vCPUs; n2 is Intel, which GCP nested virtualization needs.
+    name: "mypcbench",
+    machineType: "n2-standard-8",
+    diskGb: 60,
+    nestedVirt: true,
+    ports: [...mypcApps.map((a) => a.port), MYPC_RESET_PORT].map((remote) => ({ remote, local: remote + MYPC_OFFSET })),
+    // Docker install, the image pull and upstream's first boot (up to 10 minutes to a healthy control API).
+    bootMinutes: 30,
+    startup: mypcbenchStartup(),
   },
 ];
