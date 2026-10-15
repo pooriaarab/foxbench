@@ -13,7 +13,7 @@ import { pickSubset } from "../subsets.js";
 import type { Benchmark, BenchContext, Env, Episode, Readiness } from "../types.js";
 import { startHar, type HarRecorder } from "./har.js";
 import { judgeCase } from "./judge.js";
-import { fillPrompt, loadPrompts, loadTasks, parseStartUrl, promptName, toCase, uvMissing, WAV_VERSION, wavDir, type WavTask } from "./tasks.js";
+import { fillPrompt, loadPrompts, loadTasks, parseStartUrl, promptName, toCase, uvMissing, wavDir, type WavTask } from "./tasks.js";
 
 export const WAV_TAG = "0.1.0";
 export const TUNNEL_OFFSET = 10000;
@@ -154,7 +154,7 @@ size_of() { stat -c %s "$1" 2>/dev/null || echo 0; }
 try_zim() {
   for try in 1 2 3; do
     [ "$(size_of $ZIM.part)" -le $ZIM_SIZE ] || rm -f $ZIM.part
-    [ "$(size_of $ZIM.part)" = $ZIM_SIZE ] || curl -fL -C - --connect-timeout 30 -o $ZIM.part "$1" || true
+    [ "$(size_of $ZIM.part)" = $ZIM_SIZE ] || curl -fsSL -C - --connect-timeout 30 -o $ZIM.part "$1" || true
     [ "$(size_of $ZIM.part)" = $ZIM_SIZE ] && break
     echo "foxbench: ZIM from $1: $(size_of $ZIM.part) of $ZIM_SIZE bytes (try $try of 3)" >&2
   done
@@ -184,8 +184,6 @@ function wavData(): string {
 DATA=/opt/foxbench/wav-data
 mkdir -p $DATA
 fail() { echo "foxbench: BOOT FAILED: $*" >&2; exit 1; }
-python3 -c "import ensurepip" >/dev/null 2>&1 || { apt-get update -q && DEBIAN_FRONTEND=noninteractive apt-get install -y -q python3-venv; }
-[ -x /opt/foxbench/wav-venv/bin/webarena-verified ] || { python3 -m venv /opt/foxbench/wav-venv && /opt/foxbench/wav-venv/bin/pip install -q webarena-verified==${WAV_VERSION}; }
 ${fetchZim()}
 # stream_map URL VOLUME PATH...: each volume is emptied, then filled from its path in the archive on stdin (tar strips the path, as upstream's strip_components does).
 stream_map() {
