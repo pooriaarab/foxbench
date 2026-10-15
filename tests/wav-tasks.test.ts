@@ -80,12 +80,17 @@ describe("WT3 site tags", () => {
 });
 
 describe("WT4 the start URL and the base URL", () => {
-  it("opens the tunnel URL with the start path, on the site port, with the site's Host", async () => {
+  it("opens the start path on the site's tunnel, on the site port, with the site's Host", async () => {
+    // The URL is the case's HAR recorder (WJ2), which forwards to the tunnel.
+    const seen = await fakeSite(7780);
     const admin = await bench.start(env, byId("0"));
     // shopping_admin's site URL is upstream's http://<host>:7780/admin.
-    expect(admin).toMatchObject({ url: `http://127.0.0.1:${7780 + OFFSET}/admin/`, startPath: "/admin/", port: 7780, headers: { host: "127.0.0.1:7780" } });
+    expect(admin).toMatchObject({ startPath: "/admin/", port: 7780, headers: { host: "127.0.0.1:7780" } });
+    expect(new URL(admin.url).pathname).toBe("/admin/");
+    expect((await fetch(admin.url, { headers: { "x-probe": "1" } })).status).toBe(200);
+    expect(seen).toContainEqual(expect.objectContaining({ "x-probe": "1" }));
     const shop = await bench.start(env, byId("21"));
-    expect(shop.url).toMatch(new RegExp(`^http://127\\.0\\.0\\.1:${7770 + OFFSET}/6s-wireless-headphones-.*\\.html$`));
+    expect(new URL(shop.url).pathname).toMatch(/^\/6s-wireless-headphones-.*\.html$/);
     expect(shop.startPath).toBe(new URL(shop.url).pathname);
     expect(shop.port).toBe(7770);
     expect(shop.url).not.toContain("__");

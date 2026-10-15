@@ -57,11 +57,13 @@ describe("WV2 the base URL is the proxy's", () => {
 });
 
 describe("WV3 one site table", () => {
-  it("tunnels each site and env-ctrl port, and maps it in the startup script", () => {
+  it("tunnels each site and env-ctrl port and the reset service, and maps them in the startup script", () => {
     expect(wavSites.map((s) => s.id)).toEqual(["shopping", "shopping_admin", "reddit", "gitlab"]);
-    const want = wavSites.flatMap((s) => [{ remote: s.port, local: s.port + 10000 }, { remote: s.ctrlPort, local: s.ctrlPort + 10000 }]);
+    // The reset service (WJ6) is the last port.
+    const want = [...wavSites.flatMap((s) => [{ remote: s.port, local: s.port + 10000 }, { remote: s.ctrlPort, local: s.ctrlPort + 10000 }]), { remote: 8870, local: 18870 }];
     expect(env.ports).toEqual(want);
     for (const s of wavSites) expect(env.startup).toContain(`-p ${s.port}:${s.containerPort} -p ${s.ctrlPort}:8877`);
+    expect(env.startup).toContain("ThreadingHTTPServer((\"0.0.0.0\", 8870)");
   });
   it("is in the registry as webarena-verified, on a VM, under Apache-2.0", () => {
     const b = benchmarkById("webarena-verified")!;
