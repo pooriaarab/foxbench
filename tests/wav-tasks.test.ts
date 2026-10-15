@@ -8,9 +8,11 @@ import { join } from "node:path";
 import { afterEach, beforeAll, describe, expect, it } from "vitest";
 import { benchContext } from "../src/bench/registry.js";
 import type { Case, Env } from "../src/bench/types.js";
-import { webarenaVerified } from "../src/bench/wav/index.js";
+import { webarenaVerified, wavSites } from "../src/bench/wav/index.js";
+import { freeBase } from "./free-base.js";
 
-const OFFSET = 40000;
+// Below the ephemeral range, in a band of this file's own.
+const OFFSET = await freeBase(13500, 1000, [...wavSites.flatMap((s) => [s.port, s.ctrlPort]), 8870]);
 const bench = webarenaVerified({ offset: OFFSET });
 const ctx = benchContext();
 let all: Case[] = [];
