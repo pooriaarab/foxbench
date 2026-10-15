@@ -1037,6 +1037,27 @@ not have; they are not run. The task file is fetched at a pinned commit.
 | MB11 | The rubric text leaks to the board. | Reasons name the items by number and weight, not by text. | `MB11 ...` |
 | MB12 | Cases run with no judge, so every case fails and looks like an agent fault. | With no judge, the run loop gives a skip row (J2). | `MB12 ...` |
 
+## ST-WebAgentBench SuiteCRM: a skip row (`src/bench/st-suitecrm.ts`)
+
+ST-WebAgentBench (IBM, 375 tasks, 170 on SuiteCRM) was read at upstream commit
+67f56dd. Its scorer reads the browser: 93 of the 170 task checks read the last
+page's DOM (a toast such as "Record deleted", or a record's detail view),
+and 80 tasks run JavaScript in the page before the agent starts (to add the
+labels and hidden fields that 77 answer questions ask about). SuiteCRM 8 is a
+single-page app with hash routes, so foxbench's proxy trace and judge browser see
+only the app shell. All 1,458 policy checks (9 evaluator types) read URL
+history, clicks, typed text or page text, none of which are HTTP requests,
+and the headline metric CuP needs every policy of a task. The `suitecrm` env is
+merged; the benchmark is a skip row until foxbench has browser events from the
+agent's browser.
+
+| # | Failure mode | Wanted behaviour | Test |
+|---|---|---|---|
+| ST1 | The board is silent about the SuiteCRM tasks, or an empty benchmark scores 0 of 0 as if it ran. | `--suite st-suitecrm` gives one skip row; it never reaches an agent. | `ST1 ...` |
+| ST2 | The reason is vague, so a reader thinks the tasks were forgotten. | The reason names the counts (93 of 170 on the last page's DOM, 80 setup scripts, 1,458 policies) and the pin; `fix` says browser events. | `ST2 ...` |
+| ST3 | A reduced task set (state checks only, no policies) is scored and read as ST-WebAgentBench's CR or CuP. | `load()` returns no cases for every subset; no baseline is listed. | `ST3 ...` |
+| ST4 | The pin or licence is lost. | The benchmark records the repo, the full commit and Apache-2.0. | `ST4 ...` |
+
 ## AMO release build and listed submission (`scripts/amo-listing.mjs`)
 
 `pnpm check:amo` reads `dist-ext/`, which is what `release.yml` signs. Each
