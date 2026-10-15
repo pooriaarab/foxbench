@@ -30,6 +30,7 @@ import { mypcbenchBenchmark } from "./mypcbench/index.js";
 import { redteamcuaBenchmark } from "./redteamcua.js";
 import { waspBenchmark } from "./wasp/index.js";
 import { stSuitecrmBenchmark } from "./st-suitecrm.js";
+import { stwabBenchmark } from "./stwab.js";
 
 const foxbench = foxbenchBenchmark();
 // One entry per line, so two PRs that each add a benchmark do not conflict.
@@ -61,6 +62,7 @@ export const benchmarks: Benchmark[] = [
   webvoyagerBenchmark(),
   redteamcuaBenchmark(),
   waspBenchmark(),
+  stwabBenchmark(),
 ];
 
 export const benchmarkById = (id: string): Benchmark | undefined => benchmarks.find((b) => b.id === id);
