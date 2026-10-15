@@ -556,6 +556,24 @@ are in `tests/tau2-retail.test.ts` and run tau2's real code through `uv`.
 | T7 | tau2 prints at import time and breaks the bridge's line protocol, or the bridge dies and the site hangs. | The bridge writes replies to its own copy of stdout and sends tau2's prints to stderr. A dead bridge fails each call at once, and the page answers 502. | `T7 ...` |
 | T8 | Text from the database (names, addresses) breaks the page or injects markup. | Every value is HTML-escaped. | `T8 ...` |
 
+The benchmark `tau2-retail` (`src/bench/tau2/index.ts`) adds the customer and
+the verdict: a Claude customer with tau2's own user prompt talks to the agent
+in the chat (#140), and tau2's `evaluate_simulation` scores the trajectory
+the pages and the chat recorded. Its tests are in `tests/tau2.test.ts`, with
+a scripted customer and a fake judge.
+
+| # | Failure mode | Wanted behaviour | Test |
+|---|---|---|---|
+| T9 | The verdict is foxbench's guess, not tau2's. | tau2's `evaluate_simulation` (evaluation type ALL, the task's reward basis) replays the recorded calls and compares the database with the gold one. A scripted agent that does the gold actions through the pages passes 112 of 114 (T17). | `T9 ...` |
+| T10 | An agent that does nothing passes. | tau2's scorer passes a task with no gold write and no NL assertion when the agent changes nothing: 6 of 114 (tasks 10, 12, 25, 50, 57, 65). foxbench keeps tau2's scorer, as it keeps AgentDojo's (E7). Every other task fails for `noop`. | `T10 ...` |
+| T11 | A wrong agent passes: a missing write, or a write to the wrong order. | The database differs from the gold one, and the case fails with that reason. | `T11 ...` |
+| T12 | The agent sees the task's scenario, so it need not ask. | The goal is the same text for every case and names only the chat and the policy; the scenario goes only to the customer. | `T12 ...` |
+| T13 | The conversation's end is scored wrong. | A customer's stop token is tau2's user stop; an agent that returns is tau2's agent stop. tau2 scores both. | `T13 ...` |
+| T14 | tau2's NL assertions go to tau2's default GPT-4.1, or to nobody, or a judged score is not marked. | The bridge sends tau2's own NL-assertion prompt to the run's first LLM judge (Claude, #138). The verdict names `llm:<model>` when assertions ran; tasks without assertions stay programmatic. With no judge, a task that needs one fails with the reason. | `T14 ...` |
+| T15 | `--suite all` stops or runs a broken tau2 when `uv` or the API key is missing. | `check()` is not ready, with the fix: `uv` and `git` on the PATH, `ANTHROPIC_API_KEY` for the customer. | `T15 ...` |
+| T16 | The quick list names a task tau2 does not have. | 20 ids from tau2's test split; `pickSubset` throws on an unknown id. | `T16 ...` |
+| T17 | A task cannot be passed through the pages at all. | Known limit, kept: tau2's `modify_pending_order_items` prices every changed item from the last pair's new variant, so the database depends on the order of the pairs. The form sends pairs in row order; on tasks 21 and 100 the gold order differs, so the gold actions through the pages pass 112 of 114. Fixing it would change tau2's tool. | `T9 T17 ...` |
+
 tau2 airline is a second desk on the same parts (`src/bench/tau2/desk.ts`):
 customers, reservations, flight search and status, airports, and forms for
 booking, cancelling, flights, baggage, passengers and certificates. Lists

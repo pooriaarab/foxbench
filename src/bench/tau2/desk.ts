@@ -5,7 +5,8 @@ import type { IncomingMessage } from "node:http";
 import { serveCase } from "../serve.js";
 import type { Tau2Bridge, Tau2Reply } from "./bridge.js";
 
-export interface Tau2Call { name: string; arguments: Record<string, unknown>; content: string; error: boolean }
+/** `at` is performance.now() when the call ran, to order it among the chat lines. */
+export interface Tau2Call { name: string; arguments: Record<string, unknown>; content: string; error: boolean; at: number }
 
 export interface Tau2Site {
   origin: string;
@@ -58,7 +59,7 @@ export async function startDesk(bridge: Tau2Bridge, o: { nav: string; link: (tex
     page,
     async call(name, args) {
       const reply = await bridge.call(name, args);
-      calls.push({ name, arguments: args, ...reply });
+      calls.push({ name, arguments: args, ...reply, at: performance.now() });
       return reply;
     },
     async read(title, name, args, more = () => "") {
