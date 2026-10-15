@@ -73,11 +73,46 @@ const mapVolume = (v: string) => `webarena_verified_map_${v}`;
 /** The Docker Hub image of a site; the startup script and the registry test both read it from here. */
 export const wavImage = (s: WavSite) => `am1n3e/webarena-verified-${s.id}:${s.tag ?? WAV_TAG}`;
 
+// Upstream's Wikipedia image is one linux/arm64 manifest (its tags 1.0.0 and latest both), so an x86_64 VM gets "exec format error" from it.
+// Its files are shell and Python, so the startup script copies them from this digest onto the amd64 kiwix-serve image that upstream's own
+// Dockerfile starts from (kiwix-tools 3.3.0, this digest), and runs the result.
+const WIKIPEDIA_ARM64 = "am1n3e/webarena-verified-wikipedia@sha256:8c52e6cc8b7cc6f77daaf279929517399b1889bd02b09a257ebd465364ad387d";
+const KIWIX_AMD64 = "ghcr.io/kiwix/kiwix-serve@sha256:aa34c07de00da49e4fb6709195a579b35fba18e0ba81b731c2442307dda3328b";
+const WIKIPEDIA_LOCAL = "foxbench-wikipedia:1.0.0";
+
 /** The sites the startup script runs, with the flags that put each one on its ports with the proxy's base URL. */
 function wavRun(s: WavSite): string {
   const extra = s.id === "gitlab" ? " --shm-size=2g" : s.id === "wikipedia" ? " -v /opt/foxbench/wav-data:/data:ro"
     : s.id === "map" ? MAP_VOLUMES.map((v) => ` -v ${mapVolume(v.volume)}:${v.mount}`).join("") : "";
-  return `run wav-${s.id} ${wavImage(s)} -p ${s.port}:${s.containerPort} -p ${s.ctrlPort}:${s.ctrlInner ?? 8877} -e WA_ENV_CTRL_EXTERNAL_SITE_URL=http://127.0.0.1:${s.port}${extra}`;
+  return `run wav-${s.id} ${s.id === "wikipedia" ? WIKIPEDIA_LOCAL : wavImage(s)} -p ${s.port}:${s.containerPort} -p ${s.ctrlPort}:${s.ctrlInner ?? 8877} -e WA_ENV_CTRL_EXTERNAL_SITE_URL=http://127.0.0.1:${s.port}${extra}`;
+}
+
+/** The startup script's build of the amd64 Wikipedia image (see WIKIPEDIA_ARM64), made once. */
+function buildWikipedia(): string {
+  return `build_wikipedia() {
+  docker image inspect -f x ${WIKIPEDIA_LOCAL} >/dev/null 2>&1 && return
+  ctx=$(mktemp -d)
+  docker pull -q --platform linux/arm64 ${WIKIPEDIA_ARM64}
+  c=$(docker create --platform linux/arm64 ${WIKIPEDIA_ARM64})
+  for f in entrypoint.sh etc/supervisord.conf srv/index.html usr/local/bin/env-ctrl opt/environment_control; do docker cp "$c:/$f" "$ctx/$(basename $f)"; done
+  docker rm "$c" >/dev/null
+  cat > "$ctx/Dockerfile" <<'DOCKER'
+FROM ${KIWIX_AMD64}
+RUN apk add --no-cache python3 supervisor
+COPY environment_control /opt/environment_control
+COPY env-ctrl /usr/local/bin/env-ctrl
+COPY index.html /srv/index.html
+COPY supervisord.conf /etc/supervisord.conf
+COPY entrypoint.sh /entrypoint.sh
+ENV PYTHONPATH=/opt/environment_control WA_ENV_CTRL_TYPE=wikipedia WA_ENV_CTRL_ZIM_FILE=/data/wikipedia_en_all_maxi_2022-05.zim WA_ENV_CTRL_KIWIX_PORT=8080 WA_ENV_CTRL_PORT=8874 WA_ENV_CTRL_SITE_URL=http://localhost:8888
+EXPOSE 8080 8874
+WORKDIR /data
+ENTRYPOINT ["/entrypoint.sh"]
+DOCKER
+  docker build -q -t ${WIKIPEDIA_LOCAL} "$ctx"
+  rm -rf "$ctx"
+}
+build_wikipedia`;
 }
 
 /**
@@ -127,6 +162,7 @@ load_map() {
   fail "map archive $tar did not stream into its volumes after 3 tries"
 }
 ${mapStreams()}
+${buildWikipedia()}
 ${wavFullSites.map(wavRun).join("\n")}
 `;
 }
@@ -139,12 +175,19 @@ export function wavStartup(full = false): string {
 set -e
 command -v docker >/dev/null || { apt-get update -q && DEBIAN_FRONTEND=noninteractive apt-get install -y -q docker.io; }
 ${dockerMirror()}
+ARCH=$(case "$(uname -m)" in x86_64) echo amd64;; aarch64) echo arm64;; *) uname -m;; esac)
+fail() { echo "foxbench: BOOT FAILED: $*" >&2; exit 1; }
+check_arch() {
+  got=$(docker image inspect -f '{{.Architecture}}' "$1") || fail "image $1 is missing"
+  [ "$got" = "$ARCH" ] || fail "image $1 is linux/$got but this VM is linux/$ARCH"
+}
 run() {
   name=$1 image=$2
   shift 2
-  if docker inspect "$name" >/dev/null 2>&1; then docker start "$name"; return; fi
-  docker pull -q "$image"
-  docker run -d --name "$name" --restart unless-stopped "$@" "$image"
+  if docker inspect "$name" >/dev/null 2>&1; then check_arch "$(docker inspect -f '{{.Config.Image}}' "$name")"; docker start "$name"; return; fi
+  docker image inspect -f x "$image" >/dev/null 2>&1 || docker pull -q --platform "linux/$ARCH" "$image"
+  check_arch "$image"
+  docker run -d --platform "linux/$ARCH" --name "$name" --restart unless-stopped "$@" "$image"
 }
 ${run.join("\n")}
 mkdir -p /opt/foxbench
