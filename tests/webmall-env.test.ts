@@ -2,12 +2,24 @@
 // docker and curl on PATH log every call, so the script runs for real and nothing is fetched.
 import { execFileSync, spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { createServer as tcp } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeAll, describe, expect, it } from "vitest";
 import { TUNNEL_OFFSET, WEBMALL_IMAGES, WEBMALL_REF, webmallScript, webmallSites, webmallStartup } from "../src/bench/webmall/env.js";
 
 const root = join(import.meta.dirname, "..");
+
+const isFree = (port: number) => new Promise<boolean>((r) => { const s = tcp(); s.once("error", () => r(false)); s.listen(port, "127.0.0.1", () => s.close(() => r(true))); });
+
+/** An offset that puts every given port on a free local port, staying under 65536. */
+async function freeOffset(ports: number[]): Promise<number> {
+  for (let tries = 0; tries < 50; tries++) {
+    const offset = 1000 + Math.floor(Math.random() * (65535 - Math.max(...ports) - 1000));
+    if ((await Promise.all(ports.map((p) => isFree(p + offset)))).every(Boolean)) return offset;
+  }
+  throw new Error("no free local port range for the tunnels");
+}
 const fixtures = join(root, "tests/fixtures");
 let home = "";
 let source = "";
@@ -174,16 +186,18 @@ describe("WebMall env", () => {
     expect(docker("volume")).toEqual([]);
   });
 
-  it("WM9 is an e2-standard-4 with 40 GB, five tunnels and a long boot wait", () => {
+  it("WM9 is an e2-standard-4 with 40 GB, five tunnels and a long boot wait", async () => {
     fresh();
-    const r = cli(["env", "up", "webmall"], { FAKE_GCLOUD_LOG: join(home, "gcloud.jsonl") });
+    // Another program can hold a real tunnel port (an SSH tunnel on 18082), which stops `up`: use free ones.
+    const offset = await freeOffset(webmallSites.map((s) => s.port + TUNNEL_OFFSET));
+    const r = cli(["env", "up", "webmall", "--local-port-offset", String(offset)], { FAKE_GCLOUD_LOG: join(home, "gcloud.jsonl") });
     expect(r.status).toBe(0);
     const gcloud = readFileSync(join(home, "gcloud.jsonl"), "utf8").trim().split("\n").map((l) => JSON.parse(l) as { argv: string[]; script?: string });
     const create = gcloud.find((c) => c.argv.includes("create"))!;
     expect(create.argv).toEqual(expect.arrayContaining(["--machine-type=e2-standard-4", "--boot-disk-size=40GB", "--labels=foxbench-env=webmall"]));
     expect(create.script).toContain("SHOP1_PORT=0.0.0.0:18081");
     const ports = gcloud.filter((c) => c.argv.includes("start-iap-tunnel")).map((c) => c.argv.find((a) => a.startsWith("--local-host-port="))!.split(":")[1]);
-    expect(ports).toEqual(webmallSites.map((s) => String(s.port + TUNNEL_OFFSET)));
+    expect(ports).toEqual(webmallSites.map((s) => String(s.port + TUNNEL_OFFSET + offset)));
   });
 
   it("WM10 an env without a local mode, or an unknown provider, stops before docker", () => {
