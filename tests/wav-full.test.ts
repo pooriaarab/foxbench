@@ -40,6 +40,7 @@ describe("WF1 the VM and its ports", () => {
 function boot(dir: string, pythonPre = "", aptBody = "true") {
   const bin = join(dir, "bin");
   mkdirSync(bin, { recursive: true });
+  if (!existsSync(join(dir, "served"))) serveMapTars(dir);
   const tool = (name: string, body: string) => { writeFileSync(join(bin, name), `#!/bin/sh\necho "${name} $*" >> ${dir}/log\n${body}\n`); chmodSync(join(bin, name), 0o755); };
   tool("docker", `case "$1" in inspect) [ -e ${dir}/has-$2 ];; run) shift; while [ "$1" != --name ]; do shift; done; touch ${dir}/has-$2;;
     volume) case "$2" in create) mkdir -p ${dir}/vol/$3/_data;; inspect) echo ${dir}/vol/$5/_data;; esac;; esac`);
@@ -134,9 +135,9 @@ function serveMapTars(dir: string) {
   }
 }
 
+const fresh = () => mkdtempSync(join(tmpdir(), "fbn-wf8-"));
+const volume = (dir: string, vol: string) => join(dir, "vol", vol, "_data", "data.bin");
 describe("WF8 the map's archives are never kept on the disk", () => {
-  const fresh = () => { const dir = mkdtempSync(join(tmpdir(), "fbn-wf8-")); serveMapTars(dir); return dir; };
-  const volume = (dir: string, vol: string) => join(dir, "vol", vol, "_data", "data.bin");
   it("streams each archive into its volumes: no tar in the data directory, each volume holding its own path", () => {
     const dir = fresh();
     try {

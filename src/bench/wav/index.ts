@@ -57,11 +57,18 @@ export const wavFullSites: WavSite[] = [
   { id: "map", port: 3000, ctrlPort: 3071, containerPort: 8080, health: "/", readOnly: true },
 ];
 
-// The data volumes upstream's `env setup init --site map` fills (its config.py), and the mount each has in the container.
-const MAP_VOLUMES: [string, string][] = [
-  ["tile_db", "/data/database"], ["routing_car", "/data/routing/car"], ["routing_bike", "/data/routing/bike"], ["routing_foot", "/data/routing/foot"],
-  ["nominatim_db", "/data/nominatim/postgres"], ["nominatim_flatnode", "/data/nominatim/flatnode"], ["website_db", "/var/lib/postgresql/14/main"], ["tiles", "/data/tiles"], ["style", "/data/style"],
+// The data volumes upstream's `env setup init --site map` fills (its config.py), the mount each has in the container, and for the ones it fills from an archive, that archive and the path inside it.
+const MAP_URL = "https://webarena-map-server-data.s3.amazonaws.com";
+const MAP_VOLUMES: { volume: string; mount: string; tar?: string; path?: string }[] = [
+  { volume: "tile_db", mount: "/data/database", tar: "osm_tile_server.tar", path: "projects/ogma3/docker/volumes/osm-data/_data" },
+  { volume: "routing_car", mount: "/data/routing/car", tar: "osrm_routing.tar", path: "car" },
+  { volume: "routing_bike", mount: "/data/routing/bike", tar: "osrm_routing.tar", path: "bike" },
+  { volume: "routing_foot", mount: "/data/routing/foot", tar: "osrm_routing.tar", path: "foot" },
+  { volume: "nominatim_db", mount: "/data/nominatim/postgres", tar: "nominatim_volumes.tar", path: "projects/metis2/docker/docker/volumes/nominatim-data/_data" },
+  { volume: "nominatim_flatnode", mount: "/data/nominatim/flatnode", tar: "nominatim_volumes.tar", path: "projects/metis2/docker/docker/volumes/nominatim-flatnode/_data" },
+  { volume: "website_db", mount: "/var/lib/postgresql/14/main" }, { volume: "tiles", mount: "/data/tiles" }, { volume: "style", mount: "/data/style" },
 ];
+const mapVolume = (v: string) => `webarena_verified_map_${v}`;
 
 /** The Docker Hub image of a site; the startup script and the registry test both read it from here. */
 export const wavImage = (s: WavSite) => `am1n3e/webarena-verified-${s.id}:${s.tag ?? WAV_TAG}`;
@@ -69,20 +76,57 @@ export const wavImage = (s: WavSite) => `am1n3e/webarena-verified-${s.id}:${s.ta
 /** The sites the startup script runs, with the flags that put each one on its ports with the proxy's base URL. */
 function wavRun(s: WavSite): string {
   const extra = s.id === "gitlab" ? " --shm-size=2g" : s.id === "wikipedia" ? " -v /opt/foxbench/wav-data:/data:ro"
-    : s.id === "map" ? MAP_VOLUMES.map(([v, m]) => ` -v webarena_verified_map_${v}:${m}`).join("") : "";
+    : s.id === "map" ? MAP_VOLUMES.map((v) => ` -v ${mapVolume(v.volume)}:${v.mount}`).join("") : "";
   return `run wav-${s.id} ${wavImage(s)} -p ${s.port}:${s.containerPort} -p ${s.ctrlPort}:${s.ctrlInner ?? 8877} -e WA_ENV_CTRL_EXTERNAL_SITE_URL=http://127.0.0.1:${s.port}${extra}`;
 }
 
-/** The part of the startup script that downloads Wikipedia's and the map's data with upstream's own CLI at the pinned version, once per site. */
+/**
+ * The map's archives, streamed from the download into their volumes with no archive on the disk (the first
+ * real run kept 187 GB of them beside their 187 GB of volumes and filled a 450 GB disk). One call per archive
+ * lists its volumes and the path of each inside it, so the 125 GB nominatim archive downloads once for two volumes.
+ */
+function mapStreams(): string {
+  const tars = [...new Set(MAP_VOLUMES.flatMap((v) => (v.tar ? [v.tar] : [])))];
+  return tars.map((tar) => `load_map ${tar} ${MAP_VOLUMES.filter((v) => v.tar === tar).map((v) => `${mapVolume(v.volume)} ${v.path}`).join(" ")}`).join("\n");
+}
+
+/** The part of the startup script that downloads Wikipedia's and the map's data, once per site. */
 function wavData(): string {
-  return `# wav-full: the data of the two sites, from upstream's CLI (the ZIM file is 100 GB, the map data 60 GB). The core sites above are already up.
+  return `# wav-full: the data of the two sites (the ZIM file is 95 GB, the map data 187 GB). The core sites above are already up.
 DATA=/opt/foxbench/wav-data
 mkdir -p $DATA
+fail() { echo "foxbench: BOOT FAILED: $*" >&2; exit 1; }
 python3 -c "import ensurepip" >/dev/null 2>&1 || { apt-get update -q && DEBIAN_FRONTEND=noninteractive apt-get install -y -q python3-venv; }
 [ -x /opt/foxbench/wav-venv/bin/webarena-verified ] || { python3 -m venv /opt/foxbench/wav-venv && /opt/foxbench/wav-venv/bin/pip install -q webarena-verified==${WAV_VERSION}; }
-for site in ${wavFullSites.map((s) => s.id).join(" ")}; do
-  [ -e /opt/foxbench/data-$site.done ] || { /opt/foxbench/wav-venv/bin/webarena-verified env setup init --site $site --data-dir $DATA && touch /opt/foxbench/data-$site.done; }
-done
+[ -e /opt/foxbench/data-wikipedia.done ] || { /opt/foxbench/wav-venv/bin/webarena-verified env setup init --site wikipedia --data-dir $DATA && touch /opt/foxbench/data-wikipedia.done; }
+# stream_map URL VOLUME PATH...: each volume is emptied, then filled from its path in the archive on stdin (tar strips the path, as upstream's strip_components does).
+stream_map() {
+  url=$1; shift
+  args=""
+  while [ $# -gt 0 ]; do
+    docker volume create "$1" >/dev/null
+    dir=$(docker volume inspect -f '{{.Mountpoint}}' "$1")
+    find "$dir" -mindepth 1 -delete
+    args="$args $2 --transform=s,^$2/*,\${dir#/}/,"
+    shift 2
+  done
+  rc=$(mktemp)
+  { curl -fsS --connect-timeout 30 "$url"; echo $? > "$rc"; } | tar -xp -f - -C / $args
+  tarrc=$?
+  curlrc=$(cat "$rc"); rm -f "$rc"
+  [ "$tarrc" = 0 ] && [ "$curlrc" = 0 ]
+}
+# load_map ARCHIVE VOLUME PATH...: three tries, then the boot stops with a line that names the archive.
+load_map() {
+  tar=$1; shift
+  [ -e /opt/foxbench/map-$tar.done ] && return
+  for try in 1 2 3; do
+    if stream_map ${MAP_URL}/$tar "$@"; then touch /opt/foxbench/map-$tar.done; return; fi
+    echo "foxbench: map archive $tar failed (try $try of 3)" >&2
+  done
+  fail "map archive $tar did not stream into its volumes after 3 tries"
+}
+${mapStreams()}
 ${wavFullSites.map(wavRun).join("\n")}
 `;
 }

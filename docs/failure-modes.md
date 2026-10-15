@@ -439,9 +439,9 @@ tunnel on local port 18081. The tests are in `tests/suitecrm-env.test.ts`.
 ## WebArena-Verified map and Wikipedia: the wav-full env (`src/bench/wav/index.ts`, `src/env/envs.ts`)
 
 `wav-full` is wav-core plus upstream's Wikipedia and map containers, with the
-data they need (a 100 GB ZIM file and about 60 GB of map tiles and routing
-graphs). The data comes from upstream's own `webarena-verified env setup init`
-at the pinned package version. The tests are in `tests/wav-full.test.ts`; they
+data they need (a 95 GB ZIM file and 187 GB of map archives). Wikipedia's data
+comes from upstream's own `webarena-verified env setup init` at the pinned
+package version; the map's archives stream into its volumes (WF8). The tests are in `tests/wav-full.test.ts`; they
 read the env from the registry, run its startup script with fake `docker`,
 `systemctl` and `python3` tools that log what they are asked, and run real map
 and Wikipedia cases through the run loop against fake sites on the tunnel
@@ -449,13 +449,14 @@ ports.
 
 | # | Failure mode | Wanted behaviour | Test |
 |---|---|---|---|
-| WF1 | The VM is too small or its ports are missing, so the data does not fit or a site cannot be reached. | `wav-full` is n2-standard-16 (64 GB) with a 450 GB disk, and tunnels every wav-core port plus Wikipedia (8888, ctrl 8889) and map (3000, ctrl 3071), each at +10000. | `WF1 ...` |
-| WF2 | The startup script is broken, unpinned, or downloads the data again on every boot. | It passes `sh -n`; it installs `python3-venv` when `ensurepip` is missing (Debian 12), then `webarena-verified==1.2.3`; every image name comes from one table (`wavImage`) at a tag Docker Hub has (Wikipedia is `1.0.0`, the rest `0.1.0`), checked with `docker manifest inspect` when there is network; it runs upstream's `env setup init` for each site once (a marker file per site); a second boot downloads nothing and only starts the containers. | `WF2 ...` |
+| WF1 | The VM is too small or its ports are missing, so the data does not fit or a site cannot be reached. | `wav-full` is n2-standard-16 (64 GB) with a 500 GB SSD, and tunnels every wav-core port plus Wikipedia (8888, ctrl 8889) and map (3000, ctrl 3071), each at +10000. | `WF1 ...` |
+| WF2 | The startup script is broken, unpinned, or downloads the data again on every boot. | It passes `sh -n`; it installs `python3-venv` when `ensurepip` is missing (Debian 12), then `webarena-verified==1.2.3`; every image name comes from one table (`wavImage`) at a tag Docker Hub has (Wikipedia is `1.0.0`, the rest `0.1.0`), checked with `docker manifest inspect` when there is network; it runs upstream's `env setup init` for Wikipedia once and streams each map archive once (a marker file each); a second boot downloads nothing and only starts the containers. | `WF2 ...` |
 | WF3 | A failed 160 GB download leaves the four core sites down. | The script starts the core sites and the reset service first, and the data setup last. | `WF3 ...` |
 | WF4 | Only wav-core is up, and the benchmark is not ready, or a core case fails. | `check()` is ready when the four core sites answer. A map or Wikipedia case fails at start with a reason that names the missing site and `wav-full`. A multi-site case with one missing site fails the same way, and the reason names only the missing one. | `WF4 ...` |
 | WF5 | Map and Wikipedia are up and a case on them gets a login header, a wrong Host, or no HAR. | The case opens the site on its own port, sends `Host: 127.0.0.1:<port>`, no login header, and logs a HAR for upstream's evaluator. Map and Wikipedia cases carry the `map` and `wikipedia` tags. | `WF5 ...` |
 | WF6 | A map or Wikipedia case is judged wrong. | noop and a scripted wrong agent fail, and a scripted perfect agent passes, on a map case and a Wikipedia case, judged by upstream's evaluator. | `WF6 ...` |
 | WF7 | A stray POST marks the 60 GB map for a reset that its container cannot do (the reset service does not know it). | Map and Wikipedia are read-only: a POST never marks them for reset, and the reset service answers 404 for them. | `WF7 ...` |
+| WF8 | The map's archives stay on the disk beside their extracted volumes (187 GB twice), so a 450 GB disk fills. | Each archive streams from the download through `tar` into its volumes (the paths of upstream's `config.py`); no archive is written. A cut stream empties the volumes and starts again, three tries, then the boot stops with `foxbench: BOOT FAILED: map archive <name> ...`. The disk is 500 GB SSD: 374 GB measured (187.4 archives, 95.2 ZIM, 91 images) plus headroom. | `WF8 ...` |
 
 ## MiniWoB++ and AgentDojo (`src/bench/miniwob/`, `src/bench/agentdojo/`)
 
