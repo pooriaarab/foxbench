@@ -70,7 +70,9 @@ export async function startProxy(target: string, options: { headers?: Record<str
     socket.on("error", () => up.destroy());
   });
   await new Promise<void>((resolve, reject) => {
-    server.once("error", reject);
+    server.once("error", (error: NodeJS.ErrnoException) => reject(error.code === "EADDRINUSE" && options.port
+      ? new Error(`port ${options.port} is in use, and this case needs its proxy there (the site keeps one origin); multi-site WebArena-Verified cases must run serially or on separate hosts`)
+      : error));
     server.listen(options.port ?? 0, "127.0.0.1", resolve);
   });
   origin = `http://127.0.0.1:${(server.address() as { port: number }).port}`;

@@ -215,6 +215,7 @@ tests are in `tests/proxy.test.ts`.
 | P3 | An auto-login header reaches the agent, or never reaches the site. | `Episode.headers` go on each request to the site, and only there. | `P3 ...` |
 | P4 | A request to another host through the proxy is not seen, so a cloud agent shows 0 egress. | An absolute URL or a CONNECT to any other host is logged as egress with its host and bytes, and forwarded or tunnelled, never decrypted. The board sums egress per case. | `P4 ...` |
 | P5 | The proxy stays up after the case, so a late request reaches the next case (R1), or a fixed port changes per case (R6). | The loop closes the proxy after the judge. With `Episode.port`, the proxy listens on that port, so a site keeps its origin. | `P5 ...` |
+| P6 | `Episode.port` is held by another process, and the case hangs or shows a bare `listen EADDRINUSE`. | `startProxy` rejects at once with `port <n> is in use` and the reason it needs that port. It never retries or waits. The loop turns it into a `harness:` reason for that case. | `P6 ...` |
 
 ## Cloud environments (`foxbench env`, `src/env/`)
 
@@ -329,7 +330,9 @@ The `webarena-verified` benchmark loads its 812 tasks from the
 package and the task list stay in the cache. Each case starts on one site of
 `wav-core`, through the recording proxy on that site's port. The tests are in
 `tests/wav-tasks.test.ts`; they load the real task list and start real cases
-against fake sites on the tunnel ports.
+against fake sites on the tunnel ports. They move the tunnel ports and the
+site ports by offsets picked at run time (`tests/free-base.ts`), so no test
+file holds a fixed port such as 9999.
 
 | # | Failure mode | Wanted behaviour | Test |
 |---|---|---|---|
@@ -343,6 +346,7 @@ against fake sites on the tunnel ports.
 | WT8 | Two quick runs see different cases. | `quick` is 20 single-site ids, 5 per wav-core site, committed in `src/bench/subsets/webarena-verified.json`. | `WT8 ...` |
 | WT9 | `uv` is missing, and every case fails late. | `check()` is not ready, with the fix. | `WT9 ...` |
 | WT10 | The agent gets another prompt than upstream's agents, so the scores are not comparable. | The goal is upstream's prompt for the task's sites, from the repo at the pinned commit and kept in the cache, with the intent and the start URLs on the proxy ports filled in. | `WT10 ...` |
+| WT11 | A site's own port (7770, 7780, 9999, 8023) is taken, by another case in a parallel run, another benchmark process or any local program. The proxy cannot listen there, and the case hangs, or fails with a bare `listen EADDRINUSE` the operator cannot place. | `start` fails the case at once, and the loop records `harness: port <n> is in use ...`, naming the port and saying that multi-site WebArena-Verified cases must run serially or on separate hosts (a site keeps one origin, so two cases cannot share its port). Nothing waits, and `start` stops the proxies and recorders it had already started. | `WT11 ...` |
 
 ## WebArena-Verified scoring (`src/bench/wav/judge.ts`, `src/bench/wav/har.ts`)
 

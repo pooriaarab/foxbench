@@ -1,8 +1,8 @@
 // Tests for the recording proxy failure modes in docs/failure-modes.md
-// (P1-P5). A toy site records what reaches it; the run loop puts the proxy in
+// (P1-P6). A toy site records what reaches it; the run loop puts the proxy in
 // front of it, and the judge reads the trace the proxy hands over.
 import { createServer, request, type IncomingHttpHeaders, type Server } from "node:http";
-import { connect } from "node:net";
+import { connect, createServer as createTcp } from "node:net";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { noopAdapter, type Adapter } from "../src/adapter.js";
 import { runBenchmarks } from "../src/bench/run.js";
@@ -123,6 +123,23 @@ describe("P5 the proxy ends with its case and keeps a fixed port", () => {
     await play(toy({ port }).bench, agent(async (url) => { late = url; }));
     expect(new URL(late).port).toBe(String(port));
     await expect(fetch(late)).rejects.toThrow();
+  });
+});
+
+describe("P6 a busy Episode.port fails the case at once", () => {
+  it("names the port in a harness reason and never runs the agent", async () => {
+    const port = await freeBase(11200, 100, [0]);
+    const holder = createTcp();
+    await new Promise<void>((r) => holder.listen(port, "127.0.0.1", r));
+    let ran = false;
+    try {
+      const board = await play(toy({ port }).bench, agent(async () => { ran = true; }));
+      expect(board.results[0]!.success).toBe(false);
+      expect(board.results[0]!.reasons[0]).toMatch(new RegExp(`^harness: port ${port} is in use`));
+      expect(ran).toBe(false);
+    } finally {
+      await new Promise((r) => holder.close(r));
+    }
   });
 });
 
