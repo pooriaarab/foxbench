@@ -1007,3 +1007,25 @@ row is a way that the listed build or the submission can go wrong.
 |---|---|---|
 | AR-U1 | A `local_hosts` reason for a host permission also clears a test content script on the same pattern | Each reason names its use (`host_permission`, `content_script`, `web_accessible_resource`, `externally_connectable`); a use without its own reason stops the check |
 | AR-U2 | `local_hosts` keeps a reason for a use that the release build does not have | The check stops and names the pattern and the use |
+
+## MyPCBench env (`mypcbench`, `src/bench/mypcbench/env.ts`)
+
+The `mypcbench` env runs MyPCBench's QEMU/KVM desktop image
+(`ljang/mypcbench-qemu`, MIT) in a container on a nested-virtualization VM.
+The VM serves 17 web apps (3001-3017) and a control API (5000). The agent
+reaches each app on its own port through the recording proxy; the proxy
+forwards to the IAP tunnel on that port plus 10000. Upstream's runner resets
+state by restarting the container, which rebuilds the VM's overlay from the
+baked image (about 90 s). The tests are in `tests/mypcbench-env.test.ts`,
+against the fake gcloud and a fake docker.
+
+| # | Failure mode | Wanted behaviour | Test |
+|---|---|---|---|
+| MP1 | The daily `latest` tag moves under the tasks, so two runs score different data. | The startup script runs the image by digest, never by tag. | `MP1 ...` |
+| MP2 | The VM has no nested virtualization, so QEMU falls back to software emulation and the desktop never boots; or every env gets the flag. | `CloudEnv.nestedVirt` makes `createVm` pass `--enable-nested-virtualization`; only `mypcbench` sets it. | `MP2 ...` |
+| MP3 | The VM boots on a host with no `/dev/kvm` and the run waits 30 minutes for nothing. | The startup script checks `/dev/kvm` first and stops with a message on the serial console. | `MP3 ...` |
+| MP4 | An app is tunnelled but not mapped, or the reset port is missing. | The env's ports, the startup script's `-p` mappings and the cookies come from one table of 17 apps. | `MP4 ...` |
+| MP5 | The Mac's Firefox has no session, so every app shows its login page. | The proxy adds the signed session cookie upstream's harness uses (`session_<app>`, HMAC-SHA256 over the persona's email and the app), so the agent never sees it. | `MP5 ...` |
+| MP6 | The next task starts on the last task's state, or on a VM that still boots. | `POST /reset` restarts the container and answers 200 only when the control API is healthy and every app answers; a VM that does not come up gives 500 with the reason. | `MP6 ...` |
+| MP7 | The VM is too small or its disk full: QEMU wants about 8 GB and 4 vCPUs, and the image is 5 GB compressed and 12 GB unpacked. | n2-standard-8 and a 60 GB disk. | `MP7 ...` |
+| MP8 | A reset call hangs forever on a dead tunnel. | `resetVm` times out and names the URL. | `MP8 ...` |
