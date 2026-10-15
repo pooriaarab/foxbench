@@ -60,8 +60,10 @@ function strftime(t: number, fmt: string): string {
   return fmt.replace(/%([BbdY])/g, (_m, c: string) => c === "B" ? MONTHS[d.getUTCMonth()]! : c === "b" ? MONTHS[d.getUTCMonth()]!.slice(0, 3) : c === "d" ? pad(d.getUTCDate()) : String(d.getUTCFullYear()));
 }
 
+/** The Sunday before Valentine's Day, and the Sunday after it. */
+const week = (y: number) => { const start = Date.UTC(y, 1, 14) - (weekday(Date.UTC(y, 1, 14)) + 1) * DAY; return [start, start + 7 * DAY] as const; };
+
 function valentinesWeek(now: number): string {
-  const week = (y: number) => { const start = Date.UTC(y, 1, 14) - (weekday(Date.UTC(y, 1, 14)) + 1) * DAY; return [start, start + 7 * DAY] as const; };
   let year = new Date(now).getUTCFullYear();
   let [start, end] = week(year);
   if (now > end) [start, end] = week(++year);
@@ -97,6 +99,8 @@ function instantiate(t: Template, now: number): Wv {
   };
 }
 
+const leap = (y: number) => y % 4 === 0 && (y % 100 !== 0 || y % 400 === 0);
+
 /** Moves the 2023-24 dates of a Booking or Google Flights task to the first future occurrence (WVY3). */
 export function freshDates(text: string, now: number): string {
   const d = new Date(now);
@@ -110,7 +114,6 @@ export function freshDates(text: string, now: number): string {
   const [month, day] = !last ? [0, 1] : last[1] ? [monthOf(last[1]), Number(last[2])] : last[4] ? [monthOf(last[4]), Number(last[3])] : [Number(last[6]) - 1, Number(last[5])];
   const base = Date.UTC(year, month, day) > now + DAY ? year : year + 1;
   const moved = out.replace(/\b(2023|2024)\b/g, (y) => String(base + Number(y) - Number(first[1])));
-  const leap = (y: number) => y % 4 === 0 && (y % 100 !== 0 || y % 400 === 0);
   return moved.replace(/\b(Feb(?:ruary)?)\.? 29,? (\d{4})/g, (all, _f, y: string) => leap(Number(y)) ? all : `March 1, ${y}`);
 }
 
@@ -136,6 +139,8 @@ const hosts = (trace: Trace) => [...new Set(trace.requests.map((r) => r.host))].
 const requests = (trace: Trace) => trace.requests.slice(0, 200).map((r) => `${r.method} ${r.host}${r.path} ${r.status}`).join("\n") || "(none)";
 const escape = (s: string) => s.replace(/[&<>"]/g, (c) => `&#${c.charCodeAt(0)};`);
 const slug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, "-");
+
+const toCase = (t: Wv): Case => ({ id: t.id, tags: [slug(t.site), t.kind], judge: "llm", goal: t.goal });
 
 const parse = (reply: string) => {
   const m = /Status:\s*"?(success|failure)"?/i.exec(reply);
@@ -174,7 +179,6 @@ export const webvoyagerBenchmark = (o: { now?: () => Date } = {}): Benchmark => 
     },
     async load(ctx, subset) {
       const all = await read(ctx);
-      const toCase = (t: Wv): Case => ({ id: t.id, tags: [slug(t.site), t.kind], judge: "llm", goal: t.goal });
       const pool = subset === "published" ? all.filter((t) => t.kind === "emergence") : subset.startsWith("tag:") ? all : all.filter((t) => t.kind === "original");
       return pickSubset("webvoyager", pool.map(toCase), subset);
     },
