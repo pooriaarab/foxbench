@@ -10,6 +10,9 @@ import type { WaPage } from "./eval.js";
 
 export interface JudgeBrowser {
   page(): Promise<WaPage>;
+  /** Closes the pages opened so far; the browser stays for the next case. */
+  closePages(): Promise<void>;
+  /** Closes the browser. */
   close(): Promise<void>;
 }
 
@@ -28,13 +31,15 @@ export function judgeBrowser(ctx: BenchContext, origins: Record<string, string> 
       const page = await fox.open("about:blank");
       pages.push(page);
       return {
-        goto: async (url) => { await page.goto(mapped(url), { waitUntil: "load" }); },
+        // The 3 s settle after it (eval.ts) stands in for the rest of the load: a GitLab merge request page holds the load event for over 30 s.
+        goto: async (url) => { await page.goto(mapped(url), { waitUntil: "domcontentloaded", timeout: 60_000 }); },
         evaluate: (js) => page.evaluate(js),
         content: () => page.content(),
       };
     },
+    closePages: async () => void (await Promise.all(pages.splice(0).map((p) => p.close().catch(() => {})))),
     async close() {
-      await Promise.all(pages.splice(0).map((p) => p.close().catch(() => {})));
+      await this.closePages();
       await fox?.close();
       fox = undefined;
     },

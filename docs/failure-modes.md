@@ -1234,6 +1234,28 @@ agent's browser.
 | ST3 | A reduced task set (state checks only, no policies) is scored and read as ST-WebAgentBench's CR or CuP. | `load()` returns no cases for every subset; no baseline is listed. | `ST3 ...` |
 | ST4 | The pin or licence is lost. | The benchmark records the repo, the full commit and Apache-2.0. | `ST4 ...` |
 
+## WebArena-Lite (`src/bench/wa/bench.ts`, `src/bench/wa/lite.ts`)
+
+`webarena-lite` is the 165-task WebArena-Lite list (VAB-WebArena-Lite,
+THUDM/VisualAgentBench at `9055fc2`, Apache-2.0), run on the WebArena-Verified
+sites and scored with the evaluators of the section above. The task list is
+fetched at run time into the cache and never committed. Cases start through
+the same code as WebArena-Verified (`wavStart`: reset marks, proxies, HAR
+recorders, logins). `tests/wa-lite.test.ts` runs real cases through the run
+loop with scripted agents against fake sites on the tunnel ports, a fake judge
+and a fake judge browser.
+
+| # | Failure mode | Wanted behaviour | Test |
+|---|---|---|---|
+| LI1 | The task list is not the pinned one, or a half-fetched file is used, so boards are not over the 165 tasks. | The file at the pinned commit; 165 cases with upstream's `task_id` as the case id (0-164). It is written to the cache whole or not at all. | `LI1 ...` |
+| LI2 | A case has the wrong tags, or a fuzzy case is scored by code. | Tags are the sites, the eval types and `multi-site`. A case with a `fuzzy_match` anywhere (40) is `judge: llm`; the benchmark is `mixed`. | `LI2 ...` |
+| LI3 | A case with several start URLs (`\|AND\|`) or on a site that is not up misleads the agent or fails with no reason. | The agent starts on the first URL and the goal names the others, on the proxy ports. A task on more sites than its start URLs name gets a proxy and login for each. A case on a missing site (the 31 map and 4 Wikipedia cases on wav-core) fails with the wav-full reason of WF4. | `LI3 ...` |
+| LI4 | The score reads `done`, the log, or a URL the agent did not end on. | The answer is `output.answer`, never the log. The final URL is the last page load in the case's HAR that did not redirect or fail: a request a browser marks `sec-fetch-dest: document`, or, from a client that sends no such header, a GET that answered with HTML. It is on the site port the agent saw. | `LI4 ...` |
+| LI5 | An agent that does nothing, or answers wrong, passes. | noop and a scripted wrong agent fail every case; a scripted perfect agent (the reference answers and URLs from the task file) passes the string_match and url_match cases. | `LI5 ...` |
+| LI6 | program_html reads a logged-out page, the agent's browser, or leaves proxies and Firefox open. | Each case gets judge proxies that add the site's login; the judge browser opens each target on them and reads the page; the proxies are closed after the case and the browser in `down`. A case with no program_html never starts the browser. | `LI6 ...` |
+| LI7 | A fuzzy case passes with no judge, or the board does not say who judged. | With no judge the case fails with `judge: no judge`. With one, the verdict is `llm:<model>` and each judge's result is recorded. | `LI7 ...` |
+| LI8 | `quick` changes between runs or needs map. | `quick` is the committed list in `src/bench/subsets/webarena-lite.json`: 20 ids on wav-core sites only. | `LI8 ...` |
+
 ## AMO release build and listed submission (`scripts/amo-listing.mjs`)
 
 `pnpm check:amo` reads `dist-ext/`, which is what `release.yml` signs. Each
