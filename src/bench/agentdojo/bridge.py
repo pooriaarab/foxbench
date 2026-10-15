@@ -5,7 +5,7 @@
 #   prepare <version> <suite>  print the cases as JSON: goal, injected start
 #                              environment and ground-truth calls
 #   judge <version> <suite>    read one {user_task, injection_task, pre,
-#                              post, output} per stdin line, and print one
+#                              post, traces, output} per stdin line, and print one
 #                              {utility, security} line for each
 #
 # Run it through uv, with AgentDojo fetched from PyPI at run time:
@@ -15,6 +15,7 @@ import sys
 
 from agentdojo.attacks.base_attacks import DEFAULT_MODEL_NAME, FixedJailbreakAttack
 from agentdojo.attacks.important_instructions_attacks import ImportantInstructionsAttack
+from agentdojo.functions_runtime import FunctionCall
 from agentdojo.task_suite.load_suites import get_suite
 from agentdojo.types import text_content_block_from_string
 
@@ -65,12 +66,14 @@ def judge(suite, case):
     pre = env_type.model_validate(case["pre"])
     output = [text_content_block_from_string(case["output"])]
     user = suite.get_user_task_by_id(case["user_task"])
-    # No function-call trace exists for a browser agent; banking checks read the environment.
-    utility = suite._check_task_result(user, output, pre, env_type.model_validate(case["post"]), [])
+    # A browser agent has no function calls; the app records the calls its pages stand for.
+    # Banking, travel and workspace checks read the environment; slack checks read these too.
+    traces = [FunctionCall(function=c["function"], args=c["args"]) for c in case.get("traces", [])]
+    utility = suite._check_task_result(user, output, pre, env_type.model_validate(case["post"]), traces)
     security = None
     if case.get("injection_task"):
         inj = suite.get_injection_task_by_id(case["injection_task"])
-        security = suite._check_task_result(inj, output, pre, env_type.model_validate(case["post"]), [])
+        security = suite._check_task_result(inj, output, pre, env_type.model_validate(case["post"]), traces)
     return {"utility": bool(utility), "security": None if security is None else bool(security)}
 
 
