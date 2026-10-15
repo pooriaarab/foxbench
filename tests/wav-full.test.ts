@@ -13,11 +13,13 @@ import type { Adapter, TaskOutput } from "../src/adapter.js";
 import { noopAdapter } from "../src/adapter.js";
 import { benchContext } from "../src/bench/registry.js";
 import { runBenchmarks } from "../src/bench/run.js";
-import { webarenaVerified, wavFullSites, wavSites } from "../src/bench/wav/index.js";
+import { webarenaVerified, wavFullSites, wavImage, wavSites } from "../src/bench/wav/index.js";
 import { WAV_VERSION, wavDir } from "../src/bench/wav/tasks.js";
 import { cloudEnvs } from "../src/env/envs.js";
 import { freeBase } from "./free-base.js";
 
+// Skipped without a Docker CLI and network.
+const online = spawnSync("docker", ["manifest", "inspect", "hello-world"], { stdio: "ignore", timeout: 30_000 }).status === 0;
 const env = cloudEnvs.find((e) => e.name === "wav-full")!;
 
 describe("WF1 the VM and its ports", () => {
@@ -35,13 +37,13 @@ describe("WF1 the VM and its ports", () => {
 });
 
 // A scratch VM: /opt/foxbench is a temp dir, and the tools log what they are asked.
-function boot(dir: string) {
+function boot(dir: string, pythonPre = "", aptBody = "true") {
   const bin = join(dir, "bin");
   mkdirSync(bin, { recursive: true });
   const tool = (name: string, body: string) => { writeFileSync(join(bin, name), `#!/bin/sh\necho "${name} $*" >> ${dir}/log\n${body}\n`); chmodSync(join(bin, name), 0o755); };
   tool("docker", `case "$1" in inspect) [ -e ${dir}/has-$2 ];; run) shift; while [ "$1" != --name ]; do shift; done; touch ${dir}/has-$2;; esac`);
-  for (const name of ["systemctl", "systemd-run", "apt-get"]) tool(name, name === "systemctl" ? '[ "$1" != is-active ]' : "true");
-  tool("python3", `[ "$1" = -m ] && [ "$2" = venv ] && [ "$3" != --help ] && for t in pip webarena-verified; do mkdir -p $3/bin; printf '#!/bin/sh\\necho "$t $*" >> ${dir}/log\\n' | sed "s/\\$t/$t/" > $3/bin/$t; chmod +x $3/bin/$t; done; true`);
+  for (const name of ["systemctl", "systemd-run", "apt-get"]) tool(name, name === "systemctl" ? '[ "$1" != is-active ]' : name === "apt-get" ? aptBody : "true");
+  tool("python3", `${pythonPre}\n[ "$1" = -m ] && [ "$2" = venv ] && [ "$3" != --help ] && for t in pip webarena-verified; do mkdir -p $3/bin; printf '#!/bin/sh\\necho "$t $*" >> ${dir}/log\\n' | sed "s/\\$t/$t/" > $3/bin/$t; chmod +x $3/bin/$t; done; true`);
   const script = join(dir, "startup.sh");
   writeFileSync(script, env.startup.replaceAll("/opt/foxbench", join(dir, "fb")));
   mkdirSync(join(dir, "fb"), { recursive: true });
@@ -56,9 +58,30 @@ describe("WF2 WF3 the startup script", () => {
     const syntax = spawnSync("sh", ["-n", "-c", env.startup]);
     expect(syntax.status).toBe(0);
     expect(env.startup).toContain(`webarena-verified==${WAV_VERSION}`);
-    const images = env.startup.match(/am1n3e\/webarena-verified-[a-z_]+(:\S+)?/g)!;
-    expect(images.map((i) => i.replace(/.*-/, ""))).toEqual(expect.arrayContaining(["wikipedia:0.1.0", "map:0.1.0"]));
-    expect(images.every((i) => i.endsWith(":0.1.0"))).toBe(true);
+    expect(env.startup.match(/am1n3e\/webarena-verified-[a-z_]+:\S+/g)!.toSorted()).toEqual([...wavSites, ...wavFullSites].map(wavImage).toSorted());
+  });
+  it("takes every image name from one table, at the tags Docker Hub has", () => {
+    expect([...wavSites, ...wavFullSites].map(wavImage).toSorted()).toEqual([
+      "am1n3e/webarena-verified-gitlab:0.1.0", "am1n3e/webarena-verified-map:0.1.0", "am1n3e/webarena-verified-reddit:0.1.0",
+      "am1n3e/webarena-verified-shopping:0.1.0", "am1n3e/webarena-verified-shopping_admin:0.1.0", "am1n3e/webarena-verified-wikipedia:1.0.0"]);
+  });
+  // Real registry: the fake docker above cannot tell a missing tag from a present one (the first GCP run failed on that).
+  it.skipIf(!online)("has every image of the startup script on Docker Hub", (t) => {
+    for (const image of env.startup.match(/am1n3e\/webarena-verified-[a-z_]+:\S+/g)!) {
+      const r = spawnSync("docker", ["manifest", "inspect", image], { encoding: "utf8", timeout: 60_000 });
+      if (/toomanyrequests|429/.test(r.stderr)) return t.skip("Docker Hub rate limit");
+      expect(r.status, `${image}: ${r.stderr}`).toBe(0);
+    }
+  });
+  it("installs python3-venv when ensurepip is missing, before the venv step", () => {
+    const dir2 = mkdtempSync(join(tmpdir(), "fbn-wf-venv-"));
+    try {
+      const noEnsurepip = boot(dir2, `[ "$1" = -c ] && [ ! -e ${dir2}/venv-installed ] && exit 1`, `[ "$*" = "install -y -q python3-venv" ] && touch ${dir2}/venv-installed; true`);
+      expect(noEnsurepip.status, noEnsurepip.stderr).toBe(0);
+      const at = (re: RegExp) => noEnsurepip.log.findIndex((l) => re.test(l));
+      expect(at(/^apt-get install .*python3-venv/)).toBeGreaterThan(-1);
+      expect(at(/^python3 -m venv .*wav-venv/)).toBeGreaterThan(at(/^apt-get install .*python3-venv/));
+    } finally { rmSync(dir2, { recursive: true, force: true }); }
   });
   it("starts the core sites and the reset service first, then sets up each data site once", () => {
     const first = boot(dir);

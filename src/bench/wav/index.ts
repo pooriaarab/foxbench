@@ -29,6 +29,8 @@ export interface WavSite {
   /** Where env-ctrl listens inside the container; the default is 8877. */
   ctrlInner?: number;
   containerPort: number;
+  /** The image tag on Docker Hub; the default is WAV_TAG (wikipedia's only tag is 1.0.0). */
+  tag?: string;
   /** A page that answers once the site is up, as upstream's own health check. */
   health: string;
   /** The path upstream's site URL has, as in its config (shopping_admin is at /admin). */
@@ -50,7 +52,7 @@ export const wavSites: WavSite[] = [
 
 // Ports and health pages as upstream's config.py (its docs say map is on 3030; its code and the WebArena paper say 3000).
 export const wavFullSites: WavSite[] = [
-  { id: "wikipedia", port: 8888, ctrlPort: 8889, ctrlInner: 8874, containerPort: 8080, health: "/", readOnly: true },
+  { id: "wikipedia", port: 8888, ctrlPort: 8889, ctrlInner: 8874, containerPort: 8080, tag: "1.0.0", health: "/", readOnly: true },
   { id: "map", port: 3000, ctrlPort: 3001, containerPort: 8080, health: "/", readOnly: true },
 ];
 
@@ -60,11 +62,14 @@ const MAP_VOLUMES: [string, string][] = [
   ["nominatim_db", "/data/nominatim/postgres"], ["nominatim_flatnode", "/data/nominatim/flatnode"], ["website_db", "/var/lib/postgresql/14/main"], ["tiles", "/data/tiles"], ["style", "/data/style"],
 ];
 
+/** The Docker Hub image of a site; the startup script and the registry test both read it from here. */
+export const wavImage = (s: WavSite) => `am1n3e/webarena-verified-${s.id}:${s.tag ?? WAV_TAG}`;
+
 /** The sites the startup script runs, with the flags that put each one on its ports with the proxy's base URL. */
 function wavRun(s: WavSite): string {
   const extra = s.id === "gitlab" ? " --shm-size=2g" : s.id === "wikipedia" ? " -v /opt/foxbench/wav-data:/data:ro"
     : s.id === "map" ? MAP_VOLUMES.map(([v, m]) => ` -v webarena_verified_map_${v}:${m}`).join("") : "";
-  return `run wav-${s.id} am1n3e/webarena-verified-${s.id}:${WAV_TAG} -p ${s.port}:${s.containerPort} -p ${s.ctrlPort}:${s.ctrlInner ?? 8877} -e WA_ENV_CTRL_EXTERNAL_SITE_URL=http://127.0.0.1:${s.port}${extra}`;
+  return `run wav-${s.id} ${wavImage(s)} -p ${s.port}:${s.containerPort} -p ${s.ctrlPort}:${s.ctrlInner ?? 8877} -e WA_ENV_CTRL_EXTERNAL_SITE_URL=http://127.0.0.1:${s.port}${extra}`;
 }
 
 /** The part of the startup script that downloads Wikipedia's and the map's data with upstream's own CLI at the pinned version, once per site. */
@@ -72,7 +77,7 @@ function wavData(): string {
   return `# wav-full: the data of the two sites, from upstream's CLI (the ZIM file is 100 GB, the map data 60 GB). The core sites above are already up.
 DATA=/opt/foxbench/wav-data
 mkdir -p $DATA
-command -v python3 >/dev/null && python3 -m venv --help >/dev/null 2>&1 || { apt-get update -q && DEBIAN_FRONTEND=noninteractive apt-get install -y -q python3-venv; }
+python3 -c "import ensurepip" >/dev/null 2>&1 || { apt-get update -q && DEBIAN_FRONTEND=noninteractive apt-get install -y -q python3-venv; }
 [ -x /opt/foxbench/wav-venv/bin/webarena-verified ] || { python3 -m venv /opt/foxbench/wav-venv && /opt/foxbench/wav-venv/bin/pip install -q webarena-verified==${WAV_VERSION}; }
 for site in ${wavFullSites.map((s) => s.id).join(" ")}; do
   [ -e /opt/foxbench/data-$site.done ] || { /opt/foxbench/wav-venv/bin/webarena-verified env setup init --site $site --data-dir $DATA && touch /opt/foxbench/data-$site.done; }
