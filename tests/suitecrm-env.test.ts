@@ -127,7 +127,7 @@ describe("SE5 reset restores the seeded database", () => {
 
 describe("SE6 one port table", () => {
   it("tunnels SuiteCRM and the reset service, and maps them in the startup script", () => {
-    expect(env.ports).toEqual([{ remote: 8080, local: 18081 }, { remote: 8871, local: 18871 }]);
+    expect(env.ports).toEqual([{ remote: 8080, local: 18181 }, { remote: 8871, local: 18971 }]);
     expect(env.startup).toContain("-p 8080:8080");
     expect(env.startup).toContain('("0.0.0.0", 8871)');
   });
