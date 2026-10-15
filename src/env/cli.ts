@@ -87,6 +87,9 @@ async function up(gcp: Gcp, name: string, spot: boolean, maxRun: string, offset:
     if (listVms(gcp, name).length) throw new Error(`${name} is up already (${stateFile(name)}). Run foxbench env down ${name} first.`);
     // No VM: it was preempted or deleted, and its tunnels from that run may still hold the ports.
     stopTunnels(old);
+    // A stopped tunnel frees its port a moment after the signal; under load that moment is long.
+    const until = Date.now() + 10_000;
+    for (const t of old.tunnels) while (!(await portFree(t.local)) && Date.now() < until) await sleep(100);
     rmSync(stateFile(name), { force: true });
   }
   for (const p of env.ports) if (!(await portFree(p.local))) throw new Error(`Local port ${p.local} is in use; ${name} tunnels to it. Free it first.`);

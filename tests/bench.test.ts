@@ -13,7 +13,7 @@ import { referenceAdapter } from "./reference.js";
 
 const root = join(import.meta.dirname, "..");
 const foxbench = benchmarkById("foxbench")!;
-const cli = (...args: string[]) => spawnSync(process.execPath, [join(root, "dist/cli.js"), "list", ...args], { encoding: "utf8", timeout: 60_000 });
+const cli = (...args: string[]) => spawnSync(process.execPath, [join(root, "dist/cli.js"), "list", ...args], { encoding: "utf8", timeout: 280_000 });
 
 /** Runs every case of a subset through the interface, one after another. */
 async function play(bench: Benchmark, subset: SubsetName, adapter: Adapter): Promise<{ id: string; verdict: Verdict }[]> {
@@ -152,6 +152,7 @@ describe("foxbench list reads the registry", () => {
     expect(rows.map((r) => r.id)).toEqual(benchmarks.map((b) => b.id));
     expect(rows[0]).toMatchObject({ id: "foxbench", ready: true, cases: tasksIn("all").length });
     expect(cli().stdout).toMatch(/foxbench\s+ready/);
-    // list loads every benchmark's cases, and a cold cache fetches the BrowseSafe-Bench file.
-  }, 120_000);
+    // list loads every benchmark's cases (about 12 s on an idle machine, over 60 s under the full
+    // suite on a loaded one), and a cold cache fetches the BrowseSafe-Bench file.
+  }, 600_000);
 });

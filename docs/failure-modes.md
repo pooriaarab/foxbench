@@ -245,6 +245,7 @@ argv and prints canned JSON.
 | V15 | A Spot VM is preempted. Its tunnel processes keep running and hold the local ports, and `down` says "No VMs" and leaves them. | `down` stops every tunnel in the env's state even when no VM exists, then removes the state. A tunnel that `up` started but had not yet recorded is in the state too: `up` records the pid when it starts the process. | `V15 ...` |
 | V16 | The next `up` stops at "Local port N is in use" because of the env's own tunnels from an earlier run. | `up` finds the env's state. When no VM has the env's label it stops the state's tunnels and removes it before it checks ports. When a VM exists it still stops with "up already". | `V16 ...` |
 | V17 | V16 kills a process that is not a tunnel: the pid in an old state file now belongs to another program, or another program holds the port. | A pid is stopped only when its command line has `start-iap-tunnel`. A port held by another program still stops `up` and nothing is killed. | `V17 ...` |
+| V18 | V16 stops the old tunnel, but its port is still bound for a moment after the signal (long on a loaded machine), so `up` stops at "Local port N is in use" anyway. | After it stops the old tunnels, `up` waits up to 10 s for their ports to be free before it checks ports. | `V18 ...` |
 
 ## WebMall env (`src/bench/webmall/env.ts`, `foxbench env up webmall`)
 

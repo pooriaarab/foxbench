@@ -146,10 +146,19 @@ describe("WJ9 the HAR path is the run's own", () => {
     const own = mkdtempSync(join(tmpdir(), "fbn-wj9-"));
     await run(perfect, ["44"], { harDir: own });
     expect(JSON.parse(readFileSync(join(own, "44.har"), "utf8")).log.entries.length).toBeGreaterThan(0);
-    const before = readdirSync(tmpdir()).filter((f) => f.startsWith("fbn-wav-har-"));
-    expect((await run(perfect, ["44"], { harDir: undefined })).passed).toBe(1);
+    // Other test files run wav cases at the same time and use the system temp dir: give this run its own.
+    const temp = mkdtempSync(join(tmpdir(), "fbn-wj9-tmp-"));
+    const saved = process.env.TMPDIR;
+    process.env.TMPDIR = temp;
+    try {
+      expect((await run(perfect, ["44"], { harDir: undefined })).passed).toBe(1);
+    } finally {
+      if (saved === undefined) delete process.env.TMPDIR;
+      else process.env.TMPDIR = saved;
+    }
     expect(readFileSync(decoy, "utf8")).toBe("another run's trace");
-    expect(readdirSync(tmpdir()).filter((f) => f.startsWith("fbn-wav-har-") && !before.includes(f))).toEqual([]);
+    expect(readdirSync(temp).filter((f) => f.startsWith("fbn-wav-har-"))).toEqual([]);
+    rmSync(temp, { recursive: true });
     rmSync(own, { recursive: true });
     rmSync(decoy);
   }, 300_000);
