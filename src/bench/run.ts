@@ -8,6 +8,7 @@ import type { Judge, JudgeResult } from "./judge.js";
 import { startProxy, type RecordingProxy } from "./proxy.js";
 import { benchContext, readiness } from "./registry.js";
 import { median, speedBoard, type Speed } from "./speed.js";
+import { passHatKBoard, type PassHatK } from "./trials.js";
 import type { Benchmark, Case, Env, Episode, Readiness, SubsetName, Verdict } from "./types.js";
 
 export interface TaskResult {
@@ -40,6 +41,8 @@ export interface TaskResult {
   asks: number;
   /** Who played the user: "scripted", "llm:<model>", or null for no user (Q8). */
   user: string | null;
+  /** Which trial of the case this was, from 0, when the run had more than one (K5). */
+  trial?: number;
   /** What the agent reported about itself, or null. Never used in the score. */
   agentMetrics: AgentMetrics | null;
   /** Each LLM judge's verdict, when judges scored the case. */
@@ -87,6 +90,8 @@ export interface Scoreboard {
   fingerprint: Fingerprint;
   /** Cases and passes per LLM judge, so the cloud and the local judge stand side by side (J4). */
   judges: Record<string, { model: string; where: JudgeResult["where"]; cases: number; passed: number }>;
+  /** pass^1 to pass^n per benchmark, when the run had more than one trial (K1). */
+  passHatK?: Record<string, PassHatK>;
   results: TaskResult[];
 }
 
@@ -101,6 +106,8 @@ export interface BenchRunOptions {
   graceMs?: number;
   /** The model that plays the user where a benchmark has one. */
   userModel?: string;
+  /** How many times to run each case, each from a fresh start (K3). The default is 1. */
+  trials?: number;
   onResult?: (result: TaskResult) => void;
   /** The LLM judges, for cases marked `judge: "llm"`. */
   judges?: Judge[];
@@ -224,10 +231,14 @@ export async function runBenchmarks(options: BenchRunOptions): Promise<Scoreboar
         continue;
       }
       try {
+        const trials = options.trials ?? 1;
         for (const item of cases) {
-          const result = await runCase(bench, env, item, options);
-          results.push(result);
-          options.onResult?.(result);
+          for (let trial = 0; trial < trials; trial++) {
+            const result = await runCase(bench, env, item, options);
+            if (trials > 1) result.trial = trial;
+            results.push(result);
+            options.onResult?.(result);
+          }
         }
       } finally {
         await bench.down(env);
@@ -237,7 +248,8 @@ export async function runBenchmarks(options: BenchRunOptions): Promise<Scoreboar
     await options.adapter.close?.();
   }
   const detectors = detectorScores(results, options.runs.map((r) => r.benchmark));
-  return { ...scoreboard(options.adapter.name, results, skipped), ...(Object.keys(detectors).length ? { detectors } : {}), speed: speedBoard(results), fingerprint: fingerprint({ ...(ctx.firefox ? { firefox: ctx.firefox } : {}), env: ctx.env, judges: ctx.judges ?? [],
+  return { ...scoreboard(options.adapter.name, results, skipped), ...(Object.keys(detectors).length ? { detectors } : {}),
+    ...((options.trials ?? 1) > 1 ? { passHatK: passHatKBoard(results) } : {}), speed: speedBoard(results), fingerprint: fingerprint({ ...(ctx.firefox ? { firefox: ctx.firefox } : {}), env: ctx.env, judges: ctx.judges ?? [],
     users: [...new Set(results.flatMap((r) => (r.user?.startsWith("llm:") ? [r.user] : [])))] }) };
 }
 

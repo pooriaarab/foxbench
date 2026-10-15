@@ -324,6 +324,7 @@ tags.
 | `--timeout <s>` | The longest time for one task. The default is 600 seconds. |
 | `--min-success <0-1>` | Exit 1 when the success rate is lower. |
 | `--user-model <id>` | The Claude model that plays the user in benchmarks that have one (tau2). The default is `claude-sonnet-5-5`; `claude-haiku-5-5` is the cheap one. It needs `ANTHROPIC_API_KEY` (and `ANTHROPIC_WORKSPACE_ID` when the key needs one). The board's fingerprint names the model. |
+| `--trials <n>` | Run each case n times, each from a fresh start, and report pass^1 to pass^n per benchmark as tau2-bench defines it (the mean over cases of C(c, k) / C(n, k)). Trials that ended in a harness error are left out of pass^k and counted. |
 | `--arg key=json` | An extra argument for each MCP tool call, for example `--arg llm=true`. Repeat it for more. |
 
 `foxbench run` exits 1 when every task ended in an adapter error, for example
