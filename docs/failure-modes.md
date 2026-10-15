@@ -547,6 +547,24 @@ with a fake fetch: no test calls the Anthropic API.
 | Q9 | The API key reaches the agent, the trace or the board. | The key and the workspace id go only on the request to the API, as `x-api-key` and `anthropic-workspace-id`. The board JSON holds neither. A missing key is a not-ready row, never a request. | `Q9 ...` |
 | Q10 | Two messages at once interleave, so a reply answers the wrong question. | Replies run one at a time, in the order the messages came. | `Q10 ...` |
 
+## Repeated trials and pass^k (`src/bench/trials.ts`)
+
+`foxbench run --trials <n>` runs each case n times and reports pass^k as
+tau2-bench defines it (`tau2/metrics/agent_metrics.py`): for each case with c
+passing trials out of n, C(c, k) / C(n, k), averaged over cases, for k from 1
+to the fewest trials any case has. Each row is a way a reliability number
+could differ from tau2's. The tests are in `tests/trials.test.ts`, on a toy
+benchmark whose scripted agent passes a fixed pattern of trials.
+
+| # | Failure mode | Wanted behaviour | Test |
+|---|---|---|---|
+| K1 | pass^k is not tau2's formula, so it cannot sit beside the leaderboard. | C(c, k) / C(n, k) per case, then the mean over cases. With n = 4: c = 2 gives 0.5, 1/6, 0, 0; c = 4 gives 1 for every k. | `K1 ...` |
+| K2 | pass^1 differs from the success rate of the same trials. | pass^1 is the mean of the per-case pass rates; with every case run n times it equals `passed / tasks`. | `K2 ...` |
+| K3 | A trial sees the state an earlier trial left, so later trials are easier or harder. | Each trial is its own `start`: a fresh episode, server and proxy. | `K3 ...` |
+| K4 | A harness error (the site or the simulated user failed) counts as an agent failure in pass^k, while tau2 leaves its infrastructure errors out. | Trials whose first reason starts with `harness:` are left out of pass^k, and the board counts them. pass^k goes up to the fewest trials left for any case, as tau2 does. The success rate still counts them as fails. | `K4 ...` |
+| K5 | Two trials of a case share one row, so a reader cannot tell them apart. | Each result names its trial (0 to n - 1). | `K5 ...` |
+| K6 | `--trials 0`, a fraction or text runs nothing, or runs once and exits 0. | Exit 2 and say what `--trials` takes. Without the flag, each case runs once and the board has no pass^k. | `K6 ...` |
+
 ## AMO release build and listed submission (`scripts/amo-listing.mjs`)
 
 `pnpm check:amo` reads `dist-ext/`, which is what `release.yml` signs. Each
