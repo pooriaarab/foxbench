@@ -1011,6 +1011,32 @@ no OS VM, so the benchmark is a skip row that says so.
 | RT3 | A web-only subset is invented that upstream never measured, so scores look comparable to Operator's 7.6% and are not. | `load()` returns no cases for every subset; no baseline is listed. | `RT3 ...` |
 | RT4 | The pin or licence is lost. | The benchmark records the repo, the full commit and Apache-2.0. | `RT4 ...` |
 
+## MyPCBench tasks and rubric judge (`src/bench/mypcbench/index.ts`)
+
+MyPCBench (Jang et al., 2026, MIT) has 184 personal-assistant tasks over one
+persona's 17 logged-in apps. Each task has 3 to 8 rubric items with weights
+that sum to 1; upstream's judge reads a screenshot of every step and a task
+passes ("Perfect %") when every item is met. foxbench has no screenshots, so
+the Claude judge reads the agent's final answer and the write requests the
+proxy saw, and the board says it is a different judge. 93 tasks need
+LibreOffice, Files or Thunar on the VM's desktop, which a browser agent does
+not have; they are not run. The task file is fetched at a pinned commit.
+
+| # | Failure mode | Wanted behaviour | Test |
+|---|---|---|---|
+| MB1 | The task file is committed, unpinned or changed, so two runs grade different tasks. | It is fetched at the pinned commit into the cache, checked against a pinned SHA-256, and not in the repo. A changed file stops the run. | `MB1 ...` |
+| MB2 | Desktop tasks run on a browser agent and fail as agent faults, or are dropped without a word. | `load()` returns only tasks with no LibreOffice, Files or Thunar app; the count of the others is in the benchmark's description. Every case is `judge: "llm"`. | `MB2 ...` |
+| MB3 | An agent that does nothing scores, because the judge is easy. | With a fair fake judge (an item passes only if the evidence shows it), a noop agent passes 0 cases. | `MB3 ...` |
+| MB4 | A perfect agent fails, so the harness cannot be passed. | An agent that makes the writes and states the answer passes: every item met. | `MB4 ...` |
+| MB5 | A wrong agent passes, or the agent's `done` claim is believed. | An agent that claims `done` with a wrong answer and no writes fails. The judge prompt holds the instruction, the answer, the log and the writes, never `done`. | `MB5 ...` |
+| MB6 | The judge sees reads as work: a page view counts as the booking. | The prompt lists only writes (POST, PUT, PATCH, DELETE) to the apps of the case, with status, and says reads are not work. | `MB6 ...` |
+| MB7 | A partial result counts as a pass, or a pass hides how far the agent got. | `success` needs every item met; `score` is the weight of the items met. | `MB7 ...` |
+| MB8 | A judge reply that lacks an item, or is not JSON, counts as a pass. | The case fails with a `judge:` reason (J5); the verdict names the judge model. | `MB8 ...` |
+| MB9 | A case's changes carry into the next case. | After a case with a write, the VM resets before the next case starts; a read-only case causes no reset; the mark outlives the run. | `MB9 ...` |
+| MB10 | An app is reached without its login, or on the VM's own port, so the trace misses it. | Each involved app is served on its port through its own proxy, with the persona's session cookie added; the agent never sees the cookie. | `MB10 ...` |
+| MB11 | The rubric text leaks to the board. | Reasons name the items by number and weight, not by text. | `MB11 ...` |
+| MB12 | Cases run with no judge, so every case fails and looks like an agent fault. | With no judge, the run loop gives a skip row (J2). | `MB12 ...` |
+
 ## AMO release build and listed submission (`scripts/amo-listing.mjs`)
 
 `pnpm check:amo` reads `dist-ext/`, which is what `release.yml` signs. Each
