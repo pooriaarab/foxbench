@@ -11,6 +11,7 @@ import odysseys from "./subsets/odysseys.json" with { type: "json" };
 import tau2Airline from "./subsets/tau2-airline.json" with { type: "json" };
 import tau2Retail from "./subsets/tau2-retail.json" with { type: "json" };
 import webarenaVerified from "./subsets/webarena-verified.json" with { type: "json" };
+import wasp from "./subsets/wasp.json" with { type: "json" };
 import webgames from "./subsets/webgames.json" with { type: "json" };
 import webtailbench from "./subsets/webtailbench.json" with { type: "json" };
 import webvoyager from "./subsets/webvoyager.json" with { type: "json" };
@@ -31,6 +32,7 @@ const LISTS: SubsetLists = {
   webtailbench,
   deepshop,
   webvoyager,
+  wasp,
 };
 
 /** The cases of a subset, from a benchmark's full list. Throws when a list names a case the benchmark lacks (L5). */

@@ -100,7 +100,7 @@ export function wavUrls(env: NodeJS.ProcessEnv, offset = TUNNEL_OFFSET) {
   return wavSites.map((s) => ({ site: s, url: `http://${host}:${s.port + offset}`, ctrl: `http://${host}:${s.ctrlPort + offset}`, reset: `http://${host}:${RESET_PORT + offset}/reset/${s.id}` }));
 }
 
-type SiteUrl = ReturnType<typeof wavUrls>[number];
+export type SiteUrl = ReturnType<typeof wavUrls>[number];
 
 /** One request with no connection pool, so a dead tunnel never hands back a stale socket. */
 function http(url: string, opts: { method?: string; headers?: Record<string, string>; body?: string } = {}): Promise<{ status: number; headers: IncomingHttpHeaders; body: string }> {
@@ -134,7 +134,7 @@ async function gitlabSession(u: SiteUrl, host: string): Promise<string> {
 }
 
 /** What the proxy adds on each request to a site: its own Host, so links stay on the proxy port, and the login (P3). */
-async function siteHeaders(u: SiteUrl): Promise<Record<string, string>> {
+export async function siteHeaders(u: SiteUrl): Promise<Record<string, string>> {
   const host = `127.0.0.1:${u.site.port}`;
   const { header, user, password } = u.site.login;
   return { host, ...(header ? { [header]: `${user}:${password}` } : { cookie: await gitlabSession(u, host) }) };
@@ -143,7 +143,7 @@ async function siteHeaders(u: SiteUrl): Promise<Record<string, string>> {
 const message = (error: unknown) => (error instanceof Error ? error.message : String(error));
 
 /** Null when env-ctrl says healthy and the health page loads; else why not. */
-async function probe(url: string, ctrl: string, health: string): Promise<string | null> {
+export async function probe(url: string, ctrl: string, health: string): Promise<string | null> {
   try {
     const body = JSON.parse((await get(`${ctrl}/status`)).body) as { success?: boolean; message?: string };
     if (!body.success) return `env-ctrl at ${ctrl}/status says not healthy${body.message ? `: ${body.message}` : ""}`;
@@ -175,7 +175,7 @@ const running = new WeakMap<Episode, { task: WavTask; hars: { site: string; har:
 const READS = ["GET", "HEAD", "OPTIONS"];
 
 /** Recreates a site's container through the env's reset service, then waits for its probe. */
-async function reset(u: SiteUrl, waitMs: number): Promise<void> {
+export async function reset(u: SiteUrl, waitMs: number): Promise<void> {
   const res = await http(u.reset, { method: "POST" });
   if (res.status !== 200) throw new Error(`${u.site.id}: the reset service returned ${res.status}`);
   const deadline = Date.now() + waitMs;
@@ -184,6 +184,9 @@ async function reset(u: SiteUrl, waitMs: number): Promise<void> {
     await new Promise((r) => setTimeout(r, Math.min(3000, waitMs / 4)));
   }
 }
+
+/** The file of the sites to reset before their next case, per host and tunnel offset (WJ6). */
+export const wavDirtyFile = (ctx: BenchContext, offset = TUNNEL_OFFSET) => join(wavDir(ctx), `dirty-${ctx.env.FOXBENCH_WAV_HOST || "127.0.0.1"}-${offset}.json`);
 
 /** `offset` moves the tunnel ports and `resetWaitMs` shortens the wait for a reset, for tests. */
 export const webarenaVerified = (options: { offset?: number; resetWaitMs?: number } = {}): Benchmark => ({
@@ -210,7 +213,7 @@ export const webarenaVerified = (options: { offset?: number; resetWaitMs?: numbe
   },
   async up(ctx) {
     const { tasks } = await loadTasks(ctx);
-    const dirtyFile = join(wavDir(ctx), `dirty-${ctx.env.FOXBENCH_WAV_HOST || "127.0.0.1"}-${options.offset ?? TUNNEL_OFFSET}.json`);
+    const dirtyFile = wavDirtyFile(ctx, options.offset);
     const dirty = new Set<string>(existsSync(dirtyFile) ? JSON.parse(readFileSync(dirtyFile, "utf8")) : []);
     const env: WavEnv = { ctx, sites: wavUrls(ctx.env, options.offset), tasks: new Map(tasks.map((t) => [String(t.id), t])), prompts: await loadPrompts(ctx, tasks), dirty, dirtyFile };
     return env as unknown as Env;

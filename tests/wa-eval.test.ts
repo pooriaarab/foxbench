@@ -162,6 +162,15 @@ describe("WE9 approaches the port does not know", () => {
   });
 });
 
+const gone = (text: string) => ok(html([target({ url: "http://127.0.0.1:8023/p", required_contents: { must_exclude: ["dotfiles"] } })]), { page: async () => scripted({ "http://127.0.0.1:8023/p": { html: text } }).page });
+describe("WE11 must_exclude", () => {
+  it("fails while an entry is on the page, as a whole token for one word, and on an empty page", async () => {
+    expect(await gone("<li>dotfiles</li>")).toBe(false);
+    expect(await gone("<li>dotfiles-2</li><li>other</li>")).toBe(true);
+    expect(await gone("")).toBe(false);
+  });
+});
+
 describe("WE10 noop", () => {
   it("scores 0 on every kind and opens no browser", async () => {
     let started = 0;

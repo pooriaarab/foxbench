@@ -118,6 +118,8 @@ class Run {
         if (!exactMatch(value as string, pred)) this.fail(`${what}: not exactly "${value}"`);
       } else if (approach === "must_include") {
         for (const entry of value as string[]) if (!entry.split(" |OR| ").some((alt) => mustInclude(alt, pred))) this.fail(`${what}: does not include "${entry}"`);
+      } else if (approach === "must_exclude") {
+        for (const entry of value as string[]) if (mustInclude(entry, pred)) this.fail(`${what}: includes "${entry}"`);
       } else if (approach === "fuzzy_match" && value === "N/A") {
         if (!exactMatch("N/A", pred)) await this.ask(uaAsk(pred, this.task.eval.string_note ?? "", this.task.intent), parseUa);
       } else if (approach === "fuzzy_match") {
