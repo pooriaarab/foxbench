@@ -1,0 +1,4 @@
+{
+  "how": "4 per capability, the first 4 ids by sha256 of \"foxbench-gaia2:<id>\"",
+  "quick": ["0053_aanknwl7oew08yda60lfw6ii37zmbn27", "0111_4oimwnx3g2037nm9q4hiawruhtsmytqh", "0326_cua96jjihfu9cuznvuu8dimpkuxb690t", "0382_pqfuln99gfxe5mmrqg9yvkfp2miwrt9q", "0229_349f6ov3ft34acmbxwwfbimtzelhtyfj", "0295_xu1isz6ulvp0v1pn0nlprinmey9a36jn", "0394_5htp0cvoeu8z8s6w018c86xzrdor21si", "0425_65ew956wvtg4pbw1ncpavp09p0oc74nj", "0640_wmhimcz5k59llrdgf6g0fkqppmruk82b", "0859_0955qpz7w3j9ib9vml2osvr8fxjzswxs", "0891_orvr2n92xivf9rm5s6ih12473ypo6t18", "0932_5jfayayraae5kkh471epw5qhdjb6c5sl", "0165_r8pvueijvovyaw9gwc9k8k2c3jjrlczp", "0197_da4x890dllfqmlhxx79l1rxypwc8op76", "0200_ndh9u8xbnpvnqmyy787miw5glb62ecu0", "0520_vs2mfw4rol4q163x0lzp2f907btnnsmk", "0735_sbonsywxnoryge3wlcev7sxiqje8uyti", "0812_qlzb47am926hwepov29ts6qei6y0clzq", "0976_vq721pp5cpl558vdzftau24pzgvl9sv5", "0982_nqa42peg3anfzs7v0mcna20scf6r5dn0"]
+}

@@ -12,6 +12,7 @@ import { browsesafeBenchmark } from "./browsesafe.js";
 import { slackBenchmark } from "./agentdojo/slack.js";
 import { foxbenchBenchmark } from "./foxbench.js";
 import { gaiaBenchmark } from "./gaia.js";
+import { gaia2Benchmark } from "./gaia2/index.js";
 import { miniwobBenchmark } from "./miniwob/index.js";
 import { onlineMind2webBenchmark } from "./online-mind2web.js";
 import type { BenchContext, Benchmark, Readiness, SubsetName } from "./types.js";
@@ -43,6 +44,7 @@ export const benchmarks: Benchmark[] = [
   tau2Benchmark("retail"),
   tau2Benchmark("airline"),
   gaiaBenchmark(),
+  gaia2Benchmark(),
   onlineMind2webBenchmark(),
   browsecompBenchmark(),
   odysseysBenchmark(),
