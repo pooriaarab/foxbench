@@ -12,6 +12,7 @@ import { slackBenchmark } from "./agentdojo/slack.js";
 import { foxbenchBenchmark } from "./foxbench.js";
 import { gaiaBenchmark } from "./gaia.js";
 import { miniwobBenchmark } from "./miniwob/index.js";
+import { onlineMind2webBenchmark } from "./online-mind2web.js";
 import type { BenchContext, Benchmark, Readiness, SubsetName } from "./types.js";
 import { DEFAULT_USER_MODEL } from "./user.js";
 import { tau2Benchmark } from "./tau2/index.js";
@@ -37,6 +38,7 @@ export const benchmarks: Benchmark[] = [
   tau2Benchmark("retail"),
   tau2Benchmark("airline"),
   gaiaBenchmark(),
+  onlineMind2webBenchmark(),
 ];
 
 export const benchmarkById = (id: string): Benchmark | undefined => benchmarks.find((b) => b.id === id);
