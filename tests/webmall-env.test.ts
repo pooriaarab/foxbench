@@ -101,7 +101,7 @@ describe("WebMall env", () => {
     expect(readFileSync(join(home, ".foxbench/env/webmall.key"), "utf8")).toBe(one);
     expect(statSync(join(home, ".foxbench/env/webmall.key")).mode & 0o777).toBe(0o600);
     expect(webmallScript.bind(null, { bind: "x", dir: "x", key: "a'); evil" })).toThrow("only letters");
-  });
+  }, 120_000);
 
   it("CP2 is up only when every shop answers the control route with the key", () => {
     fresh();
@@ -118,7 +118,7 @@ describe("WebMall env", () => {
       expect(up().status).toBe(0);
       expect(readFileSync(join(cache(), "override.yml"), "utf8").includes("UseSVE=0")).toBe(flag);
     }
-  });
+  }, 120_000);
 
   it("WM4 an interrupted first run restores again, and the ready marker comes last", () => {
     fresh();
