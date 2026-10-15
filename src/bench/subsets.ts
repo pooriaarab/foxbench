@@ -6,6 +6,7 @@ import browsecomp from "./subsets/browsecomp.json" with { type: "json" };
 import appworld from "./subsets/appworld.json" with { type: "json" };
 import browsesafe from "./subsets/browsesafe.json" with { type: "json" };
 import deepshop from "./subsets/deepshop.json" with { type: "json" };
+import doomarena from "./subsets/doomarena.json" with { type: "json" };
 import foxbench from "./subsets/foxbench.json" with { type: "json" };
 import gaia2 from "./subsets/gaia2.json" with { type: "json" };
 import miniwob from "./subsets/miniwob.json" with { type: "json" };
@@ -39,6 +40,7 @@ const LISTS: SubsetLists = {
   webvoyager,
   wasp,
   agentdam,
+  doomarena,
 };
 
 /** The cases of a subset, from a benchmark's full list. Throws when a list names a case the benchmark lacks (L5). */
