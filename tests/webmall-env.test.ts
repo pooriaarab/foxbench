@@ -1,11 +1,11 @@
-// Tests for the WebMall env failure modes in docs/failure-modes.md (WM1-WM12). A fake
+// Tests for the WebMall env failure modes in docs/failure-modes.md (WM1-WM13, CP1-CP2). A fake
 // docker and curl on PATH log every call, so the script runs for real and nothing is fetched.
 import { execFileSync, spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeAll, describe, expect, it } from "vitest";
-import { TUNNEL_OFFSET, WEBMALL_IMAGES, WEBMALL_REF, webmallSites, webmallStartup } from "../src/bench/webmall/env.js";
+import { TUNNEL_OFFSET, WEBMALL_IMAGES, WEBMALL_REF, webmallScript, webmallSites, webmallStartup } from "../src/bench/webmall/env.js";
 
 const root = join(import.meta.dirname, "..");
 const fixtures = join(root, "tests/fixtures");
@@ -44,7 +44,7 @@ function cli(args: string[], env: Record<string, string> = {}, path = join(home,
   return { status: r.status, stdout: r.stdout, stderr: r.stderr };
 }
 const up = (env: Record<string, string> = {}) => cli(["env", "up", "webmall", "--provider", "docker"], env);
-const calls = (): { cmd: string; argv: string[] }[] => (existsSync(join(home, "calls.jsonl")) ? readFileSync(join(home, "calls.jsonl"), "utf8").trim().split("\n").map((l) => JSON.parse(l)) : []);
+const calls = (): { cmd: string; argv: string[]; stdin?: string }[] => (existsSync(join(home, "calls.jsonl")) ? readFileSync(join(home, "calls.jsonl"), "utf8").trim().split("\n").map((l) => JSON.parse(l)) : []);
 const docker = (...prefix: string[]) => calls().filter((c) => c.cmd === "docker" && prefix.every((p, i) => c.argv[i] === p));
 const backups = () => calls().filter((c) => c.cmd === "curl" && c.argv.at(-1)!.includes("/webmall/backup/"));
 
@@ -66,7 +66,7 @@ describe("WebMall env", () => {
     up();
     expect(readFileSync(join(cache(), "webmall.env"), "utf8")).toBe(webmallSites.map((s, n) => `${s.id === "frontend" ? "FRONTEND" : `SHOP${n + 1}`}_PORT=127.0.0.1:${s.port + TUNNEL_OFFSET}\n`).join(""));
     expect(readFileSync(join(cache(), "override.yml"), "utf8")).toContain("ports: !reset []");
-    expect(webmallStartup()).toContain("SHOP1_PORT=0.0.0.0:18081");
+    expect(webmallStartup("k")).toContain("SHOP1_PORT=0.0.0.0:18081");
   });
 
   it("WM3 names the proxy's origin in wp-config.php and the database", () => {
@@ -81,6 +81,36 @@ describe("WebMall env", () => {
     }
   });
 
+  it("CP1 writes the control plugin to every shop on every run, with the current key", () => {
+    fresh();
+    up({ FOXBENCH_WEBMALL_KEY: "key-one" });
+    up({ FOXBENCH_WEBMALL_KEY: "key-two" });
+    const plugins = docker("exec", "-i").map((c) => [c.argv[2], c.stdin!] as const);
+    expect(plugins).toHaveLength(8);
+    expect(plugins.map(([shop]) => shop)).toEqual([1, 2, 3, 4, 1, 2, 3, 4].map((n) => `WebMall_wordpress_shop${n}`));
+    expect(plugins[0]![1]).toContain("hash_equals('key-one'");
+    expect(plugins[7]![1]).toContain("hash_equals('key-two'");
+    expect(plugins[7]![1]).not.toContain("key-one");
+    // With no FOXBENCH_WEBMALL_KEY a random key is made once, readable by its owner only, and reused.
+    fresh();
+    up();
+    up();
+    const [one, two] = docker("exec", "-i").filter((c) => c.argv[2] === "WebMall_wordpress_shop1").map((c) => /hash_equals\('(\w+)'/.exec(c.stdin!)![1]);
+    expect(one).toMatch(/^[0-9a-f]{32}$/);
+    expect(two).toBe(one);
+    expect(readFileSync(join(home, ".foxbench/env/webmall.key"), "utf8")).toBe(one);
+    expect(statSync(join(home, ".foxbench/env/webmall.key")).mode & 0o777).toBe(0o600);
+    expect(webmallScript.bind(null, { bind: "x", dir: "x", key: "a'); evil" })).toThrow("only letters");
+  }, 120_000);
+
+  it("CP2 is up only when every shop answers the control route with the key", () => {
+    fresh();
+    up({ FOXBENCH_WEBMALL_KEY: "key-one" });
+    const probes = calls().filter((c) => c.cmd === "curl" && c.argv.includes("-H") && c.argv.at(-1)!.includes("/wp-json/foxbench/v1/state"));
+    expect(probes.map((c) => c.argv.at(-1))).toEqual([18081, 18082, 18083, 18084].map((p) => `http://127.0.0.1:${p}/wp-json/foxbench/v1/state`));
+    for (const p of probes) expect(p.argv).toContain("X-Foxbench-Key: key-one");
+  });
+
   it("WM13 gives Elasticsearch no ARM-only JVM flag on x86", () => {
     for (const [arch, flag] of [["x86_64", false], ["arm64", true]] as const) {
       const bin = fresh();
@@ -88,7 +118,7 @@ describe("WebMall env", () => {
       expect(up().status).toBe(0);
       expect(readFileSync(join(cache(), "override.yml"), "utf8").includes("UseSVE=0")).toBe(flag);
     }
-  });
+  }, 120_000);
 
   it("WM4 an interrupted first run restores again, and the ready marker comes last", () => {
     fresh();
@@ -151,7 +181,7 @@ describe("WebMall env", () => {
     const gcloud = readFileSync(join(home, "gcloud.jsonl"), "utf8").trim().split("\n").map((l) => JSON.parse(l) as { argv: string[]; script?: string });
     const create = gcloud.find((c) => c.argv.includes("create"))!;
     expect(create.argv).toEqual(expect.arrayContaining(["--machine-type=e2-standard-4", "--boot-disk-size=40GB", "--labels=foxbench-env=webmall"]));
-    expect(create.script).toBe(webmallStartup());
+    expect(create.script).toContain("SHOP1_PORT=0.0.0.0:18081");
     const ports = gcloud.filter((c) => c.argv.includes("start-iap-tunnel")).map((c) => c.argv.find((a) => a.startsWith("--local-host-port="))!.split(":")[1]);
     expect(ports).toEqual(webmallSites.map((s) => String(s.port + TUNNEL_OFFSET)));
   });

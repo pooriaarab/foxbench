@@ -267,6 +267,16 @@ commit and its data from the authors' server at run time. Nothing of it is commi
 | WM12 | The real sites do not come up from the pinned files. | The live test (`FOXBENCH_WEBMALL_LIVE=1`, not in CI: 3.6 GB) brings the four shops and the start page up on local Docker; each answers on the proxy's origin and a shop lists products. | `WM12 ...` |
 | WM13 | Elasticsearch exits at once on x86 because upstream's `-XX:UseSVE=0` is an ARM-only flag, and every search fails. | The flag is set only when `uname -m` is arm64 or aarch64. | `WM13 ...` |
 
+## WebMall control plugin (`src/bench/webmall/env.ts`)
+
+The judge needs state a page never shows: every cart, every order, and a reset (the restored
+data holds the authors' old carts and orders). The env writes one foxbench plugin into each shop.
+
+| ID | Failure mode | Wanted behaviour | Test |
+|---|---|---|---|
+| CP1 | Anyone can read or reset the shops, or a changed key never reaches the shops. | The control routes need a key: `FOXBENCH_WEBMALL_KEY`, or a random one made once in `~/.foxbench/env/webmall.key` (owner-only) and reused. The plugin is written to every shop on every `up`, and a key with a quote or a space is refused. | `CP1 ...` |
+| CP2 | `up` says ready while a shop still runs an older plugin (PHP's opcache keeps a file for up to a minute) or none. | `up` ends when each shop answers the control route with the current key, and the start page answers. | `CP2 ...` |
+
 ## Speed and the run fingerprint (`src/bench/speed.ts`, `src/bench/fingerprint.ts`)
 
 A speed claim needs the right statistic and the machine it came from. Each
