@@ -129,6 +129,8 @@ export interface Benchmark {
   detector?: string;
   /** The licence forbids showing the benchmark's text: boards keep case ids and verdicts only, with no agent log. */
   redact?: boolean;
+  /** For a `redact` benchmark: the agent log with the benchmark's text masked. The board keeps its start and end. Without it a redacted benchmark keeps no log. */
+  maskLog?(episode: Episode, log: string): string;
   /** Preflight. A skip carries the reason that goes in the board. */
   check(ctx: BenchContext): Promise<Readiness>;
   /** The cases of a subset. */

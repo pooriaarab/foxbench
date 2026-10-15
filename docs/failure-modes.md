@@ -1065,10 +1065,13 @@ synthetic encrypted file (`FOXBENCH_BROWSECOMP_URL`) and use fake judges.
 | BC1 | The file changes at the blob, so a score is for questions nobody pinned. | The file's SHA-256 is pinned; a file that differs stops the load, whether fresh or cached. | `BC1 ...` |
 | BC2 | Plain text lands in the repo or the cache. | Only the encrypted file is cached and nothing is committed; decryption happens in memory. | `BC2 ...` |
 | BC3 | The case list is wrong, or lists the questions. | One case per row with a stable id from the row number and the topic as tag; no goal, so `foxbench list` shows none. | `BC3 ...` |
-| BC4 | The question, the gold answer or the agent's log reach a board. | The benchmark is `redact: true`; reasons never quote the gold answer; the JSON and Markdown boards hold ids and verdicts only. | `BC4 ...` |
+| BC4 | The question or the gold answer reach a board. | The benchmark is `redact: true`; reasons never quote the gold answer; the boards hold ids, verdicts and a masked log only. | `BC4 ...` |
 | BC5 | An agent that does nothing passes, or a wrong answer does. | The judge gets the question, the response and the gold answer. With a fair fake judge, `noop` and a wrong agent pass 0 and a perfect agent passes all. | `BC5 ...` |
 | BC6 | A judge reply with no verdict counts as a pass; the Claude-graded number is read as the official one. | The case fails with a `judge:` reason (J5); `judgedBy` names the model (J6). | `BC6 ...` |
 | BC7 | Decryption gives garbage for a row, and the case is graded against it. | A row that does not decrypt to text stops the load with its row number. | `BC7 ...` |
+| BC8 | A failed run cannot be diagnosed: `redact` drops the whole log. | `maskLog` keeps the log with the gold answer and the question masked: steps, errors and the final message stay. A redacted benchmark without `maskLog` (GAIA, AppWorld) keeps none. | `BC8 ...` |
+| BC9 | The kept log leaks the gold answer or the question: by case, spacing, punctuation, one word of the answer, a clause of the question, or an error message. | Each is masked as `[masked]`; tested with a planted answer in the log, the final answer and an adapter error. | `BC9 ...` |
+| BC10 | A long log hides its end, or fills the board. | A log over 4000 characters keeps its first 1000 and last 2950. | `BC10 ...` |
 
 ## Odysseys and Mind2Web 2 dev (`src/bench/odysseys.ts`, `src/bench/mind2web2.ts`)
 
