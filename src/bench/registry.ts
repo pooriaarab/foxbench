@@ -29,6 +29,7 @@ import { webgamesBenchmark } from "./webgames.js";
 import { mypcbenchBenchmark } from "./mypcbench/index.js";
 import { redteamcuaBenchmark } from "./redteamcua.js";
 import { waspBenchmark } from "./wasp/index.js";
+import { stSuitecrmBenchmark } from "./st-suitecrm.js";
 
 const foxbench = foxbenchBenchmark();
 // One entry per line, so two PRs that each add a benchmark do not conflict.
@@ -56,6 +57,7 @@ export const benchmarks: Benchmark[] = [
   webtailbenchBenchmark(),
   deepshopBenchmark(),
   mypcbenchBenchmark(),
+  stSuitecrmBenchmark(),
   webvoyagerBenchmark(),
   redteamcuaBenchmark(),
   waspBenchmark(),
