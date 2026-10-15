@@ -70,12 +70,9 @@ systemd-run --unit=foxbench-smoke python3 -m http.server 8080 --directory /srv/f
     machineType: "e2-standard-4",
     diskGb: 40,
     ports: webmallSites.map((s) => ({ remote: s.port + WEBMALL_OFFSET, local: s.port + WEBMALL_OFFSET })),
-    startup: webmallStartup(),
-    bootMinutes: 300,
-    local: (cacheDir) => webmallScript({ bind: "127.0.0.1", dir: join(cacheDir, `webmall-${WEBMALL_REF.slice(0, 12)}`) }),
     // A getter: the key file is made when a VM is made, not when the CLI starts.
     get startup() { return webmallStartup(webmallKey()); },
-    bootMinutes: 180,
+    bootMinutes: 300,
     local: (cacheDir) => webmallScript({ bind: "127.0.0.1", dir: join(cacheDir, `webmall-${WEBMALL_REF.slice(0, 12)}`), key: webmallKey() }),
   },
   {
