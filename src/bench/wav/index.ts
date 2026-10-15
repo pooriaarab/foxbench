@@ -3,7 +3,7 @@
 // tag. One site table drives the VM's startup script, the tunnel ports and
 // check(). The agent sees each site on its own port through the recording
 // proxy; the proxy forwards to the tunnel on that port plus TUNNEL_OFFSET.
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { request, type IncomingHttpHeaders } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -256,6 +256,7 @@ export async function wavLogin(wav: WavEnv, id: string) {
 
 /** The sites of a run: wav-core's four, and the data sites that answer (WF4). Reset marks come from the cache. */
 export async function wavUp(ctx: BenchContext, options: { offset?: number; portOffset?: number; harDir?: string } = {}): Promise<WavEnv> {
+  mkdirSync(wavDir(ctx), { recursive: true });
   const dirtyFile = wavDirtyFile(ctx, options.offset);
   const dirty = new Set<string>(existsSync(dirtyFile) ? JSON.parse(readFileSync(dirtyFile, "utf8")) : []);
   const full = wavUrls(ctx.env, options.offset, options.portOffset, wavFullSites);
