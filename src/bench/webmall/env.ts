@@ -72,7 +72,7 @@ add_action('rest_api_init', function () {
       $cart = is_array($session) ? maybe_unserialize($session['cart'] ?? '') : [];
       foreach (is_array($cart) ? $cart : [] as $item) $carts[] = get_permalink($item['product_id']);
     }
-    $orders = array_map(fn($o) => ['billing' => $o->get_address('billing'), 'items' => array_values(array_map(fn($i) => get_permalink($i->get_product_id()), $o->get_items()))], wc_get_orders(['limit' => -1]));
+    $orders = array_map(fn($o) => ['billing' => $o->get_address('billing'), 'items' => array_values(array_map(fn($i) => get_permalink($i->get_product_id()), $o->get_items()))], wc_get_orders(['limit' => -1, 'status' => ['processing', 'completed', 'on-hold']]));
     return ['carts' => $carts, 'orders' => $orders];
   }]);
   register_rest_route('foxbench/v1', '/reset', ['methods' => 'POST', 'permission_callback' => $auth, 'callback' => function () {
