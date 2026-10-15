@@ -3,7 +3,7 @@
 import { join } from "node:path";
 import { SUITECRM_TUNNEL, suitecrmStartup } from "../bench/suitecrm/index.js";
 import { RESET_PORT as MYPC_RESET_PORT, TUNNEL_OFFSET as MYPC_OFFSET, mypcApps, mypcbenchStartup } from "../bench/mypcbench/env.js";
-import { RESET_PORT, TUNNEL_OFFSET, wavSites, wavStartup } from "../bench/wav/index.js";
+import { RESET_PORT, TUNNEL_OFFSET, wavFullSites, wavSites, wavStartup } from "../bench/wav/index.js";
 import { TUNNEL_OFFSET as WEBMALL_OFFSET, webmallScript, webmallSites, webmallKey, webmallStartup, WEBMALL_REF } from "../bench/webmall/env.js";
 
 export interface CloudEnv {
@@ -16,6 +16,8 @@ export interface CloudEnv {
   startup: string;
   /** Makes the VM with nested virtualization, for an env that runs QEMU with KVM. */
   nestedVirt?: boolean;
+  /** The env this one is a superset of: it serves the same sites on the same local ports and never runs beside it. */
+  replaces?: string;
   /** How long `up` waits for the first port to answer: the startup script's time to serve. */
   bootMinutes: number;
   /** The same environment on local Docker: a script that takes the cache dir. Absent when the env has no local mode. */
@@ -86,5 +88,19 @@ systemd-run --unit=foxbench-smoke python3 -m http.server 8080 --directory /srv/f
     // Docker install, the image pull and upstream's first boot (up to 10 minutes to a healthy control API).
     bootMinutes: 30,
     startup: mypcbenchStartup(),
+  },
+  {
+    // wav-core plus Wikipedia and the map. The data (ZIM 100 GB, map tiles and routing about 60 GB, plus the
+    // map's extracted volumes) and the 91 GB of core images need about 400 GB; 64 GB of RAM holds the map's
+    // PostgreSQL, renderd and OSRM next to the four core sites.
+    name: "wav-full",
+    replaces: "wav-core",
+    machineType: "n2-standard-16",
+    diskGb: 450,
+    ports: [...wavSites, ...wavFullSites].flatMap((s) => [s.port, s.ctrlPort]).concat(RESET_PORT).map((remote) => ({ remote, local: remote + TUNNEL_OFFSET })),
+    // The core sites boot first (about 60 min); the data download comes after them and took about 4 hours on a
+    // real run. `up` waits for the first port, so doctor says which of the two data sites is still missing.
+    bootMinutes: 330,
+    startup: wavStartup(true),
   },
 ];
