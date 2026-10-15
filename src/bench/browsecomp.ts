@@ -3,13 +3,15 @@
 // from each row's canary) and asks that its plain text not appear in public.
 // The file is fetched from OpenAI's public blob, checked against a pinned
 // SHA-256 and decrypted in memory at run time: the cache holds only the
-// encrypted file, and boards hold ids and verdicts only (`redact: true`).
+// encrypted file, and boards hold ids and verdicts only (`redact: true`), with the log
+// kept but masked of the gold answer and the question (`maskLog`).
 // The official grader is a GPT-4o prompt; foxbench uses Claude through the
 // judge interface, with a grader in the same shape.
 import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
 import { join } from "node:path";
+import { mask, passagePatterns, secretPatterns } from "./mask.js";
 import { judgeWith, type Judge } from "./judge.js";
 import { pickSubset } from "./subsets.js";
 import type { BenchContext, Benchmark, Case, Episode, Readiness } from "./types.js";
@@ -135,6 +137,11 @@ export const browsecompBenchmark = (o: { sha256?: string } = {}): Benchmark => {
       const episode: Episode = { url: page.url, goal: `${row.problem}\n\nWhen you are done, reply in this format:\nExplanation: <your reasoning>\nExact Answer: <your succinct final answer>\nConfidence: <0% to 100%>`, startPath: "/", close: page.close };
       started.set(episode, row);
       return episode;
+    },
+    // The log keeps steps, errors, the last page and the final message; the gold answer and the question are masked (BC8, BC9).
+    maskLog(episode, log) {
+      const row = started.get(episode);
+      return row ? mask(log, [...secretPatterns(row.answer), ...passagePatterns(row.problem)]) : "";
     },
     async judge(env, episode, output) {
       const row = started.get(episode);
