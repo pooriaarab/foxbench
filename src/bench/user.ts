@@ -12,7 +12,8 @@ export const USER_PATH = "/user/";
 export const STOP_TOKENS = ["###STOP###", "###TRANSFER###", "###OUT-OF-SCOPE###"];
 export const DEFAULT_USER_MODEL = "claude-sonnet-5-5";
 
-export interface UserTurn { from: "agent" | "user"; text: string }
+/** `at` is performance.now() when the line was said, to order it among a benchmark's own events. */
+export interface UserTurn { from: "agent" | "user"; text: string; at: number }
 
 export interface UserChannel {
   /** "scripted", or "llm:<model>" for the board (Q8). */
@@ -25,6 +26,8 @@ export interface UserChannel {
   turns: UserTurn[];
   /** Settles when the user ends the conversation (Q5). */
   ended: Promise<void>;
+  /** True once the user has ended the conversation. */
+  stopped: boolean;
   /** The first failed reply, or null (Q7). */
   error: string | null;
 }
@@ -37,7 +40,7 @@ function channel(by: string, next: (history: History) => Promise<string>, first:
   let queue: Promise<unknown> = Promise.resolve();
   let opened: Promise<string | null> | undefined;
   const user: UserChannel = {
-    by, turns: [], error: null,
+    by, turns: [], error: null, stopped: false,
     ended: new Promise<void>((resolve) => { end = resolve; }),
     opening: () => (opened ??= first().then((text) => (text === null ? null : clean(text)), (error: unknown) => {
       user.error ??= error instanceof Error ? error.message : String(error);
@@ -47,6 +50,7 @@ function channel(by: string, next: (history: History) => Promise<string>, first:
       // One reply at a time, in the order the messages came (Q10).
       const turn = queue.then(async () => {
         await user.opening();
+        const sent = performance.now();
         const history: History = [...user.turns.map((t) => ({ role: t.from === "agent" ? "user" as const : "assistant" as const, content: t.text })), { role: "user", content: message }];
         let text: string;
         try {
@@ -55,8 +59,11 @@ function channel(by: string, next: (history: History) => Promise<string>, first:
           user.error ??= error instanceof Error ? error.message : String(error);
           throw error;
         }
-        user.turns.push({ from: "agent", text: message }, { from: "user", text: clean(text) });
-        if (STOP_TOKENS.some((t) => text.includes(t))) end?.();
+        user.turns.push({ from: "agent", text: message, at: sent }, { from: "user", text: clean(text), at: performance.now() });
+        if (STOP_TOKENS.some((t) => text.includes(t))) {
+          user.stopped = true;
+          end?.();
+        }
         return clean(text);
       });
       queue = turn.catch(() => {});
