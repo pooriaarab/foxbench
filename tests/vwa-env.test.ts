@@ -106,16 +106,18 @@ describe("VW4 the reset token is the VM's own", () => {
   });
 });
 
+/** A free local port. */
+async function free(): Promise<number> {
+  const probe = createServer();
+  await new Promise<void>((done) => probe.listen(0, "127.0.0.1", done));
+  const { port } = probe.address() as { port: number };
+  await new Promise((done) => probe.close(done));
+  return port;
+}
+
 /** The reset service on a free port, a fake docker, and a fake Classifieds that records its reset posts. */
 async function service(o: { dockerFails?: boolean; classifiedsStatus?: number } = {}) {
   const f = fakes();
-  const free = async () => {
-    const probe = createServer();
-    await new Promise<void>((done) => probe.listen(0, "127.0.0.1", done));
-    const { port } = probe.address() as { port: number };
-    await new Promise((done) => probe.close(done));
-    return port;
-  };
   const posts: string[] = [];
   const site: Server = http((req, res) => {
     let body = "";
