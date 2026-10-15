@@ -22,10 +22,10 @@ export const RESET_PORT = 8870;
 const PROBE_MS = 10_000;
 
 export interface WavSite {
-  id: "shopping" | "shopping_admin" | "reddit" | "gitlab" | "wikipedia" | "map";
+  id: "shopping" | "shopping_admin" | "reddit" | "gitlab" | "wikipedia" | "map" | "classifieds";
   /** The port the agent sees (the proxy's) and the VM's site port; the site's base URL is on it. */
   port: number;
-  /** The VM port of the container's env-ctrl server. */
+  /** The VM port of the container's env-ctrl server; 0 for a site with none (VWA's Classifieds), which is probed by its health page alone. */
   ctrlPort: number;
   /** Where env-ctrl listens inside the container; the default is 8877. */
   ctrlInner?: number;
@@ -139,9 +139,9 @@ http.server.ThreadingHTTPServer(("0.0.0.0", ${RESET_PORT}), Reset).serve_forever
 `;
 
 /** Each site's URL and env-ctrl URL on the tunnel, or on FOXBENCH_WAV_HOST, and `port`, where its proxy listens. */
-export function wavUrls(env: NodeJS.ProcessEnv, offset = TUNNEL_OFFSET, portOffset = 0, sites = wavSites) {
+export function wavUrls(env: NodeJS.ProcessEnv, offset = TUNNEL_OFFSET, portOffset = 0, sites = wavSites, resetPort = RESET_PORT) {
   const host = env.FOXBENCH_WAV_HOST || "127.0.0.1";
-  return sites.map((s) => ({ site: s, port: s.port + portOffset, url: `http://${host}:${s.port + offset}`, ctrl: `http://${host}:${s.ctrlPort + offset}`, reset: `http://${host}:${RESET_PORT + offset}/reset/${s.id}` }));
+  return sites.map((s) => ({ site: s, port: s.port + portOffset, url: `http://${host}:${s.port + offset}`, ctrl: s.ctrlPort ? `http://${host}:${s.ctrlPort + offset}` : "", reset: `http://${host}:${resetPort + offset}/reset/${s.id}` }));
 }
 
 export type SiteUrl = ReturnType<typeof wavUrls>[number];
@@ -177,12 +177,30 @@ async function gitlabSession(u: SiteUrl, host: string): Promise<string> {
   return `_gitlab_session=${session}`;
 }
 
+/** The cookies a response sets, as one Cookie header value. */
+const cookies = (...heads: IncomingHttpHeaders[]) => [...new Map(heads.flatMap((h) => (h["set-cookie"] ?? []).map((c) => [c.split("=")[0]!, c.split(";")[0]!] as const))).values()].join("; ");
+
+/** Signs in to Classifieds (Osclass) through its login form, as upstream's auto_login does, and returns the session cookies. */
+async function classifiedsSession(u: SiteUrl, host: string): Promise<string> {
+  const page = await http(`${u.url}/index.php?page=login`, { headers: { host } });
+  // The form's CSRF token (Osclass 8 calls it octoken) goes back with the email and password, as upstream's browser sends it.
+  const form = new URLSearchParams({ page: "login", action: "login_post", email: u.site.login!.user, password: u.site.login!.password, remember: "1" });
+  for (const [tag] of page.body.matchAll(/<input[^>]*>/g)) {
+    const name = /name=["']([^"']*token[^"']*)["']/i.exec(tag)?.[1];
+    if (name) form.set(name, /value=["']([^"']*)["']/.exec(tag)?.[1] ?? "");
+  }
+  const res = await http(`${u.url}/index.php`, { method: "POST", body: form.toString(), headers: { host, cookie: cookies(page.headers), "content-type": "application/x-www-form-urlencoded" } });
+  const session = cookies(page.headers, res.headers);
+  if (res.status !== 302 || String(res.headers.location).includes("page=login") || !session) throw new Error(`classifieds: signing in as ${u.site.login!.user} returned ${res.status} to ${res.headers.location}`);
+  return session;
+}
+
 /** What the proxy adds on each request to a site: its own Host, so links stay on the proxy port, and the login (P3). */
 export async function siteHeaders(u: SiteUrl): Promise<Record<string, string>> {
   const host = `127.0.0.1:${u.port}`;
   if (!u.site.login) return { host };
   const { header, user, password } = u.site.login;
-  return { host, ...(header ? { [header]: `${user}:${password}` } : { cookie: await gitlabSession(u, host) }) };
+  return { host, ...(header ? { [header]: `${user}:${password}` } : { cookie: await (u.site.id === "classifieds" ? classifiedsSession : gitlabSession)(u, host) }) };
 }
 
 const message = (error: unknown) => (error instanceof Error ? error.message : String(error));
@@ -190,8 +208,10 @@ const message = (error: unknown) => (error instanceof Error ? error.message : St
 /** Null when env-ctrl says healthy and the health page loads; else why not. */
 export async function probe(url: string, ctrl: string, health: string): Promise<string | null> {
   try {
-    const body = JSON.parse((await get(`${ctrl}/status`)).body) as { success?: boolean; message?: string };
-    if (!body.success) return `env-ctrl at ${ctrl}/status says not healthy${body.message ? `: ${body.message}` : ""}`;
+    if (ctrl) {
+      const body = JSON.parse((await get(`${ctrl}/status`)).body) as { success?: boolean; message?: string };
+      if (!body.success) return `env-ctrl at ${ctrl}/status says not healthy${body.message ? `: ${body.message}` : ""}`;
+    }
   } catch (error) {
     return `env-ctrl at ${ctrl}/status did not answer (${message(error)})`;
   }
@@ -213,6 +233,8 @@ export interface WavEnv {
   dirty: Set<string>;
   /** The marks live in the cache, per host, so the next run resets too. */
   dirtyFile: string;
+  /** Why a site is not up, for the message of a case that needs one. */
+  notUp: string;
   /** This run's HAR files, and whether `down` removes them (WJ9). */
   harDir: string;
   ownsHarDir: boolean;
@@ -240,12 +262,26 @@ export async function reset(u: SiteUrl, waitMs: number): Promise<void> {
 /** The file of the sites to reset before their next case, per host and tunnel offset (WJ6). */
 export const wavDirtyFile = (ctx: BenchContext, offset = TUNNEL_OFFSET) => join(wavDir(ctx), `dirty-${ctx.env.FOXBENCH_WAV_HOST || "127.0.0.1"}-${offset}.json`);
 
-/** Ready when wav-core's four sites answer; else which one does not, and the fix. */
-export async function wavReady(ctx: BenchContext, offset?: number, portOffset?: number): Promise<Readiness> {
-  const down = (await Promise.all(wavUrls(ctx.env, offset, portOffset).map(async (u) => ({ id: u.site.id, why: await probe(u.url, u.ctrl, u.site.health) })))).filter((d) => d.why);
+/** The sites a benchmark runs on: wav-core's four by default; the vwa env passes its own, its tunnel offset and its reset port. */
+export interface WavSet {
+  /** The env's name, for messages. */
+  name?: string;
+  offset?: number;
+  portOffset?: number;
+  sites?: WavSite[];
+  /** Sites that join the run when they answer (wav-full's data sites); wav-full's by default. */
+  optional?: WavSite[];
+  resetPort?: number;
+  /** Where the sites it lacks run, for the message of a case that needs one. */
+  elsewhere?: string;
+}
+
+/** Ready when the env's sites answer; else which one does not, and the fix. */
+export async function wavReady(ctx: BenchContext, set: WavSet = {}): Promise<Readiness> {
+  const down = (await Promise.all(wavUrls(ctx.env, set.offset, set.portOffset, set.sites, set.resetPort).map(async (u) => ({ id: u.site.id, why: await probe(u.url, u.ctrl, u.site.health) })))).filter((d) => d.why);
   if (!down.length) return { ready: true };
   return { ready: false, reason: down.map((d) => `${d.id}: ${d.why}`).join("; "),
-    fix: "foxbench env up wav-core (GitLab takes minutes to boot), or set FOXBENCH_WAV_HOST to a host that runs the wav-core containers" };
+    fix: `foxbench env up ${set.name ?? "wav-core"}${set.name ? "" : " (GitLab takes minutes to boot)"}, or set FOXBENCH_WAV_HOST to a host that runs the ${set.name ?? "wav-core"} containers` };
 }
 
 /** What a judge browser needs to open a site as the logged-in user: the tunnel URL, the port the agent saw, and the headers. */
@@ -256,13 +292,14 @@ export async function wavLogin(wav: WavEnv, id: string) {
 }
 
 /** The sites of a run: wav-core's four, and the data sites that answer (WF4). Reset marks come from the cache. */
-export async function wavUp(ctx: BenchContext, options: { offset?: number; portOffset?: number; harDir?: string } = {}): Promise<WavEnv> {
+export async function wavUp(ctx: BenchContext, options: WavSet & { harDir?: string } = {}): Promise<WavEnv> {
   mkdirSync(wavDir(ctx), { recursive: true });
   const dirtyFile = wavDirtyFile(ctx, options.offset);
   const dirty = new Set<string>(existsSync(dirtyFile) ? JSON.parse(readFileSync(dirtyFile, "utf8")) : []);
-  const full = wavUrls(ctx.env, options.offset, options.portOffset, wavFullSites);
+  const full = wavUrls(ctx.env, options.offset, options.portOffset, options.optional ?? wavFullSites, options.resetPort);
   const answering = (await Promise.all(full.map(async (u) => ((await probe(u.url, u.ctrl, u.site.health)) ? null : u)))).filter((u) => u !== null);
-  return { ctx, sites: [...wavUrls(ctx.env, options.offset, options.portOffset), ...answering], dirty, dirtyFile,
+  return { ctx, sites: [...wavUrls(ctx.env, options.offset, options.portOffset, options.sites, options.resetPort), ...answering], dirty, dirtyFile,
+    notUp: options.name ? `${options.name} does not run it; ${options.elsewhere}` : "wav-core runs shopping, shopping_admin, reddit and gitlab; run it on wav-full (foxbench env up wav-full)",
     harDir: options.harDir ?? mkdtempSync(join(tmpdir(), "fbn-wav-har-")), ownsHarDir: !options.harDir };
 }
 
@@ -277,7 +314,7 @@ export const wavDown = (wav: WavEnv) => { if (wav.ownsHarDir) rmSync(wav.harDir,
 export async function wavStart(wav: WavEnv, task: WavCase, goal: (startUrls: string[]) => string, resetWaitMs?: number): Promise<Episode> {
   const { sites, dirty } = wav;
   const missing = task.sites.filter((id) => !sites.some((u) => u.site.id === id));
-  if (missing.length) throw new Error(`skipped: task ${task.id} needs ${missing.join(" and ")}, which is not up (wav-core runs shopping, shopping_admin, reddit and gitlab); run it on wav-full (foxbench env up wav-full)`);
+  if (missing.length) throw new Error(`skipped: task ${task.id} needs ${missing.join(" and ")}, which is not up: ${wav.notUp}`);
   const site = (id: string) => sites.find((u) => u.site.id === id)!;
   const starts = task.startUrls.map(parseStartUrl).map((s) => ({ ...s, path: (site(s.site).site.base ?? "") + s.path }));
   const first = site(starts[0]!.site);
@@ -336,7 +373,7 @@ export const webarenaVerified = (options: { offset?: number; portOffset?: number
   async check(ctx: BenchContext): Promise<Readiness> {
     const noUv = uvMissing(ctx);
     if (noUv) return { ready: false, reason: `the task list needs uv: ${noUv}`, fix: "install uv (https://docs.astral.sh/uv/) or set FOXBENCH_UV" };
-    return wavReady(ctx, options.offset, options.portOffset);
+    return wavReady(ctx, options);
   },
   async load(ctx, subset) {
     const { tasks, hard } = await loadTasks(ctx);

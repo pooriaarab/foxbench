@@ -132,7 +132,7 @@ export async function pageImageQuery(run: Run): Promise<void> {
 }
 
 /** WebArena's scoring plus page_image_query. */
-export const scoreVwa = (task: VwaTask, facts: WaFacts): Promise<WaScore> => scoreWa(task, { ...facts, evaluators: { ...facts.evaluators, page_image_query: pageImageQuery } });
+export const scoreVwa = (task: WaTask, facts: WaFacts): Promise<WaScore> => scoreWa(task, { ...facts, evaluators: { ...facts.evaluators, page_image_query: pageImageQuery } });
 
 /** An image the judge can look at, from its URL; refuses what the Claude API would (over 5 MB, or not PNG, JPEG, GIF or WebP). */
 export async function fetchImage(url: string, headers: Record<string, string> = {}): Promise<JudgeImage> {

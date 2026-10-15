@@ -1311,6 +1311,27 @@ need the Wikipedia site that wav-full runs, not this env. The tests are in
 | VW14 | Every pull goes to Docker Hub through the VM's shared Cloud NAT IP, which has Hub's anonymous limit of 100 pulls per hour. | Google's mirror (`mirror.gcr.io`) is in daemon.json before the first pull; Docker falls back to Hub for a layer the mirror lacks, as it does for the Classifieds layer. | `VW14 ...` |
 | VW15 | A 500 GB standard persistent disk writes about 60 MB/s, so the 230 GB the Classifieds pull writes takes over an hour and every pull times out. | The vwa VM's boot disk is `pd-ssd`. | `VW15 ...` |
 
+## VisualWebArena tasks (`src/bench/vwa/index.ts`)
+
+`visualwebarena` is VWA's 910 tasks (web-arena-x/visualwebarena at `89f5af2`,
+MIT) on the `vwa` env's Classifieds, Shopping and Reddit. It is built on the
+WebArena-Lite machinery (`src/bench/wa/bench.ts`): cases start through
+`wavStart` (resets, logins, proxies, HAR recorders) and are scored with the
+evaluators of the two sections above. The three task files and each task's
+input images are fetched at run time into the cache and never committed.
+`tests/vwa.test.ts` runs real cases through the run loop with scripted agents
+against fake sites on the tunnel ports, a fake judge and a fake judge browser.
+
+| # | Failure mode | Wanted behaviour | Test |
+|---|---|---|---|
+| VT1 | The task list is not the pinned one, a half-fetched file is used, ids clash (VWA numbers each site's file from 0), or a judged case is scored by code. | The three files at the pinned commit, each written to the cache whole; 910 cases numbered in turn (Classifieds 0-233, Shopping 234-699, Reddit 700-909). A case with a fuzzy match or a `page_image_query` (91) is `judge: llm`; the licence is MIT, `fetch-at-run`. | `VT1 ...` |
+| VT2 | The agent is not signed in to Classifieds (a form login, no header), or sees the password, or never gets the task's image. | `start` fills Classifieds' login form (with its CSRF token) and the proxy adds the session cookies; the agent's requests carry them, never the password. Each input image (321 tasks) is fetched at the commit, served by the first site's proxy at `/foxbench-input/<n>.png`, and the goal names its URL. | `VT2 ...` |
+| VT3 | A task that needs Wikipedia (35) runs without it and fails as the agent's fault, or a multi-site task starts on the wrong site. | The case fails at `start` naming Wikipedia and wav-full: the vwa env does not run it. A task with several start URLs starts on the first and names the others on their proxy ports. | `VT3 ...` |
+| VT4 | An agent that does nothing, or answers wrong, passes. | noop and a scripted wrong agent fail; a scripted perfect agent (the reference answers and URLs, and a write for program_html) passes string_match, url_match and program_html. | `VT4 ...` |
+| VT5 | An image question passes with no judge, or on an image the judge was not shown. | With no judge the case fails with `judge: no judge`. With one, the judge is shown the page's image, and the verdict is `llm:<model>` with each judge's result. | `VT5 ...` |
+| VT6 | A case changes a site and the next case starts from the changed state. | As WJ6: the next run resets the site the last case wrote to, through the vwa reset service on its own port. | `VT6 ...` |
+| VT7 | `quick` changes between runs, or needs a write, Wikipedia or a judge, so a scripted agent cannot reach 20. | `quick` is the committed list in `src/bench/subsets/visualwebarena.json`: 20 url_match and string_match tasks on all three sites, spread over the difficulties. Two are unachievable (N/A) tasks, which are `llm` but pass on a plain N/A. | `VT7 ...` |
+
 ## WebChoreArena (`src/bench/wa/chore.ts`, `src/bench/wa/chore-eval.ts`)
 
 `webchorearena` is the 532-task WebChoreArena list (WebChoreArena/WebChoreArena
