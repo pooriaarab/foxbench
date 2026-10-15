@@ -40,6 +40,8 @@ export interface WavSite {
   login?: { user: string; password: string; header?: string };
   /** No case changes this site, so it is never reset (WF7). */
   readOnly?: boolean;
+  /** The image's env-ctrl cannot report healthy, so the site is up when its health page loads (WF11). */
+  noCtrl?: boolean;
 }
 
 // Ports and health pages as upstream's environments/container/config.py; users as its examples/configs/config.example.json.
@@ -54,7 +56,8 @@ export const wavSites: WavSite[] = [
 // Ports and health pages as upstream's config.py (its docs say map is on 3030; its code and the WebArena paper say 3000). Map's env-ctrl is on 3071, not upstream's 3001: mypcbench tunnels its 3001 to the same local port.
 export const wavFullSites: WavSite[] = [
   { id: "wikipedia", port: 8888, ctrlPort: 8889, ctrlInner: 8874, containerPort: 8080, tag: "1.0.0", health: "/", readOnly: true },
-  { id: "map", port: 3000, ctrlPort: 3071, containerPort: 8080, health: "/", readOnly: true },
+  // The map image's env-ctrl waits for /run/supervisord.sock, which its supervisord config never makes: /status blocks 180 s, then says no services.
+  { id: "map", port: 3000, ctrlPort: 3071, containerPort: 8080, health: "/", readOnly: true, noCtrl: true },
 ];
 
 // The data volumes upstream's `env setup init --site map` fills (its config.py), the mount each has in the container, and for the ones it fills from an archive, that archive and the path inside it.
@@ -434,7 +437,7 @@ export async function wavUp(ctx: BenchContext, options: WavSet & { harDir?: stri
   const dirtyFile = wavDirtyFile(ctx, options.offset);
   const dirty = new Set<string>(existsSync(dirtyFile) ? JSON.parse(readFileSync(dirtyFile, "utf8")) : []);
   const full = wavUrls(ctx.env, options.offset, options.portOffset, options.optional ?? wavFullSites, options.resetPort);
-  const answering = (await Promise.all(full.map(async (u) => ((await probe(u.url, u.ctrl, u.site.health)) ? null : u)))).filter((u) => u !== null);
+  const answering = (await Promise.all(full.map(async (u) => ((await probe(u.url, u.site.noCtrl ? "" : u.ctrl, u.site.health)) ? null : u)))).filter((u) => u !== null);
   return { ctx, sites: [...wavUrls(ctx.env, options.offset, options.portOffset, options.sites, options.resetPort), ...answering], dirty, dirtyFile,
     notUp: options.name ? `${options.name} does not run it; ${options.elsewhere}` : "wav-core runs shopping, shopping_admin, reddit and gitlab; run it on wav-full (foxbench env up wav-full)",
     harDir: options.harDir ?? mkdtempSync(join(tmpdir(), "fbn-wav-har-")), ownsHarDir: !options.harDir };
