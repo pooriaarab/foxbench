@@ -7,9 +7,9 @@
 /** SuiteCRM's port on the VM, and the port the agent sees: the site URL is http://127.0.0.1:8080. */
 export const SUITECRM_PORT = 8080;
 /** The VM port of the reset service, which restores the seeded database (SE5). */
-export const SUITECRM_RESET_PORT = 8871;
+export const SUITECRM_RESET_PORT = 8873;
 /** VM port -> local port the tunnel opens. 18080 is the smoke env's. */
-export const SUITECRM_TUNNEL = [{ remote: SUITECRM_PORT, local: 18081 }, { remote: SUITECRM_RESET_PORT, local: 18871 }];
+export const SUITECRM_TUNNEL = [{ remote: SUITECRM_PORT, local: 18081 }, { remote: SUITECRM_RESET_PORT, local: 18873 }];
 export const SUITECRM_IMAGE = "docker.io/bitnamilegacy/suitecrm:8.8.1";
 export const MARIADB_IMAGE = "docker.io/bitnamilegacy/mariadb:11.4.7";
 /** The upstream commit (ST-WebAgentBench, Apache-2.0) whose seed and task list foxbench uses. */

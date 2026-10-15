@@ -127,9 +127,9 @@ describe("SE5 reset restores the seeded database", () => {
 
 describe("SE6 one port table", () => {
   it("tunnels SuiteCRM and the reset service, and maps them in the startup script", () => {
-    expect(env.ports).toEqual([{ remote: 8080, local: 18081 }, { remote: 8871, local: 18871 }]);
+    expect(env.ports).toEqual([{ remote: 8080, local: 18081 }, { remote: 8873, local: 18873 }]);
     expect(env.startup).toContain("-p 8080:8080");
-    expect(env.startup).toContain('("0.0.0.0", 8871)');
+    expect(env.startup).toContain('("0.0.0.0", 8873)');
   });
 });
 
@@ -149,5 +149,12 @@ describe("SE8 the reset service is narrow", () => {
       expect((await fetch(`${s.url}/reset`, { method: "DELETE" })).status).toBe(405);
       expect(s.f.lines()).toEqual([]);
     } finally { s.stop(); }
+  });
+});
+
+describe("SE9 no two envs share a local port", () => {
+  it("opens each tunnel on its own local port", () => {
+    const locals = cloudEnvs.flatMap((e) => e.ports.map((p) => p.local));
+    expect(new Set(locals).size).toBe(locals.length);
   });
 });
