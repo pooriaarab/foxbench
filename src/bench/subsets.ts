@@ -1,6 +1,7 @@
 // Fixed subsets per benchmark, committed in src/bench/subsets/<id>.json, so
 // two quick runs see the same cases. `published` is the subset of the
 // baselines; a benchmark with no list runs everything for it.
+import browsecomp from "./subsets/browsecomp.json" with { type: "json" };
 import browsesafe from "./subsets/browsesafe.json" with { type: "json" };
 import foxbench from "./subsets/foxbench.json" with { type: "json" };
 import miniwob from "./subsets/miniwob.json" with { type: "json" };
@@ -19,6 +20,7 @@ const LISTS: SubsetLists = {
   "webarena-verified": webarenaVerified,
   "tau2-retail": tau2Retail,
   "tau2-airline": tau2Airline,
+  browsecomp,
 };
 
 /** The cases of a subset, from a benchmark's full list. Throws when a list names a case the benchmark lacks (L5). */

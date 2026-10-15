@@ -783,6 +783,26 @@ fake judge; `e2e/wa-judge.mjs` runs the judge browser on a real Firefox.
 | WE9 | An approach the port does not know (`required_values`, `must_exclude`, `one_of`) is skipped, and the case passes. | The case fails with `harness: unsupported ...` and the approach's name. | `WE9 ...` |
 | WE10 | The judge browser is the agent's, or stays open, or needs a built extension. | It is its own headless Firefox with a stub extension written into the cache, closed after the case. `noop` opens nothing and scores 0 on every kind. | `WE10 ...` |
 
+## BrowseComp (`src/bench/browsecomp.ts`)
+
+BrowseComp is 1,266 hard-to-find-fact questions. OpenAI ships them encrypted
+(XOR with a key derived from each row's canary) and asks that the plain text
+not appear in public. The file is fetched from OpenAI's public blob, checked
+against a pinned SHA-256, and decrypted in memory at run time. Claude grades
+each answer against the gold answer through the judge interface; the official
+grader is a GPT-4o prompt. The tests in `tests/browsecomp.test.ts` serve a
+synthetic encrypted file (`FOXBENCH_BROWSECOMP_URL`) and use fake judges.
+
+| # | Failure mode | Wanted behaviour | Test |
+|---|---|---|---|
+| BC1 | The file changes at the blob, so a score is for questions nobody pinned. | The file's SHA-256 is pinned; a file that differs stops the load, whether fresh or cached. | `BC1 ...` |
+| BC2 | Plain text lands in the repo or the cache. | Only the encrypted file is cached and nothing is committed; decryption happens in memory. | `BC2 ...` |
+| BC3 | The case list is wrong, or lists the questions. | One case per row with a stable id from the row number and the topic as tag; no goal, so `foxbench list` shows none. | `BC3 ...` |
+| BC4 | The question, the gold answer or the agent's log reach a board. | The benchmark is `redact: true`; reasons never quote the gold answer; the JSON and Markdown boards hold ids and verdicts only. | `BC4 ...` |
+| BC5 | An agent that does nothing passes, or a wrong answer does. | The judge gets the question, the response and the gold answer. With a fair fake judge, `noop` and a wrong agent pass 0 and a perfect agent passes all. | `BC5 ...` |
+| BC6 | A judge reply with no verdict counts as a pass; the Claude-graded number is read as the official one. | The case fails with a `judge:` reason (J5); `judgedBy` names the model (J6). | `BC6 ...` |
+| BC7 | Decryption gives garbage for a row, and the case is graded against it. | A row that does not decrypt to text stops the load with its row number. | `BC7 ...` |
+
 ## AMO release build and listed submission (`scripts/amo-listing.mjs`)
 
 `pnpm check:amo` reads `dist-ext/`, which is what `release.yml` signs. Each
