@@ -4,6 +4,7 @@
 import { spawn, spawnSync, type ChildProcess } from "node:child_process";
 import { chmodSync, existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { createServer, type Server } from "node:http";
+import { createServer as tcp } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -22,10 +23,21 @@ function cli(home: string, ...args: string[]) {
     env: { ...process.env, HOME: home, FOXBENCH_GCLOUD: join(root, "tests/fixtures/fake-gcloud.mjs"), FAKE_GCLOUD_LOG: join(home, "calls.jsonl"),
       FOXBENCH_GCP_PROJECT: "test-project", FOXBENCH_GCP_ZONE: "test-zone-a" } });
 }
+const isFree = (port: number) => new Promise<boolean>((r) => { const s = tcp(); s.once("error", () => r(false)); s.listen(port, "127.0.0.1", () => s.close(() => r(true))); });
+
+/** An offset that puts all of an env's tunnel ports on free local ports; other checkouts' tests can hold any of them. */
+async function freeOffset(ports: number[]): Promise<number> {
+  for (let tries = 0; tries < 50; tries++) {
+    const offset = 20000 + Math.floor(Math.random() * 30000);
+    if ((await Promise.all(ports.map((p) => isFree(p + offset)))).every(Boolean)) return offset;
+  }
+  throw new Error("no free local port range for the tunnels");
+}
 /** The create call of `foxbench env up <name>` and the startup script it sent. */
-function up(name: string) {
+async function up(name: string) {
   const home = mkdtempSync(join(tmpdir(), "fbn-mypc-"));
-  const r = cli(home, "up", name, "--local-port-offset", "30000");
+  const offset = await freeOffset(cloudEnvs.find((e) => e.name === name)!.ports.map((p) => p.local));
+  const r = cli(home, "up", name, "--local-port-offset", String(offset));
   cleanup.push(() => cli(home, "down", name));
   expect(r.status, r.stderr).toBe(0);
   const calls = readFileSync(join(home, "calls.jsonl"), "utf8").trim().split("\n").map((l) => JSON.parse(l) as { argv: string[]; script?: string });
@@ -42,14 +54,14 @@ describe("MP1 the image is pinned", () => {
 });
 
 describe("MP2 nested virtualization", () => {
-  it("is asked for by mypcbench and by no other env", () => {
+  it("is asked for by mypcbench and by no other env", async () => {
     expect(cloudEnvs.filter((e) => e.nestedVirt).map((e) => e.name)).toEqual(["mypcbench"]);
-    const call = up("mypcbench");
+    const call = await up("mypcbench");
     expect(call.argv).toContain("--enable-nested-virtualization");
     expect(call.argv).toContain("--machine-type=n2-standard-8");
     expect(call.argv).toContain("--labels=foxbench-env=mypcbench");
     expect(call.script).toBe(env.startup);
-    expect(up("smoke").argv).not.toContain("--enable-nested-virtualization");
+    expect((await up("smoke")).argv).not.toContain("--enable-nested-virtualization");
   });
 });
 
