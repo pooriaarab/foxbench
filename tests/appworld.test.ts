@@ -33,6 +33,8 @@ afterAll(() => {
   for (const [k, v] of [["APPWORLD_ROOT", saved.root], ["APPWORLD_PYTHON", saved.python]] as const) if (v === undefined) delete process.env[k]; else process.env[k] = v;
 });
 
+/** The links with a query string in a page. */
+const hrefs = (html: string) => [...html.matchAll(/href="(\/notes\/[^"]*\?[^"]*)"/g)].map((m) => m[1]!.replaceAll("&#38;", "&"));
 const form = (origin: string, path: string, fields: Record<string, string>) => fetch(origin + path, { method: "POST", body: new URLSearchParams(fields) });
 /** perfect: signs in, adds the note the fake task wants, completes, then waits to be stopped; wrong: the note is not pinned. */
 function agent(mode: "perfect" | "wrong", seen: string[] = []): Adapter {
@@ -84,6 +86,42 @@ describe("appworld", () => {
       expect(notes).toContain('<script type="application/json" id="result">[{&#34;title&#34;: &#34;posted&#34;}]</script>');
       await (env.bridge as { close(): Promise<void> }).close();
       expect((await fetch(`${o}/notes/show_notes?_run=1`)).status).toBe(502);
+      await episode.close!();
+    } finally {
+      await bench.down(env);
+    }
+  });
+
+  it("AW14 AW15 AW16 ids link to the page that takes them, long text is a textarea, and a full page links on", async () => {
+    const bench = appworldBenchmark();
+    const env = await bench.up(benchContext());
+    try {
+      const episode = await bench.start(env, { id: "fake1_1", tags: [] });
+      const o = new URL(episode.url).origin;
+      const text = async (path: string, fields?: Record<string, string>) => (await (fields ? form(o, path, fields) : fetch(o + path))).text();
+      await form(o, "/notes/login", { username: "ada@example.com", password: "pw-<b>" });
+      // AW15: the long field is a textarea, the short one an input, and a failed post keeps what was typed.
+      const blank = await text("/notes/add_note");
+      expect(blank).toMatch(/<textarea name="body">/);
+      expect(blank).toMatch(/<input name="title"/);
+      const kept = await text("/notes/add_note", { title: "t", body: "line one\nline two", stars: "many" });
+      expect(kept).toMatch(/<textarea name="body">line one\nline two<\/textarea>/);
+      expect(kept).toMatch(/name="title" value="t"/);
+      // AW14: the id a write returns links to the read page that takes it, which runs.
+      const added = await text("/notes/add_note", { title: "first", body: "line one\nline two" });
+      expect(hrefs(added)).toEqual(["/notes/show_note?note_id=1&_run=1"]);
+      const one = await text("/notes/show_note?note_id=1&_run=1");
+      expect(one).toContain("<dd>first</dd>");
+      expect(one).toMatch(/name="note_id" value="1"/);
+      // A key that no API takes, or a number under a plain key, is not a link.
+      expect(added).not.toMatch(/href="[^"]*">4\.0</);
+      expect((await fetch(`${o}/notes/show_note?note_id=9&_run=1`)).status).toBe(400);
+      // AW16: a full page links to the next, a later page to the previous, a short last page to neither next.
+      await form(o, "/notes/add_note", { title: "second" });
+      await form(o, "/notes/add_note", { title: "third" });
+      expect(hrefs(await text("/notes/show_notes?page_limit=2&_run=1")).filter((h) => h.includes("page_index"))).toEqual(["/notes/show_notes?page_limit=2&page_index=1&_run=1"]);
+      const last = hrefs(await text("/notes/show_notes?page_limit=2&page_index=1&_run=1")).filter((h) => h.includes("page_index"));
+      expect(last).toEqual(["/notes/show_notes?page_limit=2&page_index=0&_run=1"]);
       await episode.close!();
     } finally {
       await bench.down(env);
