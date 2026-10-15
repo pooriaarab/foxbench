@@ -1,6 +1,7 @@
 # A fake of the parts of the appworld package that foxbench's bridge uses,
 # for tests: one notes app and the supervisor, three tasks, and an evaluator
 # with two unit tests. No AppWorld code or data is in it.
+import collections as collections_
 import os
 import sys
 import types
@@ -19,15 +20,12 @@ DOCS = {
 state = {"world": None}
 path_store = types.SimpleNamespace(data=os.path.join(os.environ.get("APPWORLD_ROOT", "."), "data"), experiment_outputs=os.path.join(os.environ.get("APPWORLD_ROOT", "."), "experiments", "outputs"))
 
-
 def verify_fully_installed():
     if os.environ.get("FAKE_APPWORLD_UNPACKED") == "0":
         raise Exception("The appworld package is not fully installed.")
 
-
 def fail(code, message):
     raise Exception(f"Response status code is {code}:\n{{\"message\": \"{message}\"}}")
-
 
 class Api:
     def __init__(self, world, app):
@@ -50,10 +48,10 @@ class Api:
                 fail(401, "Invalid token")
             if api == "add_note":
                 w.notes.append({k: v for k, v in args.items() if k != "access_token"})
-                return {"message": "Note added.", "note_id": len(w.notes)}
+                ModelHashHandler.data[w.output_db_home_path_in_memory]["notes"] = len(w.notes)
+                return {"message": "Note added.", "note_id": len(w.notes), "score": 4.0}
             return w.notes
         return call
-
 
 class AppWorld:
     def __init__(self, task_id, experiment_name="default", **kwargs):
@@ -88,31 +86,33 @@ class AppWorld:
     def close(self):
         state["world"] = None
 
-
 def load_task_ids(dataset_name):
     return TASKS[dataset_name]
 
+class ModelHashHandler:
+    data = collections_.defaultdict(dict)
 
 class ModelCollection:
     @classmethod
     def load(cls, to_db_home_path=None, from_db_home_path=None, **kwargs):
-        # As upstream: a path on disk must exist; an in-memory one is the open world's.
+        # As upstream: a path on disk must exist, an in-memory one is the open world's, and the hashes of `to` are reset.
         if not from_db_home_path.startswith(":memory:") and not os.path.exists(from_db_home_path):
             raise Exception("The from_db_home_path does not exist.")
+        ModelHashHandler.data[to_db_home_path] = {}
         return state["world"]
 
-
 def evaluate_task(task_id, experiment_name="default", suppress_errors=True, save_report=True):
-    end = ModelCollection.load(from_db_home_path=os.path.join(path_store.experiment_outputs, experiment_name, "tasks", task_id, "dbs"))
+    memory = f":memory:{task_id}"
+    end = ModelCollection.load(to_db_home_path=memory, from_db_home_path=os.path.join(path_store.experiment_outputs, experiment_name, "tasks", task_id, "dbs"))
     want = {"title": "groceries", "pinned": True, "tags": ["milk", "eggs"]}
     added = any(all(n.get(k) == v for k, v in want.items()) for n in end.notes)
-    results = [added and len(end.notes) == 1, end.completed]
+    # Like AppWorld's collateral-damage tests, this one reads the model hashes.
+    results = [added and ModelHashHandler.data[memory].get("notes") == len(end.notes) == 1, end.completed]
     return types.SimpleNamespace(success=all(results), pass_count=sum(results), fail_count=len(results) - sum(results))
-
 
 # The submodules the bridge imports.
 for name, attrs in {"cli": {"verify_fully_installed": verify_fully_installed}, "evaluator": {"evaluate_task": evaluate_task}, "collections": {}, "collections.models": {"ModelCollection": ModelCollection},
-                    "common": {}, "common.path_store": {"path_store": path_store}}.items():
+                    "common": {}, "common.path_store": {"path_store": path_store}, "apps": {}, "apps.model_lib": {"ModelHashHandler": ModelHashHandler}}.items():
     sys.modules[f"appworld.{name}"] = sub = types.ModuleType(f"appworld.{name}")
     sub.__dict__.update(attrs)
     setattr(sys.modules[sub.__name__.rsplit(".", 1)[0]], name.rsplit(".", 1)[-1], sub)

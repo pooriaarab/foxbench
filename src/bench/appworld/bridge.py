@@ -5,6 +5,7 @@
 # AppWorld's own APIs; AppWorld's own evaluator gives the verdict (AW4).
 # `check` prints one JSON line. `serve` reads one JSON request per line and writes one reply line:
 #   {"op": "tasks"} | {"op": "open", "id"} | {"op": "call", "app", "api", "args"} | {"op": "evaluate"}
+import copy
 import json
 import os
 import re
@@ -56,6 +57,7 @@ def convert(kind, text):
 
 def serve():
     from appworld import AppWorld, evaluator, load_task_ids
+    from appworld.apps.model_lib import ModelHashHandler
     from appworld.collections import models
     from appworld.common.path_store import path_store
 
@@ -66,10 +68,14 @@ def serve():
 
     def load_in_memory(cls, to_db_home_path=None, from_db_home_path=None, **kwargs):
         # The evaluator reads the end state from the outputs on disk; here it is the open world's memory.
+        # A load resets the model hashes that a save to disk would keep, so they are put back (AW4).
         world = now["world"]
-        if world and from_db_home_path == os.path.join(path_store.experiment_outputs, EXPERIMENT, "tasks", world.task_id, "dbs"):
-            from_db_home_path = world.output_db_home_path_in_memory
-        return load(cls, to_db_home_path=to_db_home_path, from_db_home_path=from_db_home_path, **kwargs)
+        if not world or from_db_home_path != os.path.join(path_store.experiment_outputs, EXPERIMENT, "tasks", world.task_id, "dbs"):
+            return load(cls, to_db_home_path=to_db_home_path, from_db_home_path=from_db_home_path, **kwargs)
+        hashes = copy.deepcopy(ModelHashHandler.data[world.output_db_home_path_in_memory])
+        collection = load(cls, to_db_home_path=to_db_home_path, from_db_home_path=world.output_db_home_path_in_memory, **kwargs)
+        ModelHashHandler.data[to_db_home_path] = hashes
+        return collection
 
     models.ModelCollection.load = classmethod(load_in_memory)
 
@@ -92,11 +98,11 @@ def serve():
         world, values = now["world"], {}
         try:
             for p in now["docs"][app][api]["parameters"]:
-                text = str(args.get(p["name"], "")).strip()
-                if not text and p["name"] == "access_token":
+                text = str(args.get(p["name"], ""))
+                if not text.strip() and p["name"] == "access_token":
                     text = now["tokens"].get(app, "")  # AW6
-                if text:
-                    values[p["name"]] = convert(p["type"], text)
+                if text.strip():  # a string keeps its spaces; other types are parsed from the stripped text
+                    values[p["name"]] = text if p["type"] == "string" else convert(p["type"], text.strip())
         except ValueError as error:
             return {"error": f"{p['name']} ({p['type']}): {error}", "completed": world.task_completed()}
         try:
@@ -107,7 +113,8 @@ def serve():
             world.requester.reset_request_count()  # one call is one interaction
         if isinstance(result, dict) and "access_token" in result:
             now["tokens"][app] = result["access_token"]
-        return {"result": result, "completed": world.task_completed()}
+        # `json` is Python's own text of the result: a float such as 4.0 stays a float, which a JSON round trip through Node would make 4.
+        return {"result": result, "json": json.dumps(result), "completed": world.task_completed()}
 
     def evaluate():
         world = now["world"]

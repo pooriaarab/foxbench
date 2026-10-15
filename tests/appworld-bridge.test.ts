@@ -90,8 +90,8 @@ describe("appworld bridge", () => {
       expect(await login(b)).toMatchObject({ result: { access_token: "token-1" } });
       expect(await b.call("notes", "add_note", { title: "x", stars: "many" })).toMatchObject({ error: expect.stringMatching(/^stars \(integer\): /) });
       expect(await b.call("notes", "add_note", { title: "x", pinned: "yes" })).toMatchObject({ error: "pinned (boolean): must be true or false" });
-      await b.call("notes", "add_note", { title: "typed", pinned: "TRUE", tags: '["a", "b"]', stars: "3", access_token: " " });
-      expect(await b.call("notes", "show_notes", {})).toEqual({ result: [{ title: "typed", pinned: true, tags: ["a", "b"], stars: 3 }], completed: false });
+      expect(await b.call("notes", "add_note", { title: " typed\n", pinned: "TRUE", tags: '["a", "b"]', stars: " 3", access_token: " " })).toMatchObject({ json: '{"message": "Note added.", "note_id": 1, "score": 4.0}' });
+      expect(await b.call("notes", "show_notes", {})).toMatchObject({ result: [{ title: " typed\n", pinned: true, tags: ["a", "b"], stars: 3 }], completed: false });
     });
   });
 
@@ -103,7 +103,7 @@ describe("appworld bridge", () => {
     await bridge.open("fake1_1");
     expect(await bridge.call("notes", "show_notes", {})).toMatchObject({ error: expect.stringMatching(/401/) });
     await login(bridge);
-    expect(await bridge.call("notes", "show_notes", {})).toEqual({ result: [], completed: false });
+    expect(await bridge.call("notes", "show_notes", {})).toEqual({ result: [], json: "[]", completed: false });
     await bridge.close();
     const started = Date.now();
     await expect(bridge.evaluate()).rejects.toThrow(/the AppWorld bridge stopped/);

@@ -18,7 +18,8 @@ const INSTALL = `pip install appworld==${APPWORLD_VERSION} && appworld install &
 export interface ApiParam { name: string; type: string; required: boolean; description: string; default: unknown }
 export interface ApiDoc { name: string; description: string; method: string; parameters: ApiParam[] }
 export interface AppWorldTask { goal: string; supervisor: Record<string, string>; apps: Record<string, ApiDoc[]> }
-export interface CallReply { result?: unknown; error?: string; completed: boolean }
+/** `json` is the result as Python's JSON text, so 4.0 stays 4.0. */
+export interface CallReply { result?: unknown; json?: string; error?: string; completed: boolean }
 export interface Evaluation { success: boolean; passes: number; fails: number; completed: boolean }
 
 export interface AppWorldBridge {
