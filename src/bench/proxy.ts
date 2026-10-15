@@ -7,7 +7,7 @@
 import { createServer, request as httpRequest } from "node:http";
 import { request as httpsRequest } from "node:https";
 import { connect } from "node:net";
-import type { TraceEntry } from "./types.js";
+import type { Replacement, TraceEntry } from "./types.js";
 import { serveUser, USER_PATH, type UserChannel } from "./user.js";
 
 export interface RecordingProxy {
@@ -17,7 +17,7 @@ export interface RecordingProxy {
   close(): Promise<void>;
 }
 
-export async function startProxy(target: string, options: { headers?: Record<string, string>; port?: number; user?: UserChannel } = {}): Promise<RecordingProxy> {
+export async function startProxy(target: string, options: { headers?: Record<string, string>; port?: number; user?: UserChannel; replace?: Replacement[] } = {}): Promise<RecordingProxy> {
   const site = new URL(target);
   const trace: TraceEntry[] = [];
   const started = Date.now();
@@ -35,6 +35,15 @@ export async function startProxy(target: string, options: { headers?: Record<str
     if (options.user && !egress && to.pathname === USER_PATH) {
       entry.type = "text/html";
       void serveUser(options.user, req, res).then((status) => { entry.status = status; });
+      return;
+    }
+    // A listed path is the proxy's own answer, for GET only and never for another host (P7, P8).
+    const swap = !egress && entry.method === "GET" ? options.replace?.find((r) => r.path === to.pathname) : undefined;
+    if (swap) {
+      entry.status = 200;
+      entry.type = swap.type;
+      entry.bytes = swap.body.length;
+      res.writeHead(200, { "content-type": swap.type, "content-length": swap.body.length, "cache-control": "no-store" }).end(swap.body);
       return;
     }
     const send = to.protocol === "https:" ? httpsRequest : httpRequest;

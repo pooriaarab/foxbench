@@ -152,17 +152,22 @@ describe("the in-house suites through the proxy", () => {
   });
 });
 
+/** A request's status, type and body. */
+async function fetchBody(url: URL, init?: RequestInit) {
+  const r = await fetch(url, init);
+  return { status: r.status, type: r.headers.get("content-type"), body: Buffer.from(await r.arrayBuffer()) };
+}
+
 describe("replacements", () => {
   const PNG = Buffer.from("fake image bytes");
   const replace = [{ path: "/img/victim.png", type: "image/png", body: PNG }];
-  const fetchBody = async (url: string, init?: RequestInit) => { const r = await fetch(url, init); return { status: r.status, type: r.headers.get("content-type"), body: Buffer.from(await r.arrayBuffer()) }; };
 
   it("P7 serves a listed path itself with a GET, and forwards everything else", async () => {
     const { bench, traces } = toy({ replace });
     seen.length = 0;
     let got: Awaited<ReturnType<typeof fetchBody>>[] = [];
     await play(bench, agent(async (url) => {
-      got = [await fetchBody(`${url}/img/victim.png`), await fetchBody(`${url}/img/other.png`), await fetchBody(`${url}/img/victim.png`, { method: "POST", body: "x" })];
+      got = [await fetchBody(new URL("/img/victim.png", url)), await fetchBody(new URL("/img/other.png", url)), await fetchBody(new URL("/img/victim.png", url), { method: "POST", body: "x" })];
     }));
     expect(got[0]).toMatchObject({ status: 200, type: "image/png" });
     expect(got[0]!.body.equals(PNG)).toBe(true);
@@ -176,7 +181,7 @@ describe("replacements", () => {
     const { bench, traces } = toy({ replace });
     let viaHttpProxy = "";
     await play(bench, agent(async (url) => {
-      await fetchBody(`${url}/img/victim.png`);
+      await fetchBody(new URL("/img/victim.png", url));
       viaHttpProxy = await viaProxy(url, `${other}/img/victim.png`);
     }));
     const hit = traces[0]!.requests.find((r) => r.path === "/img/victim.png" && !r.egress)!;
