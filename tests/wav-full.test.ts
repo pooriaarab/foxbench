@@ -191,7 +191,6 @@ describe("WF8 the map's archives are never kept on the disk", () => {
 });
 
 describe("WF9 every image runs on the VM's architecture", () => {
-  const fresh = () => mkdtempSync(join(tmpdir(), "fbn-wf9-"));
   it("pulls each image for the VM's platform and runs it", () => {
     const dir = fresh();
     try {
