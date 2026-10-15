@@ -149,7 +149,7 @@ function fetchZim(): string {
   return `ZIM=$DATA/${file}
 ZIM_SIZE=${size}
 ZIM_MD5=${md5}
-size_of() { stat -c %s "$1" 2>/dev/null || echo 0; }
+size_of() { [ -f "$1" ] && wc -c < "$1" | tr -d ' ' || echo 0; }
 # try_zim URL: sets why and returns 1 unless the file is whole and its md5 is right.
 try_zim() {
   for try in 1 2 3; do
@@ -226,7 +226,7 @@ export function wavStartup(full = false): string {
 set -e
 command -v docker >/dev/null || { apt-get update -q && DEBIAN_FRONTEND=noninteractive apt-get install -y -q docker.io; }
 ${dockerMirror()}
-ARCH=$(case "$(uname -m)" in x86_64) echo amd64;; aarch64) echo arm64;; *) uname -m;; esac)
+ARCH=$(case "$(uname -m)" in (x86_64) echo amd64;; (aarch64) echo arm64;; (*) uname -m;; esac)
 fail() { echo "foxbench: BOOT FAILED: $*" >&2; exit 1; }
 check_arch() {
   got=$(docker image inspect -f '{{.Architecture}}' "$1") || fail "image $1 is missing"
