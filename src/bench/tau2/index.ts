@@ -11,11 +11,21 @@ import type { Benchmark, BenchContext, Case, Episode } from "../types.js";
 import { claudeUser, userReadiness, type UserChannel } from "../user.js";
 import { fetchTau2, startBridge, TAU2_REF, type Tau2Bridge, type Tau2Event } from "./bridge.js";
 import type { Tau2Site } from "./desk.js";
+import { startAirlineSite } from "./airline.js";
 import { startRetailSite } from "./retail.js";
 
-/** The same goal for every case: what the customer wants is only in the chat (T12). */
-export const TAU2_GOAL = "You work the customer support desk of an online shop. A customer is waiting in the chat at /user/: read what they say there and help them, "
-  + "following the shop's policy at /policy. Use the desk's pages to look up customers, orders and products and to make changes. Talk to the customer only in the chat.";
+type Domain = "retail" | "airline";
+const DESKS = { retail: "the customer support desk of an online shop", airline: "the reservations desk of an airline" };
+/** The same goal for every case of a domain: what the customer wants is only in the chat (T12). */
+export const tau2Goal = (domain: Domain) => `You work ${DESKS[domain]}. A customer is waiting in the chat at /user/: read what they say there and help them, `
+  + "following the policy at /policy. Use the desk's pages to look up the customer's records and to make changes. Talk to the customer only in the chat.";
+const SITES = { retail: startRetailSite, airline: startAirlineSite };
+const SUBMISSIONS = "https://github.com/sierra-research/tau2-bench/tree/main/web/leaderboard/public/submissions";
+/** Published pass^1 on the full domain (plan 6.2). Their agents called tools, not pages, with a cloud user. */
+const BASELINES: Record<Domain, [string, number][]> = {
+  retail: [["Qwen3.5-397B-A17B (tool calls, cloud user)", 0.844], ["Claude Opus 4.5 (tool calls, cloud user)", 0.796], ["Nemotron-Orchestrator-8B (custom harness)", 0.842]],
+  airline: [["Qwen3.5-397B-A17B (tool calls, cloud user)", 0.815], ["Claude Opus 4.5 (tool calls, cloud user)", 0.84], ["Nemotron-Orchestrator-8B (custom harness)", 0.56]],
+};
 
 interface Tau2Task { id: string; evaluation_criteria: { nl_assertions?: string[] | null; reward_basis: string[] } }
 interface Tau2Env { [key: string]: unknown; ctx: BenchContext; bridge: Tau2Bridge; policy: string }
@@ -24,14 +34,15 @@ const running = new WeakMap<Episode, { id: string; site: Tau2Site; user: UserCha
 const have = (cmd: string, env: NodeJS.ProcessEnv) => spawnSync(cmd, ["--version"], { env }).status === 0;
 
 /** `user` replaces the Claude customer, for tests. */
-export const tau2Benchmark = (domain: "retail", options: { user?: (scenario: { system: string; greeting: string }) => UserChannel } = {}): Benchmark => ({
+export const tau2Benchmark = (domain: Domain, options: { user?: (scenario: { system: string; greeting: string }) => UserChannel } = {}): Benchmark => ({
   id: `tau2-${domain}`,
   title: `tau2-bench ${domain}`,
   upstream: { repo: "https://github.com/sierra-research/tau2-bench", ref: TAU2_REF, paper: "https://arxiv.org/abs/2506.07982" },
   licence: { code: "MIT", data: "MIT", mode: "fetch-at-run" },
   where: "local",
   measures: ["task", "policy", "ask-user"],
-  scoring: "mixed",
+  // Airline's reward basis has no NL assertions, so code alone scores it.
+  scoring: domain === "retail" ? "mixed" : "programmatic",
   async check(ctx) {
     for (const cmd of ["git", "uv"]) if (!have(cmd, ctx.env)) return { ready: false, reason: `${cmd} is not on the PATH (tau2 runs through uv)`, fix: cmd === "uv" ? "install uv: https://docs.astral.sh/uv/" : "install git" };
     return options.user ? { ready: true } : userReadiness(ctx);
@@ -42,7 +53,7 @@ export const tau2Benchmark = (domain: "retail", options: { user?: (scenario: { s
     const tasks = JSON.parse(readFileSync(join(data, "tasks.json"), "utf8")) as Tau2Task[];
     const splits = JSON.parse(readFileSync(join(data, "split_tasks.json"), "utf8")) as Record<string, string[]>;
     const all: Case[] = tasks.map((t) => ({
-      id: t.id, tags: ["train", "test"].filter((s) => splits[s]?.includes(t.id)), goal: TAU2_GOAL,
+      id: t.id, tags: ["train", "test"].filter((s) => splits[s]?.includes(t.id)), goal: tau2Goal(domain),
       judge: t.evaluation_criteria.reward_basis.includes("NL_ASSERTION") && t.evaluation_criteria.nl_assertions?.length ? "llm" : "programmatic",
     }));
     return pickSubset(`tau2-${domain}`, all, subset);
@@ -60,9 +71,9 @@ export const tau2Benchmark = (domain: "retail", options: { user?: (scenario: { s
     const { ctx, bridge, policy } = env as Tau2Env;
     await bridge.reset();
     const scenario = await bridge.task(item.id);
-    const site = await startRetailSite(bridge, policy);
+    const site = await SITES[domain](bridge, policy);
     const user = options.user ? options.user(scenario) : claudeUser(ctx, scenario);
-    const episode: Episode = { url: `${site.origin}/`, goal: TAU2_GOAL, startPath: "/", userChannel: user, close: site.close };
+    const episode: Episode = { url: `${site.origin}/`, goal: tau2Goal(domain), startPath: "/", userChannel: user, close: site.close };
     running.set(episode, { id: item.id, site, user, greeting: scenario.greeting, opening: user.opening() });
     return episode;
   },
@@ -87,9 +98,5 @@ export const tau2Benchmark = (domain: "retail", options: { user?: (scenario: { s
     return { success, score: reward, attack: null, reasons: success ? [] : reasons.length ? reasons : [`tau2 reward ${reward}`], judgedBy: nl.length && judge ? `llm:${judge.model}` : "programmatic" };
   },
   down: async (env) => { await (env as Tau2Env).bridge.close(); },
-  baselines: [
-    { agent: "Qwen3.5-397B-A17B (tool calls, cloud user)", subset: "full", score: 0.844, source: "https://github.com/sierra-research/tau2-bench/tree/main/web/leaderboard/public/submissions" },
-    { agent: "Claude Opus 4.5 (tool calls, cloud user)", subset: "full", score: 0.796, source: "https://github.com/sierra-research/tau2-bench/tree/main/web/leaderboard/public/submissions" },
-    { agent: "Nemotron-Orchestrator-8B (custom harness)", subset: "full", score: 0.842, source: "https://github.com/sierra-research/tau2-bench/tree/main/web/leaderboard/public/submissions" },
-  ],
+  baselines: BASELINES[domain].map(([agent, score]) => ({ agent, subset: "full", score, source: SUBMISSIONS })),
 });

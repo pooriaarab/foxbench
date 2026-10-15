@@ -236,6 +236,7 @@ foxbench run --suite agentdojo,browsesafe --agent mcp --name my-agent -- node my
 | `agentdojo-workspace` | AgentDojo's workspace suite, the mail and calendar cases: 24 user tasks, then 18 pairs of a user task and an injection task, in a web app (the drive cases come later) | The same AgentDojo release, suite v1.2.2 | The same checks. A case is offered only when every call it needs has a page. |
 
 | `tau2-retail` | tau2-bench's 114 retail tasks: the agent works a shop's support desk while a Claude customer talks to it in the chat at `/user/` | [tau2-bench](https://github.com/sierra-research/tau2-bench) v1.0.1 (MIT), fetched at a pinned commit; tools run in tau2's own code through `uv` | tau2's own `evaluate_simulation`: the database against the gold one, and tau2's NL assertions sent to the run's LLM judge (`--judge`, Claude). Needs `ANTHROPIC_API_KEY` for the customer. |
+| `tau2-airline` | tau2-bench's 50 airline tasks on an airline's reservations desk, with the same Claude customer | [tau2-bench](https://github.com/sierra-research/tau2-bench) v1.0.1 (MIT), as for `tau2-retail` | tau2's own `evaluate_simulation`: the database and what the agent must tell the customer. No LLM judge. |
 
 Readiness is honest. A benchmark whose inputs are missing — a Globus login
 for EIA's data, `python3` for WebArena-Infinity, the network on a first
@@ -322,7 +323,7 @@ tags.
 
 | Option | Meaning |
 |---|---|
-| `--suite <name>` | `core` (13 tasks), `hard` (10), `security+` (3), a benchmark id (`miniwob`, `agentdojo`, `webgames`, `eia`, `browsesafe`, `webarena-infinity`, `tau2-retail`), a comma list, or `all`. |
+| `--suite <name>` | `core` (13 tasks), `hard` (10), `security+` (3), a benchmark id (`miniwob`, `agentdojo`, `webgames`, `eia`, `browsesafe`, `webarena-infinity`, `tau2-retail`, `tau2-airline`), a comma list, or `all`. |
 | `--subset <name>` | `full` (the default), `quick` (the committed list in `src/bench/subsets/<id>.json`, at most 20 cases), `published` (the subset of the baselines) or `tag:<tag>`. |
 | `--require id,id` | Exit 1 when one of these benchmarks was skipped. `doctor` takes it too. |
 | `--tasks id,id` | Run only these tasks, from any suite. |
