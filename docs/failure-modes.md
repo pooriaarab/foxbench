@@ -241,6 +241,27 @@ argv and prints canned JSON.
 | V12 | The tunnel starts before the VM listens and gcloud's connection test fails. | `up` restarts the tunnel until gcloud says `Listening on port`, for up to 5 minutes, then stops and names the log. The state file stays so `down` can delete the VM. | - (needs a real VM) |
 | V13 | IAP cannot reach the VM because no firewall rule allows Google's IAP range. | A setup step, not code: `README.md` gives the firewall rule for the `foxbench` network tag that every VM gets. | - |
 
+## WebMall env (`src/bench/webmall/env.ts`, `foxbench env up webmall`)
+
+The upstream repo has no licence. The script fetches its compose file at a pinned
+commit and its data from the authors' server at run time. Nothing of it is committed.
+
+| ID | Failure mode | Wanted behaviour | Test |
+|---|---|---|---|
+| WM1 | The upstream moves (`latest` images, a new commit), so a score is for a setup nobody pinned. | The script fetches the pinned commit, and the override pins every image by digest. | `WM1 ...` |
+| WM2 | The sites listen on every interface of a laptop, or Elasticsearch publishes 9200 on the host. | Local mode binds 127.0.0.1; the VM binds 0.0.0.0 (the IAP tunnel needs it, the VM has no external IP); Elasticsearch publishes no port. | `WM2 ...` |
+| WM3 | A shop's URL is not the proxy's origin, so WordPress redirects the agent to another address and around the recording proxy (P1). | `wp-config.php` and the database name `http://127.0.0.1:<proxy port>`: the authors' host, `http://localhost:<port>` and the doubled `http://localhost:<port>:<port>` (their own restore script doubles it) are all replaced. | `WM3 ...` |
+| WM4 | An interrupted first run leaves half-restored volumes, and the next run starts them. | The `ready` marker is written last. Without it the script removes our volumes and restores again. | `WM4 ...` |
+| WM5 | A second `up` restores again and wipes the state, or downloads 3.6 GB again. | With the marker the script only runs `compose up -d`, and downloads nothing. | `WM5 ...` |
+| WM6 | Our restore overwrites the volumes of someone's own WebMall (upstream names them `woocommerce_*`). | The override renames every volume `foxbench_webmall_*`, and the script touches no other. | `WM6 ...` |
+| WM7 | A truncated or refused download is restored. The authors' server answers 429 to a second connection. | A backup is written to `.part`, checked with `gzip -t`, then renamed; a bad one stops the script before the restore. Downloads run one at a time, and curl retries. | `WM7 ...` |
+| WM8 | `down` removes containers that are not ours (another agent's WebArena containers). | `down` selects by the compose project label `foxbench-webmall`, and keeps the volumes. | `WM8 ...` |
+| WM9 | The GCP env is a different shape than the plan, or the tunnel wait (5 minutes) ends during the 3.6 GB first boot. | `e2-standard-4`, 40 GB, the five site ports tunnelled, a 180-minute boot wait for this env only. | `WM9 ...` |
+| WM10 | `--provider docker` on an env without a local mode, or an unknown provider, starts something or exits 0. | Exit 2 and a message, and no docker call. | `WM10 ...` |
+| WM11 | Docker is missing, and the run dies with a shell error. | Exit 1 with `Could not run docker` and a fix. | `WM11 ...` |
+| WM12 | The real sites do not come up from the pinned files. | The live test (`FOXBENCH_WEBMALL_LIVE=1`, not in CI: 3.6 GB) brings the four shops and the start page up on local Docker; each answers on the proxy's origin and a shop lists products. | `WM12 ...` |
+| WM13 | Elasticsearch exits at once on x86 because upstream's `-XX:UseSVE=0` is an ARM-only flag, and every search fails. | The flag is set only when `uname -m` is arm64 or aarch64. | `WM13 ...` |
+
 ## Speed and the run fingerprint (`src/bench/speed.ts`, `src/bench/fingerprint.ts`)
 
 A speed claim needs the right statistic and the machine it came from. Each
