@@ -18,7 +18,7 @@ afterEach(async () => {
 
 type Mode = "ok" | "unhealthy" | "hang" | "down";
 /** Fake containers on host:port+OFFSET: env-ctrl answers /status, the site answers its health path. */
-async function fake(host: string, modes: Partial<Record<string, Mode>> = {}) {
+async function fake(host: string, modes: Partial<Record<string, Mode>> = {}, offset = OFFSET) {
   for (const site of wavSites) {
     const mode = modes[site.id] ?? "ok";
     if (mode === "down") continue;
@@ -34,7 +34,8 @@ async function fake(host: string, modes: Partial<Record<string, Mode>> = {}) {
     });
     for (const [server, port] of [[ctrl, site.ctrlPort], [page, site.port]] as const) {
       servers.push(server);
-      await new Promise<void>((r) => server.listen(port + OFFSET, host, r));
+      // A port in use fails here, by name, not as a 30 s test timeout.
+      await new Promise<void>((r, reject) => server.once("error", reject).listen(port + offset, host, r));
     }
   }
 }
@@ -110,9 +111,11 @@ describe("WV7 FOXBENCH_WAV_HOST", () => {
     // A host other than 127.0.0.1 that every OS can bind: macOS does not route 127.0.0.2.
     const host = Object.values(networkInterfaces()).flat().find((i) => i && i.family === "IPv4" && !i.internal)?.address;
     if (!host) throw new Error("this machine has no non-loopback IPv4 address for WV7");
-    await fake(host);
-    expect((await webarenaVerified({ offset: OFFSET }).check(ctx())).ready).toBe(false);
-    expect(await webarenaVerified({ offset: OFFSET }).check(ctx({ FOXBENCH_WAV_HOST: host }))).toEqual({ ready: true });
+    // Its own offset: a server on the runner can hold the shared ports on every address.
+    const offset = OFFSET + 1000;
+    await fake(host, {}, offset);
+    expect((await webarenaVerified({ offset }).check(ctx())).ready).toBe(false);
+    expect(await webarenaVerified({ offset }).check(ctx({ FOXBENCH_WAV_HOST: host }))).toEqual({ ready: true });
   });
 });
 
