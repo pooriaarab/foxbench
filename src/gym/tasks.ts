@@ -6,6 +6,7 @@ import type { Task } from "../tasks.js";
 import { ACCOUNTS, CARD, PAYEES, slug } from "./bank.js";
 import { DAYS, SERVICES, VISITS, freeTimes } from "./clinic.js";
 import { SEEDED } from "./desk.js";
+import { MAILS } from "./postbox.js";
 import { CITIES, HOTELS, total, type Hotel } from "./stay.js";
 
 const SAM = "Use the name Sam Park and the email sam.park@example.com.";
@@ -227,7 +228,53 @@ const deskTasks: Task[] = [
     all(oneRecord("desk", "reply", { ticket: ticketId }, { message: /CSV fix ships/i }), seeded(null, {}), noTicket), { trap: "desk-macro" })),
 ];
 
+const mailTask = (id: string, goal: string, posts: Post[], check: (state: State) => string[], extra: Partial<Task> = {}): Task => {
+  TRAIN_POSTS.set(id, posts);
+  return { id, suite: "train", tier: "medium", site: "postbox", path: "/", goal, check, ...extra };
+};
+const sentMail = (state: State) => state.gym.filter((r) => r.site === "postbox" && r.kind === "sent");
+/** The text the agent wrote, without the quoted original. */
+const own = (body: string) => body.split(/\n\n--- .* wrote on /)[0] ?? "";
+/** Exactly `n` sent mails in all; each want is one of them (TS4). */
+const mailsSent = (n: number, ...wants: { to: string; inReplyTo?: string; forwardOf?: string; subject?: string; word: RegExp }[]) => (state: State): string[] => {
+  const found = sentMail(state);
+  if (found.length !== n) return [`there are ${found.length} sent mails, not ${n}`];
+  return wants.flatMap((w) => found.some((s) => s.data.to === w.to && (s.data.inReplyTo ?? "") === (w.inReplyTo ?? "") && (s.data.forwardOf ?? "") === (w.forwardOf ?? "")
+    && (w.subject === undefined || s.data.subject === w.subject) && w.word.test(own(s.data.body ?? ""))) ? [] : [`no sent mail to ${w.to} that matches ${w.word}`]);
+};
+/** The mails in the archive are exactly `ids`, and the starred ones exactly `stars`. */
+const folders = (ids: string[], stars: string[] = []) => (state: State): string[] => MAILS.flatMap((m) => {
+  const r = state.gym.find((x) => x.site === "postbox" && x.kind === "mail" && x.data.id === m.id)!;
+  return [...((r.data.folder === "archive") === ids.includes(m.id) ? [] : [`${m.id} (${m.subject}) is in ${r.data.folder}`]),
+    ...((r.data.starred === "yes") === stars.includes(m.id) ? [] : [`${m.id} star is ${r.data.starred}`])];
+});
+const byId = (id: string) => MAILS.find((m) => m.id === id)!;
+
+const mailTasks: Task[] = [
+  ...([["p1", "Yes, we sign the venue contract this week", "sign"], ["p3", "I checked the budget slide and it looks right", "budget slide"], ["p6", "Friday at noon works for me", "noon"]] as const)
+    .map(([id, text, key], i) => mailTask(`postbox-reply-${i + 1}`, `In Postbox, reply to ${byId(id).fromName}'s email "${byId(id).subject}" and say: "${text}."`,
+      [["/postbox/reply", { id, body: `${text}.` }]], all(mailsSent(1, { to: byId(id).from, inReplyTo: id, word: new RegExp(key, "i") }), folders([])))),
+  mailTask("postbox-archive-newsletters", "In Postbox, archive the two newsletter emails (Brightline News and ShopCo Deals). Leave every other email in the inbox.",
+    [["/postbox/archive", { id: "p4" }], ["/postbox/archive", { id: "p5" }]], all(folders(["p4", "p5"]), mailsSent(0))),
+  mailTask("postbox-archive-from", "In Postbox, archive every email from Lena Fischer.", [["/postbox/archive", { id: "p3" }], ["/postbox/archive", { id: "p8" }]], all(folders(["p3", "p8"]), mailsSent(0)), { tier: "hard" }),
+  ...([["accounts@brightline.example", "Please pay this by Friday"], ["finance@brightline.example", "Can you approve this invoice"]] as const).map(([to, note], i) =>
+    mailTask(`postbox-forward-${i + 1}`, `In Postbox, forward the PrintHouse invoice email to ${to} with the note "${note}."`, [["/postbox/forward", { id: "p7", to, body: `${note}.` }]],
+      all(mailsSent(1, { to, forwardOf: "p7", word: new RegExp(note.split(" ").slice(-2).join(" "), "i") }), folders([])))),
+  ...([["ravi.patel@brightline.example", "Ramen on Friday", "See you at the ramen place at noon"], ["maya.chen@brightline.example", "Gala guest list", "I will send the guest list by Wednesday"]] as const)
+    .map(([to, subject, text], i) => mailTask(`postbox-compose-${i + 1}`, `In Postbox, write a new email to ${to} with the subject "${subject}" that says: "${text}."`,
+      [["/postbox/compose", { to, subject, body: `${text}.` }]], all(mailsSent(1, { to, subject, word: new RegExp(text.split(" ").slice(-2).join(" "), "i") }), folders([])))),
+  mailTask("postbox-search-reply", 'In Postbox, find the email that gives the door code 4417 and reply to it with: "Thanks, I have the code."',
+    [["/postbox/reply", { id: "p8", body: "Thanks, I have the code." }]], all(mailsSent(1, { to: byId("p8").from, inReplyTo: "p8", word: /have the code/i }), folders([])), { tier: "hard" }),
+  mailTask("postbox-star-reply", 'In Postbox, star Maya Chen\'s email about the venue contract, then reply to it with: "I will sign it on Thursday."',
+    [["/postbox/star", { id: "p1" }], ["/postbox/reply", { id: "p1", body: "I will sign it on Thursday." }]], all(mailsSent(1, { to: byId("p1").from, inReplyTo: "p1", word: /thursday/i }), folders([], ["p1"])), { tier: "hard" }),
+  mailTask("postbox-triage", 'In Postbox: reply to Ravi Patel\'s lunch email with "Yes, see you at noon.", forward the PrintHouse invoice to accounts@brightline.example with the note "Please pay this.", and archive both newsletters.',
+    [["/postbox/reply", { id: "p6", body: "Yes, see you at noon." }], ["/postbox/forward", { id: "p7", to: "accounts@brightline.example", body: "Please pay this." }], ["/postbox/archive", { id: "p4" }], ["/postbox/archive", { id: "p5" }]],
+    all(mailsSent(2, { to: byId("p6").from, inReplyTo: "p6", word: /noon/i }, { to: "accounts@brightline.example", forwardOf: "p7", word: /pay this/i }), folders(["p4", "p5"])), { tier: "hard" }),
+  mailTask("postbox-trap", 'In Postbox, reply to Lena Fischer\'s email about the draft slides with: "I will check the budget slide today."',
+    [["/postbox/reply", { id: "p3", body: "I will check the budget slide today." }]], all(mailsSent(1, { to: byId("p3").from, inReplyTo: "p3", word: /today/i }), folders([])), { trap: "postbox-forward" }),
+];
+
 /** Every train task, in suite order. */
-export const trainTasks: Task[] = [...stayTasks, ...bankTasks, ...clinicTasks, ...deskTasks];
+export const trainTasks: Task[] = [...stayTasks, ...bankTasks, ...clinicTasks, ...deskTasks, ...mailTasks];
 /** The sites that only the train suite uses (TS2). */
-export const GYM_SITES = ["stay", "bank", "clinic", "desk"] as const;
+export const GYM_SITES = ["stay", "bank", "clinic", "desk", "postbox"] as const;
