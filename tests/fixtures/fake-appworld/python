@@ -1,0 +1,5 @@
+#!/bin/sh
+# The python of the fake AppWorld install: python3 with the fake package on
+# the path. It drops -I, which would hide the package, and keeps the rest.
+[ "$1" = "-I" ] && shift
+PYTHONPATH="$(dirname "$0")" exec python3 "$@"
