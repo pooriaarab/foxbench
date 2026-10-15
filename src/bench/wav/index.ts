@@ -7,6 +7,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { request, type IncomingHttpHeaders } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { dockerMirror } from "../../env/mirror.js";
 import { startProxy, type RecordingProxy } from "../proxy.js";
 import { pickSubset } from "../subsets.js";
 import type { Benchmark, BenchContext, Env, Episode, Readiness } from "../types.js";
@@ -93,7 +94,7 @@ export function wavStartup(full = false): string {
 # wav-core: the WebArena-Verified sites. Runs as root on every boot; a container that exists is only started.
 set -e
 command -v docker >/dev/null || { apt-get update -q && DEBIAN_FRONTEND=noninteractive apt-get install -y -q docker.io; }
-systemctl enable --now docker
+${dockerMirror()}
 run() {
   name=$1 image=$2
   shift 2

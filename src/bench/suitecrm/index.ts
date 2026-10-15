@@ -4,6 +4,8 @@
 // tags. The agent sees SuiteCRM on SUITECRM_PORT through the recording proxy;
 // the proxy forwards to the tunnel on SUITECRM_TUNNEL.
 
+import { dockerMirror } from "../../env/mirror.js";
+
 /** SuiteCRM's port on the VM, and the port the agent sees: the site URL is http://127.0.0.1:8080. */
 export const SUITECRM_PORT = 8080;
 /** The VM port of the reset service, which restores the seeded database (SE5). */
@@ -24,7 +26,7 @@ export function suitecrmStartup(): string {
 set -e
 D=\${FOXBENCH_DIR:-/opt/foxbench}
 command -v docker >/dev/null || { apt-get update -q && DEBIAN_FRONTEND=noninteractive apt-get install -y -q docker.io; }
-systemctl enable --now docker
+${dockerMirror()}
 docker network inspect suitecrm >/dev/null 2>&1 || docker network create suitecrm
 run() {
   name=$1 image=$2
