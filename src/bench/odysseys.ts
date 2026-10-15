@@ -63,9 +63,10 @@ export function parseGrades(reply: string, n?: number) {
   return { success: met === grades.length, score: met / grades.length, reasons: met === grades.length ? [] : [`${grades.length - met} of ${grades.length} items not met: ${(/Thoughts:\s*([^\n]*)/.exec(reply)?.[1] ?? "").slice(0, 300)}`] };
 }
 
+const esc = (s: string) => s.replace(/[&<>"]/g, (c) => `&#${c.charCodeAt(0)};`);
+
 /** A local start page with the task and a search form (ODY6). */
 export async function startPage(id: string, task: string) {
-  const esc = (s: string) => s.replace(/[&<>"]/g, (c) => `&#${c.charCodeAt(0)};`);
   const html = `<!doctype html><meta charset="utf-8"><title>${esc(id)}</title><main data-case="${esc(id)}"><p>${esc(task)}</p>
 <form action="https://www.google.com/search" method="get"><input name="q" aria-label="Search the web"><button>Search</button></form></main>`;
   const server = createServer((_req, res) => res.writeHead(200, { "content-type": "text/html; charset=utf-8" }).end(html));
