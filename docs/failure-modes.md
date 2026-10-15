@@ -850,6 +850,30 @@ use a fake Hugging Face endpoint (`HF_ENDPOINT`) and fake judges.
 | DSH2 | The case list is wrong: not 150, a lost category or difficulty. | 150 cases with upstream's `id`, the category as tag and upstream's difficulty as tier. | `DSH2 ...` |
 | DSH3 | The judge is asked about a requirement the query does not have. | Only the attribute, filter and sort fields that are not `None` become criteria, one point each; the case passes when all hold. `noop` and a wrong agent pass 0 and a perfect agent passes all. | `DSH3 ...` |
 
+## Gaia2 (`src/bench/gaia2/`)
+
+Gaia2 is Meta's ARE: a phone assistant over email, calendar, contacts, chats,
+shopping and files, with events that arrive on ARE's clock while the agent
+works. ARE runs in-process in a Python bridge (`bridge.py`, under `uv`); the
+pages call ARE's own app tools, so each call is an agent event, and ARE's own
+judge scores the trace. ARE and the validation data are fetched at pinned
+revisions into the cache. ARE is MIT; the data is CC-BY-4.0 "for benchmarking
+purposes only", made with Llama, so the Llama terms apply: a model trained on
+it and released must be named "Llama...". foxbench never trains on it. The
+tests (`tests/gaia2.test.ts`) run ARE's real code on three real scenarios.
+
+| # | Failure mode | Wanted behaviour | Test |
+|---|---|---|---|
+| GA1 | ARE or the data moves upstream, or is committed, or its licence is lost. | Both are fetched at pinned revisions into the cache, and `NOTICE` with the licence terms is written beside the data. The benchmark records the licence. | `GA1 ...` |
+| GA2 | The case list is wrong: ids that change, a lost capability, or a quick list that names a scenario that is not there. | `full` is the 800 validation scenarios with unique ids and the capability as tag; `quick` is 20 committed ids, 4 per capability, and `pickSubset` throws on an unknown one. A case whose oracle has a free-text check is `judge: llm`. | `GA2 ...` |
+| GA3 | A page does something its ARE tool does not, so a correct agent fails or a wrong one passes. | The forms only collect arguments; ARE's app tool runs them, so the call is an agent event. ARE's oracle actions through the pages, on ARE's clock, pass. | `GA3 ...` |
+| GA4 | An agent that does nothing, or leaves out one action, passes. | ARE's judge fails both: `noop` and a run without the last oracle action score 0. | `GA4 ...` |
+| GA5 | One case's state or clock is still there in the next case. | Each case starts ARE's scenario in a fresh environment with a new clock. A second trial after a perfect first one fails when the agent does nothing. | `GA5 ...` |
+| GA6 | The agent cannot see the user's message or the events that arrive, or can read the oracle. | The feed at `/notifications` holds the user's task and every event; no page serves the oracle or the scenario. | `GA6 ...` |
+| GA7 | The soft rubric goes to ARE's default Llama, or runs without a judge, or an LLM verdict is not marked. | Free-text arguments go to the run's first LLM judge only; with the fake judge a changed email body passes or fails as the judge says, and the verdict is `llm:<model>`. With no judge ARE's hard checks alone decide and the verdict stays `programmatic`. | `GA7 ...` |
+| GA8 | ARE prints and logs at import time and breaks the bridge's line protocol, or the bridge dies and the site hangs. | Replies go to the bridge's own copy of stdout and ARE's prints go to stderr. A dead bridge fails each call at once and the page answers 502. | `GA8 ...` |
+| GA9 | `--suite all` stops when `uv` or `git` is missing. | `check()` is not ready, with the fix. | `GA9 ...` |
+
 ## AMO release build and listed submission (`scripts/amo-listing.mjs`)
 
 `pnpm check:amo` reads `dist-ext/`, which is what `release.yml` signs. Each
