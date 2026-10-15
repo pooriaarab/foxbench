@@ -327,10 +327,11 @@ describe("WF10 the ZIM file is complete before Wikipedia starts", () => {
     const dir = fresh10();
     try {
       serveZim(dir, { "archive.org": BYTES });
-      expect(boot(dir).status).toBe(0);
+      const first = boot(dir);
+      expect(first.status).toBe(0);
       const second = boot(dir);
       expect(second.status, second.stderr).toBe(0);
-      expect(second.log.filter((l) => l.startsWith("curl ") && l.includes(" -o "))).toHaveLength(1);
+      expect(second.log.filter((l) => l.startsWith("curl "))).toHaveLength(0);
     } finally { rmSync(dir, { recursive: true, force: true }); }
   });
   it("pins the size of the file the Internet Archive serves", async (t) => {
