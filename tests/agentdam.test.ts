@@ -81,7 +81,7 @@ const page = async (origins: Record<string, string>): Promise<WaPage> => {
   const goto = async (u: string) => { const o = new URL(u).origin; html = await (await fetch(origins[o] ? origins[o] + u.slice(o.length) : u)).text(); };
   return { goto, evaluate: async () => { throw new Error("no locators here"); }, content: async () => html };
 };
-const bench = () => agentdamBenchmark({ offset: OFFSET, agentOffset: AGENT, resetWaitMs: 2000, page, settleMs: 0 });
+const bench = () => agentdamBenchmark({ offset: OFFSET, portOffset: AGENT, resetWaitMs: 2000, page, settleMs: 0 });
 const play = (adapter: Adapter, ids: string[], judges = [fakeJudge()]) => runBenchmarks({ adapter, runs: [{ benchmark: bench(), subset: "full" }], ids, timeoutMs: 30_000, judges });
 
 /** Posts `text` to the page the task asks for. */

@@ -37,8 +37,8 @@ export interface WaFacts {
   /** Opens the judge browser on first use, so a case with no program_html never starts Firefox. */
   page?: () => Promise<WaPage>;
   judges: Judge[];
-  /** `func:` helpers beyond the ported ones, by name. */
-  helpers?: Record<string, (...args: string[]) => Promise<string> | string>;
+  /** `func:` helpers beyond the ported ones, by name. `__page__` comes through as the judge browser's page. */
+  helpers?: Record<string, (...args: (string | WaPage | undefined)[]) => Promise<string> | string>;
   /** How long program_html waits after loading a page; upstream sleeps 3 s. */
   settleMs?: number;
 }
@@ -150,6 +150,7 @@ async function callFunc(expr: string, run: Run, page: WaPage | undefined): Promi
   if (!m) throw new Error(`unreadable func ${expr}`);
   const [, name, rest] = m;
   const args = [...rest!.matchAll(/'((?:[^'\\]|\\.)*)'|"((?:[^"\\]|\\.)*)"|(__page__)/g)].map((a) => a[1] ?? a[2] ?? "__page__");
+  const helperArgs = args.map((a) => (a === "__page__" ? page : a));
   if (name === "reddit_get_post_url") {
     // http://host/f/<subreddit>/<post id>/... is the post's own URL; anything else stays as it is.
     const u = new URL(args[0]!);
@@ -163,7 +164,7 @@ async function callFunc(expr: string, run: Run, page: WaPage | undefined): Promi
   }
   const helper = run.facts.helpers?.[name!];
   if (!helper) throw new Error(`unknown helper ${name}`);
-  return helper(...args);
+  return helper(...helperArgs);
 }
 
 async function programHtml(run: Run) {
