@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { SUITES } from "../tasks.js";
 import { agentdojoBenchmark } from "./agentdojo/index.js";
 import { browsecompBenchmark } from "./browsecomp.js";
+import { appworldBenchmark } from "./appworld/index.js";
 import { assistantbenchBenchmark } from "./assistantbench.js";
 import { travelBenchmark } from "./agentdojo/travel.js";
 import { workspaceBenchmark } from "./agentdojo/workspace.js";
@@ -51,6 +52,7 @@ export const benchmarks: Benchmark[] = [
   gaiaBenchmark(),
   gaia2Benchmark(),
   onlineMind2webBenchmark(),
+  appworldBenchmark(),
   browsecompBenchmark(),
   odysseysBenchmark(),
   mind2web2Benchmark(),
