@@ -31,6 +31,7 @@ const WRITES: Record<string, [string, string][]> = { "mail-b002": [["HooliMail",
 const dir = mkdtempSync(join(tmpdir(), "fbn-mpc-"));
 const saved = { ...process.env };
 const file = JSON.stringify(TASKS);
+let served = file;
 const sha = (text: string) => createHash("sha256").update(text).digest("hex");
 const servers: Server[] = [];
 const seen: { cookies: Record<string, string[]>; resets: number; hits: string[] } = { cookies: {}, resets: 0, hits: [] };
@@ -63,7 +64,7 @@ beforeAll(async () => {
   });
   servers.push(reset);
   await listen(reset, RESET_PORT + offset);
-  const raw = createServer((req, res) => res.writeHead(req.url?.includes(`/ljang0/MyPCBench/${MYPCBENCH_COMMIT}/tasks/final/all_tasks_with_grading.json`) ? 200 : 404).end(file));
+  const raw = createServer((req, res) => res.writeHead(req.url?.includes(`/ljang0/MyPCBench/${MYPCBENCH_COMMIT}/tasks/final/all_tasks_with_grading.json`) ? 200 : 404).end(served));
   servers.push(raw);
   await listen(raw, 0);
   Object.assign(process.env, { FOXBENCH_RAW_URL: `http://127.0.0.1:${(raw.address() as { port: number }).port}`, FOXBENCH_CACHE: join(dir, "cache"), MYPCBENCH_HOST: "127.0.0.1" });
@@ -126,7 +127,10 @@ describe("MyPCBench", () => {
     expect(cases[1]).toMatchObject({ judge: "llm", tags: expect.arrayContaining(["mail", "hoolicalendar", "situated_action", "medium"]) });
     expect(cases.every((c) => c.judge === "llm")).toBe(true);
     const odd = JSON.stringify([{ ...TASKS[0], apps_involved: ["Mystery App"] }]);
-    await expect(mypcbenchBenchmark({ sha256: sha(odd) }).load({ ...ctx(), cacheDir: join(dir, "odd"), env: { ...process.env, FOXBENCH_RAW_URL: `data:` } }, "full")).rejects.toThrow();
+    served = odd;
+    try {
+      await expect(mypcbenchBenchmark({ sha256: sha(odd) }).load({ ...ctx(), cacheDir: join(dir, "odd") }, "full")).rejects.toThrow("Mystery App");
+    } finally { served = file; }
   });
 
   it("MB3 MB4 MB5 noop and a wrong claim pass 0, perfect passes all", async () => {
