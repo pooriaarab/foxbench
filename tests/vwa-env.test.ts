@@ -26,7 +26,7 @@ function fakes(sha = "match") {
   };
   program("docker", `echo "docker $*" >> ${log}
 case "$1" in
-  inspect) grep -qx "$2" ${dir}/exists 2>/dev/null ;;
+  inspect) grep -qx "$2" ${dir}/exists 2>/dev/null; exit $? ;;
   network) [ "$2" = inspect ] && exit 1; exit 0 ;;
   run) echo "$*" | sed -n 's/.*--name \\([^ ]*\\).*/\\1/p' >> ${dir}/exists ;;
 esac

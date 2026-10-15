@@ -411,6 +411,14 @@ with your own login. Give the project, zone and account with `--project`,
   restores the seeded database on `POST /reset`. Log in as `user` / `bitnami`.
 - `webmall`: the WebMall shops, below.
 
+- `vwa`: VisualWebArena's start state on an n2-standard-8 with 100 GB: the
+  WebArena-Verified shopping (7770) and reddit (9999) images, and Classifieds
+  (9980) from the compose zip that VWA publishes on archive.org (checked
+  against its SHA-1 at boot). Each port is tunnelled to that port plus 20000.
+  A reset service on VM port 8872 recreates shopping and reddit from their
+  images and resets Classifieds with a token the VM makes for itself. VWA's
+  Wikipedia tasks need wav-full's Wikipedia site, not this env.
+
 If another process holds a local port, `up` stops
 before it makes a VM; `--local-port-offset N` moves every tunnel port by N.
 
