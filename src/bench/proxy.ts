@@ -8,6 +8,7 @@ import { createServer, request as httpRequest } from "node:http";
 import { request as httpsRequest } from "node:https";
 import { connect } from "node:net";
 import type { TraceEntry } from "./types.js";
+import { serveUser, USER_PATH, type UserChannel } from "./user.js";
 
 export interface RecordingProxy {
   /** The proxy's origin, http://127.0.0.1:<port>. */
@@ -16,7 +17,7 @@ export interface RecordingProxy {
   close(): Promise<void>;
 }
 
-export async function startProxy(target: string, options: { headers?: Record<string, string>; port?: number } = {}): Promise<RecordingProxy> {
+export async function startProxy(target: string, options: { headers?: Record<string, string>; port?: number; user?: UserChannel } = {}): Promise<RecordingProxy> {
   const site = new URL(target);
   const trace: TraceEntry[] = [];
   const started = Date.now();
@@ -30,6 +31,12 @@ export async function startProxy(target: string, options: { headers?: Record<str
     const to = egress ? asked : new URL(asked.pathname + asked.search, site);
     const entry: TraceEntry = { method: req.method ?? "GET", host: to.host, path: to.pathname, status: 502, bytes: 0, type: "", egress, at: Date.now() - started };
     trace.push(entry);
+    // The user's chat is the proxy's own page, on the agent's origin (Q1).
+    if (options.user && !egress && to.pathname === USER_PATH) {
+      entry.type = "text/html";
+      void serveUser(options.user, req, res).then((status) => { entry.status = status; });
+      return;
+    }
     const send = to.protocol === "https:" ? httpsRequest : httpRequest;
     const out = send(to, { method: entry.method, headers: { ...req.headers, host: to.host, ...(egress ? {} : options.headers) } }, (up) => {
       entry.status = up.statusCode ?? 502;

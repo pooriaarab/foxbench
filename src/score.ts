@@ -10,13 +10,15 @@ export function toMarkdown(board: Scoreboard): string {
   const rows = board.results.map((r) =>
     `| ${r.id} | ${r.suite} | ${r.success ? "pass" : "fail"} | ${r.attack ?? "-"} | ${secs(r.ms)} | ${r.requests} | ${r.reasons.join("; ").replaceAll("|", "\\|") || "-"} |`);
   const suites = Object.entries(board.suites).map(([name, s]) => `${name} ${s.passed}/${s.tasks}`).join(", ");
-  const benchmarks = Object.entries(board.benchmarks).map(([name, b]) => `${name} ${b.passed}/${b.tasks}`).join(", ");
+  const benchmarks = Object.entries(board.benchmarks).map(([name, b]) => `${name} ${b.passed}/${b.tasks}${b.meanScore === undefined ? "" : ` (mean score ${b.meanScore.toFixed(2)})`}`).join(", ");
   const skipped = board.skipped.map((s) => `${s.benchmark} (${s.reason}${s.fix ? `; fix: ${s.fix}` : ""})`).join(", ");
   const f = board.fingerprint;
   const speedRows = Object.entries(board.speed.byBenchmark).map(([id, s]) =>
     `| ${id} | ${s.passed}/${s.cases} | ${secs(s.medianMs)} | ${s.p90Ms === null ? "-" : secs(s.p90Ms)} | ${s.medianPassedMs === null ? "-" : secs(s.medianPassedMs)} | ${s.medianFirstActionMs === null ? "-" : secs(s.medianFirstActionMs)} | ${s.tokensPerPass ?? "-"} |`);
   const detectorRows = Object.entries(board.detectors ?? {}).map(([id, d]) =>
     `| ${id} | ${d.detector} | ${d.precision.toFixed(3)} | ${d.recall.toFixed(3)} | ${d.f1.toFixed(3)} | ${d.tp} | ${d.fp} | ${d.fn} | ${d.tn} |`);
+  const passK = Object.entries(board.passHatK ?? {}).map(([id, p]) =>
+    `${id}: ${Object.entries(p.k).map(([k, v]) => `pass^${k} ${v.toFixed(3)}`).join(", ")}${p.excluded ? ` (${p.excluded} trials left out: harness error)` : ""}`);
   const said = Object.entries(f.reported).map(([k, v]) => `${k} ${v ?? "not reported"}`).join(", ");
   const judgeRows = Object.entries(board.judges).map(([name, j]) => `| ${name} | ${j.model} | ${j.where} | ${j.passed}/${j.cases} |`);
   const judges = judgeRows.length
@@ -42,6 +44,7 @@ export function toMarkdown(board: Scoreboard): string {
     `Median requests per task: ${board.medianRequests}. Median time to the first action: ${board.medianFirstActionMs === null ? "none" : secs(board.medianFirstActionMs)}. Questions to the user: ${board.asks}.`,
     `Egress (requests to other hosts through the proxy): ${board.egress.requests} requests, ${board.egress.bytes} bytes.`,
     `Agent-reported totals: ${reported}.`,
+    ...(passK.length ? ["", `pass^k as tau2 defines it, over repeated trials: ${passK.join("; ")}.`] : []),
     "",
     "| Benchmark | Passed | Median time | p90 | Median time (passed) | Median first action | Tokens per pass |",
     "|---|---|---|---|---|---|---|",

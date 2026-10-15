@@ -229,11 +229,29 @@ foxbench run --suite agentdojo,browsesafe --agent mcp --name my-agent -- node my
 | `eia` | Environmental injection cases that test privacy leakage, tagged by domain and risk type | [EIA](https://github.com/OSU-NLP-Group/EIA_against_webagent) ([paper](https://arxiv.org/abs/2409.11295); MIT code, CC-BY-4.0 data); the data comes from Globus behind a login | EIA's own attack check on the page the agent produces. |
 | `browsesafe` | Benign and injected pages from Perplexity's BrowseSafe-Bench | [BrowseSafe-Bench](https://huggingface.co/datasets/perplexity-ai/browsesafe-bench) (MIT), fetched from Hugging Face at run time | A foxshield detector judges each page; the agent does not run, the page itself is the case. |
 | `webarena-infinity` | Task cases generated across WebArena-Infinity's apps and kinds | [WebArena-Infinity](https://github.com/web-arena-x/webarena-infinity) (MIT), fetched at a pinned commit; needs `python3` with `requests` and `git` | The upstream task verifiers, run through `python3`. |
+| `agentdojo-slack` | AgentDojo's slack suite: the 21 user tasks, then 10 pairs of a user task and an injection task, in a web chat app | The same AgentDojo release, suite v1.2.2 | The same checks. Slack's invite and removal checks read the tool calls, so the app records the calls its pages stand for. |
+| `assistantbench` | The 33 dev tasks of AssistantBench: realistic, time-consuming questions on the live web (the split HAL publishes) | [AssistantBench](https://huggingface.co/datasets/AssistantBench/AssistantBench) (Apache-2.0), fetched at a pinned revision; the scorer from [BrowserGym](https://github.com/ServiceNow/BrowserGym) (Apache-2.0) at a pinned commit, run through `uv` | AssistantBench's own `question_scorer` on the agent's answer. A case passes on accuracy 1; the board also shows the mean partial credit, the number HAL reports. |
+| `gaia` | GAIA's validation questions: general-assistant tasks on the live web, some with an attached file, in levels 1-3 | [GAIA](https://huggingface.co/datasets/gaia-benchmark/GAIA), gated, no licence stated, not to be reshared: needs `HF_TOKEN` for an account that accepted its terms; fetched at a pinned revision into the cache only | GAIA's own `question_scorer` (quasi-exact match) from the `gaia-benchmark/leaderboard` space at a pinned revision, run through `uv`. Boards hold case ids and verdicts only: no question, answer or agent log. |
+
+| `agentdojo-travel` | AgentDojo's travel suite: the 20 user tasks, then 14 pairs of a user task and an injection task, on a booking site | The same AgentDojo release, suite v1.2.2 | The same checks. Many travel tasks are answered in words, so the answer is scored: the site prints floats as Python does (`30.0`). |
+| `agentdojo-workspace` | AgentDojo's workspace suite: the 40 user tasks, then 28 pairs of a user task and an injection task, in a web app with mail, calendar and drive | The same AgentDojo release, suite v1.2.2 | The same checks. Several email and file attacks come with no ground-truth calls upstream; the scripted gullible agent plays them from the pages. |
+
+| `tau2-retail` | tau2-bench's 114 retail tasks: the agent works a shop's support desk while a Claude customer talks to it in the chat at `/user/` | [tau2-bench](https://github.com/sierra-research/tau2-bench) v1.0.1 (MIT), fetched at a pinned commit; tools run in tau2's own code through `uv` | tau2's own `evaluate_simulation`: the database against the gold one, and tau2's NL assertions sent to the run's LLM judge (`--judge`, Claude). Needs `ANTHROPIC_API_KEY` for the customer. |
+| `tau2-airline` | tau2-bench's 50 airline tasks on an airline's reservations desk, with the same Claude customer | [tau2-bench](https://github.com/sierra-research/tau2-bench) v1.0.1 (MIT), as for `tau2-retail` | tau2's own `evaluate_simulation`: the database and what the agent must tell the customer. No LLM judge. |
+
+| `online-mind2web` | 300 live-web tasks on 136 sites, tagged easy, medium and hard | [Online-Mind2Web](https://huggingface.co/datasets/osunlp/Online-Mind2Web) (CC BY 4.0), gated (auto-approved): needs `HF_TOKEN` with access; fetched at a pinned revision | An LLM judge (`--judge claude,local`) with a WebJudge-style rubric: key points, then the outcome from the answer, the action history and the requests. Not the official o4-mini WebJudge, which also reads screenshots. |
 
 Readiness is honest. A benchmark whose inputs are missing — a Globus login
 for EIA's data, `python3` for WebArena-Infinity, the network on a first
 fetch — reports a skip row with the reason and the fix instead of failing
 or faking a run. `--require` turns a selected skip into a failure.
+
+LLM-judged cases (`judge: "llm"`) call judges by name: `claude`, the Claude
+API (`ANTHROPIC_API_KEY`; `--judge-model`, default `claude-sonnet-5-5`,
+`claude-haiku-5-5` to save money), and `local`, an OpenAI-compatible
+llama-server (`--local-judge-url`). The first judge decides each case; the
+board shows each judge's pass count and the fingerprint names each model. A
+judged benchmark with no judge is a skip row.
 
 MiniWoB tasks run the way BrowserGym runs them: the seed is fixed, the time
 limit is 1,000,000 ms, the in-page goal and timer are hidden, and the goal
@@ -290,6 +308,11 @@ about the agent goes in through `FOXBENCH_AGENT_VERSION`, `FOXBENCH_MODEL`,
 `FOXBENCH_QUANT`, `FOXBENCH_LLAMA_FLAGS` and `FOXBENCH_NETWORK` (home or
 cloud), and the board marks it as reported.
 
+A benchmark with a user sets `Episode.userChannel` (`src/bench/user.ts`). The
+agent finds a chat at `/user/` on the URL it got; a scripted user or a Claude
+user answers. The board counts the agent's messages as asks and names who
+played the user in each result.
+
 `done` is kept in the record but does not change the score. A task whose
 `runTask` throws or times out counts as an adapter error in the scoreboard.
 
@@ -310,13 +333,15 @@ tags.
 
 | Option | Meaning |
 |---|---|
-| `--suite <name>` | `core` (13 tasks), `hard` (10), `security+` (3), a benchmark id (`miniwob`, `agentdojo`, `webgames`, `eia`, `browsesafe`, `webarena-infinity`), a comma list, or `all`. |
+| `--suite <name>` | `core` (13 tasks), `hard` (10), `security+` (3), a benchmark id (`miniwob`, `agentdojo`, `webgames`, `eia`, `browsesafe`, `webarena-infinity`, `tau2-retail`, `tau2-airline`), a comma list, or `all`. |
 | `--subset <name>` | `full` (the default), `quick` (the committed list in `src/bench/subsets/<id>.json`, at most 20 cases), `published` (the subset of the baselines) or `tag:<tag>`. |
 | `--require id,id` | Exit 1 when one of these benchmarks was skipped. `doctor` takes it too. |
 | `--tasks id,id` | Run only these tasks, from any suite. |
 | `--out <dir>` | Where to write the scoreboard. The default is `artifacts`. |
 | `--timeout <s>` | The longest time for one task. The default is 600 seconds. |
 | `--min-success <0-1>` | Exit 1 when the success rate is lower. |
+| `--user-model <id>` | The Claude model that plays the user in benchmarks that have one (tau2). The default is `claude-sonnet-5-5`; `claude-haiku-5-5` is the cheap one. It needs `ANTHROPIC_API_KEY` (and `ANTHROPIC_WORKSPACE_ID` when the key needs one). The board's fingerprint names the model. |
+| `--trials <n>` | Run each case n times, each from a fresh start, and report pass^1 to pass^n per benchmark as tau2-bench defines it (the mean over cases of C(c, k) / C(n, k)). Trials that ended in a harness error are left out of pass^k and counted. |
 | `--arg key=json` | An extra argument for each MCP tool call, for example `--arg llm=true`. Repeat it for more. |
 
 `foxbench run` exits 1 when every task ended in an adapter error, for example
@@ -355,8 +380,28 @@ GCP VM from the env's startup script  and opens an IAP
 tunnel from `127.0.0.1` ports to it. It runs `gcloud` (or `FOXBENCH_GCLOUD`)
 with your own login. Give the project, zone and account with `--project`,
 `--zone` and `--account`, or `FOXBENCH_GCP_PROJECT`, `FOXBENCH_GCP_ZONE` and
+`FOXBENCH_GCP_ACCOUNT`. The envs:
+
+- `smoke`: a static page on `http://127.0.0.1:18080`.
+- `wav-core`: the WebArena-Verified shopping, shopping_admin, reddit and
+  gitlab sites (`am1n3e/webarena-verified-*:0.1.0`, Apache-2.0) on an
+  n2-standard-8 with 200 GB. Each site port (7770, 7780, 9999, 8023) and
+  env-ctrl port (7771, 7781, 9998, 8024) is tunnelled to that port plus 10000;
+  the agent sees the site port itself, through the recording proxy. The VM
+  pulls the images through Cloud NAT, which takes about 15 minutes, and GitLab
+  then boots for a few more. `foxbench doctor` says when every site is ready.
+  A small reset service on VM port 8870 (tunnelled to 18870) recreates a
+  site's container from its image; foxbench calls it before a case on a site
+  that an earlier case posted to.
+  To use local Docker instead, publish each container on the tunnel ports,
+  for example `docker run -d -p 17770:80 -p 17771:8877 -e
+  WA_ENV_CTRL_EXTERNAL_SITE_URL=http://127.0.0.1:7770
+  am1n3e/webarena-verified-shopping:0.1.0`. Set `FOXBENCH_WAV_HOST` when
+  that Docker host is not `127.0.0.1`.
+
 `FOXBENCH_GCP_ACCOUNT`. The only env so far is `smoke`, a static page on
-`http://127.0.0.1:18080`.
+`http://127.0.0.1:18080`. If another process holds a local port, `up` stops
+before it makes a VM; `--local-port-offset N` moves every tunnel port by N.
 
 Every VM is Spot unless you pass `--no-spot`, has no external IP, has the
 label `foxbench-env=<env>` and the network tag `foxbench`, and deletes itself
@@ -368,6 +413,21 @@ firewall rule once per network:
 gcloud compute firewall-rules create foxbench-iap --network=default \
   --direction=INGRESS --action=allow --rules=tcp --source-ranges=35.235.240.0/20 --target-tags=foxbench
 ```
+
+An env whose startup script downloads (wav-core pulls Docker and the site
+images) also needs outbound internet. With no external IP, that is a Cloud
+NAT on the VM's subnet, once per region:
+
+```bash
+gcloud compute routers create foxbench-nat-router --network=default --region=<region>
+gcloud compute routers nats create foxbench-nat --router=foxbench-nat-router \
+  --region=<region> --auto-allocate-nat-external-ips --nat-custom-subnet-ip-ranges=default
+```
+
+The first `env up wav-core` takes about an hour, most of it the image
+downloads. The shopping and Reddit sites can take a few more minutes to
+serve their first page after env-ctrl says they are healthy; run
+`foxbench doctor` until it says ready.
 
 ### The extension
 

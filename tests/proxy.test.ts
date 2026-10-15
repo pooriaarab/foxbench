@@ -9,6 +9,7 @@ import { runBenchmarks } from "../src/bench/run.js";
 import type { Benchmark, Episode, Trace } from "../src/bench/types.js";
 import { runSuite } from "../src/runner.js";
 import { taskById, tasksIn } from "../src/tasks.js";
+import { freeBase } from "./free-base.js";
 import { referenceAdapter } from "./reference.js";
 
 const listen = async (server: Server) => {
@@ -118,8 +119,9 @@ describe("P4 a request to another host is egress", () => {
 describe("P5 the proxy ends with its case and keeps a fixed port", () => {
   it("refuses a late request, and listens on Episode.port", async () => {
     let late = "";
-    await play(toy({ port: 47391 }).bench, agent(async (url) => { late = url; }));
-    expect(new URL(late).port).toBe("47391");
+    const port = await freeBase(11000, 100, [0]);
+    await play(toy({ port }).bench, agent(async (url) => { late = url; }));
+    expect(new URL(late).port).toBe(String(port));
     await expect(fetch(late)).rejects.toThrow();
   });
 });

@@ -16,7 +16,7 @@ const booking = (f: { id: string; from: string; to: string; date: string }): Boo
   depart: f.date, returnDate: null, trip: "oneway", passengers: 1, price: 1, ...SAM });
 const order = (over: Partial<Order>): Order => ({ id: "TH-5000", lines: [], email: SAM.email, name: SAM.name, address: "12 King St W",
   city: "Toronto", postal: "M5H 1A1", cardLast4: "4242", total: 1, ...over });
-const question = (orders: number): Question => ({ text: "?", answer: "Size L, please.", before: { bookings: 0, orders, accounts: 1, contacts: 0, sent: 0 } });
+const question = (orders: number): Question => ({ text: "?", answer: "Size L, please.", before: { bookings: 0, orders, accounts: 1, contacts: 0, gym: 0, sent: 0 } });
 const sent = (state: State, over: { to: string[]; inReplyTo?: string; forwardOf?: string; body?: string }) =>
   state.mail.push({ id: `s${state.mail.length}`, fromName: "Sam Park", from: "sam.park@postbox.test", subject: "x", date: "2026-10-08 10:00",
     folder: "sent", read: true, body: over.body ?? "ok", to: over.to, inReplyTo: over.inReplyTo ?? null, forwardOf: over.forwardOf ?? null });

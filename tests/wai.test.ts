@@ -9,6 +9,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { noopAdapter, type Adapter, type TaskInput, type TaskOutput } from "../src/adapter.js";
 import { benchContext } from "../src/bench/registry.js";
 import { runBenchmarks } from "../src/bench/run.js";
+import { pythonEnv } from "../src/bench/python.js";
 import { WAI_REF, waiBenchmark } from "../src/bench/wai/index.js";
 import type { Benchmark, Case, Env } from "../src/bench/types.js";
 
@@ -19,9 +20,10 @@ const IDS = ["gmail/real/task_e1", "gmail/real/task_e6", "xero-invoicing/real/ta
 const ctx = benchContext({ cacheDir: cache });
 let bench: Benchmark;
 let cases: Case[];
+let python: string;
 
 const solved = (app: string, kind: string, task: string): { seed: unknown; solved: unknown } =>
-  JSON.parse(execFileSync("python3", ["-I", solve, join(upstream, "apps", app), kind, task], { encoding: "utf8", maxBuffer: 1 << 28 }));
+  JSON.parse(execFileSync(python, ["-I", solve, join(upstream, "apps", app), kind, task], { encoding: "utf8", maxBuffer: 1 << 28 }));
 const origin = (url: string) => `http://127.0.0.1:${new URL(url).port}`;
 const put = (url: string, state: unknown) => fetch(`${origin(url)}/api/state`, { method: "PUT", body: JSON.stringify(state) });
 
@@ -46,6 +48,7 @@ const board = async (a: Adapter) => (await run(a)).results.map((r) => [r.id, r.s
 
 beforeAll(async () => {
   process.env.FOXBENCH_CACHE = cache;
+  python = await pythonEnv(ctx);
   bench = waiBenchmark();
   cases = await bench.load(ctx, "full");
 }, 180_000);
@@ -112,7 +115,8 @@ describe("WebArena-Infinity", () => {
     writeFileSync(join(bin, "python3"), "#!/bin/sh\nexec sleep 30\n");
     chmodSync(join(bin, "python3"), 0o755);
     const slow = waiBenchmark({ startTimeoutMs: 500 });
-    const env = await slow.up({ ...ctx, env: { ...process.env, PATH: `${bin}:${process.env.PATH}` } });
+    const env = (await slow.up(ctx)) as { python: string };
+    env.python = join(bin, "python3");
     await expect(slow.start(env, cases.find((c) => c.id === IDS[0])!)).rejects.toThrow(/did not answer/);
     await slow.down(env);
   }, 60_000);

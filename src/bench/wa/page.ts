@@ -1,0 +1,42 @@
+// The judge browser: the runner's own headless Firefox, never the agent's. It
+// opens the pages program_html reads. create-foxkit drives Firefox and needs an
+// extension, so a stub one is written into the cache. A canonical site URL
+// (`http://127.0.0.1:<site port>/...`) is opened on the origin the caller maps
+// it to, such as a proxy that adds the site's login.
+import { mkdirSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+import type { BenchContext } from "../types.js";
+import type { WaPage } from "./eval.js";
+
+export interface JudgeBrowser {
+  page(): Promise<WaPage>;
+  close(): Promise<void>;
+}
+
+/** `origins` maps each canonical origin to the one the browser opens it on; the browser starts on the first `page()`. */
+export function judgeBrowser(ctx: BenchContext, origins: Record<string, string> = {}): JudgeBrowser {
+  let fox: Awaited<ReturnType<(typeof import("create-foxkit/e2e"))["launch"]>> | undefined;
+  const pages: { close(): Promise<unknown> }[] = [];
+  const mapped = (url: string) => { const o = new URL(url).origin; return origins[o] ? origins[o] + url.slice(o.length) : url; };
+  return {
+    async page() {
+      const extension = join(ctx.cacheDir, "wa-judge-extension");
+      mkdirSync(extension, { recursive: true });
+      writeFileSync(join(extension, "manifest.json"), JSON.stringify({ manifest_version: 2, name: "foxbench judge", version: "1", browser_specific_settings: { gecko: { id: "judge@foxbench.invalid" } } }));
+      const { launch } = await import("create-foxkit/e2e");
+      fox ??= await launch({ extension, headless: true, ...(ctx.firefox ? { firefox: ctx.firefox } : {}) });
+      const page = await fox.open("about:blank");
+      pages.push(page);
+      return {
+        goto: async (url) => { await page.goto(mapped(url), { waitUntil: "load" }); },
+        evaluate: (js) => page.evaluate(js),
+        content: () => page.content(),
+      };
+    },
+    async close() {
+      await Promise.all(pages.splice(0).map((p) => p.close().catch(() => {})));
+      await fox?.close();
+      fox = undefined;
+    },
+  };
+}

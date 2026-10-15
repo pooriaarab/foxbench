@@ -3,22 +3,59 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { SUITES } from "../tasks.js";
 import { agentdojoBenchmark } from "./agentdojo/index.js";
+import { browsecompBenchmark } from "./browsecomp.js";
+import { assistantbenchBenchmark } from "./assistantbench.js";
+import { travelBenchmark } from "./agentdojo/travel.js";
+import { workspaceBenchmark } from "./agentdojo/workspace.js";
 import { eiaBenchmark } from "./eia.js";
 import { browsesafeBenchmark } from "./browsesafe.js";
+import { slackBenchmark } from "./agentdojo/slack.js";
 import { foxbenchBenchmark } from "./foxbench.js";
+import { gaiaBenchmark } from "./gaia.js";
 import { miniwobBenchmark } from "./miniwob/index.js";
+import { onlineMind2webBenchmark } from "./online-mind2web.js";
 import type { BenchContext, Benchmark, Readiness, SubsetName } from "./types.js";
+import { DEFAULT_USER_MODEL } from "./user.js";
+import { tau2Benchmark } from "./tau2/index.js";
+import { webarenaVerified } from "./wav/index.js";
 import { waiBenchmark } from "./wai/index.js";
+import { mind2web2Benchmark } from "./mind2web2.js";
+import { odysseysBenchmark } from "./odysseys.js";
+import { deepshopBenchmark } from "./deepshop.js";
+import { webtailbenchBenchmark } from "./webtailbench.js";
 import { webgamesBenchmark } from "./webgames.js";
 
 const foxbench = foxbenchBenchmark();
-export const benchmarks: Benchmark[] = [foxbench, miniwobBenchmark, agentdojoBenchmark, webgamesBenchmark(), eiaBenchmark(), browsesafeBenchmark(), waiBenchmark()];
+// One entry per line, so two PRs that each add a benchmark do not conflict.
+export const benchmarks: Benchmark[] = [
+  foxbench,
+  miniwobBenchmark,
+  agentdojoBenchmark,
+  slackBenchmark,
+  travelBenchmark,
+  workspaceBenchmark,
+  webgamesBenchmark(),
+  eiaBenchmark(),
+  browsesafeBenchmark(),
+  waiBenchmark(),
+  webarenaVerified(),
+  assistantbenchBenchmark(),
+  tau2Benchmark("retail"),
+  tau2Benchmark("airline"),
+  gaiaBenchmark(),
+  onlineMind2webBenchmark(),
+  browsecompBenchmark(),
+  odysseysBenchmark(),
+  mind2web2Benchmark(),
+  webtailbenchBenchmark(),
+  deepshopBenchmark(),
+];
 
 export const benchmarkById = (id: string): Benchmark | undefined => benchmarks.find((b) => b.id === id);
 
 export function benchContext(over: Partial<BenchContext> = {}): BenchContext {
   const env = over.env ?? process.env;
-  return { cacheDir: env.FOXBENCH_CACHE ?? join(homedir(), ".cache", "foxbench"), ...(env.FIREFOX ? { firefox: env.FIREFOX } : {}), env, ...over };
+  return { cacheDir: env.FOXBENCH_CACHE ?? join(homedir(), ".cache", "foxbench"), userModel: DEFAULT_USER_MODEL, ...(env.FIREFOX ? { firefox: env.FIREFOX } : {}), env, ...over };
 }
 
 /** The names --suite takes: the in-house suites, all, and each benchmark id. */

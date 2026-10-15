@@ -90,7 +90,7 @@ label{display:block;font-weight:600;margin:10px 0 4px}input,select,textarea{font
 input[type=checkbox],input[type=radio]{width:auto}button,.btn{font:inherit;padding:8px 16px;border:0;border-radius:6px;background:var(--brand,#334);color:#fff;cursor:pointer;text-decoration:none;display:inline-block}
 .row{display:flex;gap:12px;flex-wrap:wrap}.row>*{flex:1;min-width:160px}.error{color:#b00020;font-size:13px}.muted{color:#667}
 table{border-collapse:collapse;width:100%}td,th{padding:8px;border-bottom:1px solid #eef;text-align:left}
-.site-flights{--brand:#0b5cad}.site-signup{--brand:#5b3fd1}.site-mail{--brand:#c2410c}.site-shop{--brand:#166534}.site-user{--brand:#475569}`;
+.site-flights{--brand:#0b5cad}.site-signup{--brand:#5b3fd1}.site-mail{--brand:#c2410c}.site-shop{--brand:#166534}.site-user{--brand:#475569}.site-stay{--brand:#0e7490}.site-bank{--brand:#365314}.site-clinic{--brand:#be185d}.site-desk{--brand:#4338ca}.site-postbox{--brand:#b45309}`;
 
 async function readForm(req: IncomingMessage): Promise<URLSearchParams> {
   if (req.method !== "POST") return new URLSearchParams();
