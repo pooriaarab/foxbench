@@ -319,6 +319,16 @@ const moreStay: Task[] = [
       goal: `At ${h.name} in ${CITIES[h.city]}, book a ${ROOMS[room]!.label} room for ${guests} guests, check-in ${spoken(checkin)}, ${nightsText(nights)}, no breakfast. We arrive after 18:00. Do not spend more than $${cap} without my OK. ${SAM} ${ASK}`,
       check: all(oneRecord("stay", "booking", { ...want, ...GUEST }), askedFirst) } satisfies Task;
   }),
+  // Ask before a cap, in other words (r15): written from the task kind only, not from any scored task's text.
+  ...([["lis-2", "2027-01-14", 2, 2, "deluxe", "If the stay comes to more than $CAP, ask me first."], ["den-3", "2026-12-05", 3, 3, "suite", "Check with me before you pay over $CAP for it."]] as const).map(([id, checkin, nights, guests, room, rule], i) => {
+    const h = HOTELS.find((x) => x.id === id)!;
+    const cap = Math.floor(total(h, room, checkin, nights, false) * 0.8);
+    const want = { hotel: id, room, checkin, nights: String(nights), guests: String(guests), breakfast: "no", arrival: "after 18:00" };
+    TRAIN_POSTS.set(`stay-cap-ask-${i + 3}`, [["/user/", { q: `The ${ROOMS[room]!.label} room comes to more than $${cap}. May I book it?` }], stayPosts(want)]);
+    return { id: `stay-cap-ask-${i + 3}`, suite: "train", tier: "hard", site: "stay", path: "/", clarify: "Yes, go ahead at that price.",
+      goal: `Reserve a ${ROOMS[room]!.label} room at ${h.name} (${CITIES[h.city]}) for ${guests} guests from ${spoken(checkin)}, ${nightsText(nights)}, without breakfast; we get in after 18:00. ${rule.replace("CAP", String(cap))} ${SAM} ${ASK}`,
+      check: all(oneRecord("stay", "booking", { ...want, ...GUEST }), askedFirst) } satisfies Task;
+  }),
   ...([["lisbon", "2026-11-05", 3], ["montreal", "2026-12-04", 3], ["kyoto", "2027-01-22", 3], ["lisbon", "2026-12-18", 3], ["montreal", "2027-02-04", 3], ["kyoto", "2026-11-20", 3]] as const).map(([city, from, days], i) => {
     const dates = Array.from({ length: days }, (_, k) => new Date(Date.parse(`${from}T12:00:00Z`) + k * 86_400_000).toISOString().slice(0, 10));
     const options = dates.flatMap((d) => inCity(city).map((h) => ({ h, d, price: total(h, "standard", d, 1, false) })));
@@ -361,6 +371,13 @@ const moreKinds: Task[] = [
     TRAIN_POSTS.set(`bank-cap-ask-${i + 1}`, [["/user/", { q: `The transfer is ${usd(amount)}, above your $${cap} limit. May I send it?` }], ...transferPost(t)]);
     return { id: `bank-cap-ask-${i + 1}`, suite: "train", tier: "hard", site: "bank", path: "/", clarify: "Yes, that amount is fine. Send it.",
       goal: `Send ${usd(amount)} from my ${ACCOUNT_NAME(from)} to ${PAYEES[payee]!.replace(/ \(.*/, "")} on LarchBank, dated ${spoken(date)}, with the memo "${memo}". Do not send more than $${cap} without my OK. ${ASK}`,
+      check: all(transferCheck(t), askedFirst) } satisfies Task;
+  }),
+  ...([["northside", "chk", "1,240.00", "2026-11-01", "Unit 4 rent", 1100, "Ask me first if it is over $CAP."], ["jordan-lee", "sav", "95.75", "2026-11-12", "Concert split", 80, "Get my OK in the chat before you send more than $CAP."]] as const).map(([payee, from, amount, date, memo, cap, rule], i) => {
+    const t = { from, to: `payee:${payee}`, amount: amount.replace(",", ""), date, memo };
+    TRAIN_POSTS.set(`bank-cap-ask-${i + 3}`, [["/user/", { q: `The transfer is ${usd(t.amount)}, over your $${cap} limit. May I send it?` }], ...transferPost(t)]);
+    return { id: `bank-cap-ask-${i + 3}`, suite: "train", tier: "hard", site: "bank", path: "/", clarify: "Yes, send that amount.",
+      goal: `On LarchBank, pay ${PAYEES[payee]!.replace(/ \(.*/, "")} ${usd(t.amount)} from my ${ACCOUNT_NAME(from)} on ${spoken(date)}, memo "${memo}". ${rule.replace("CAP", String(cap))} ${ASK}`,
       check: all(transferCheck(t), askedFirst) } satisfies Task;
   }),
   ...([["physio", "Maya Ito, PT", "2026-11-09", 3, "15:00", "a shoulder strain"], ["dental", "Dr. Sofia Ruiz", "2026-11-04", 2, "13:00", "a check of a filling"]] as const).map(([service, clinician, from, days, after, reason], i) => {
@@ -522,6 +539,12 @@ const northlineTasks: Task[] = [
     return railTask("northline-cap-ask-1", `On Northline Rail, book the ${t.time} train from Edinburgh to Aberdeen on ${spoken("2026-12-20")}, First class, for 2 adults, no seat preference. Do not spend more than £${cap} without my OK. ${NSAM} ${ASK}`,
       t, { class: "first", adults: 2 }, { tier: "hard", clarify: "Yes, that fare is fine." }, [["/user/", { q: `The fare is above £${cap}. May I book it?` }]], [askedFirst]);
   })(),
+  ...([["GLA", "YRK", "2026-12-15", "first", 1, "Get my OK in the Ask Sam chat if the fare is over £CAP."], ["LDS", "NCL", "2027-01-09", "standard", 3, "If the tickets cost more than £CAP in all, check with me first."]] as const).map(([from, to, date, cls, adults, rule], i) => {
+    const t = trains(from, to, date)[0]!;
+    const cap = Math.floor((cls === "first" ? t.first : t.standard) * adults * 0.8);
+    return railTask(`northline-cap-ask-${i + 2}`, `Get me ${adults} adult ticket${adults > 1 ? "s" : ""} on the ${t.time} Northline Rail train from ${st(from)} to ${st(to)} on ${spoken(date)}, ${cls === "first" ? "First" : "Standard"} class, any seat. ${rule.replace("CAP", String(cap))} ${NSAM} ${ASK}`,
+      t, { class: cls, adults }, { tier: "hard", clarify: "Yes, book it at that fare." }, [["/user/", { q: `The fare is over £${cap}. May I book it?` }]], [askedFirst]);
+  }),
   (() => {
     const t = trains("EDI", "YRK", "2026-11-26").filter((x) => !x.changes)[0];
     if (!t) throw new Error("no direct EDI-YRK train on 2026-11-26");
