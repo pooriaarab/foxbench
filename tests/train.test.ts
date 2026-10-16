@@ -178,6 +178,20 @@ describe("TS4 Inkwell reads, searches and refuses a second archive", () => {
   });
 });
 
+describe("TS4 an Inkwell reply box starts with the quoted mail", () => {
+  it("shows the quote in the box, keeps the agent's own text above or below it, and refuses a reply of the quote only", async () => {
+    const task = trainTasks.find((t) => t.id === "inkwell-reply-3")!;
+    await open(task);
+    expect(await (await get("/inkwell/reply?id=p6")).text()).toMatch(/<textarea id="body" name="body" rows="8">\s*--- Ravi Patel wrote on 2026-10-13 ---\nHey Sam, lunch on Friday at noon\?/);
+    const quoted = "\n\n--- Ravi Patel wrote on 2026-10-13 ---\nHey Sam, lunch on Friday at noon? The new ramen place on King Street.\nRavi";
+    expect((await post("/inkwell/reply", { id: "p6", body: quoted })).status).toBe(400);
+    expect((await post("/inkwell/reply", { id: "p6", body: `Friday at noon works for me.${quoted}` })).status).toBe(303);
+    expect((await post("/inkwell/reply", { id: "p6", body: `${quoted.trim()}\n\nSee you there.` })).status).toBe(303);
+    const sent = server!.state.gym.filter((r) => r.site === "inkwell" && r.kind === "sent").map((r) => r.data.body!.split("\n\n--- ")[0]);
+    expect(sent).toEqual(["Friday at noon works for me.", "See you there."]);
+  });
+});
+
 describe("TS6 a booking before the question fails the cap task", () => {
   it("passes ask then book, and fails book then ask", async () => {
     const task = trainTasks.find((t) => t.id === "stay-cap-ask-1")!;
