@@ -259,7 +259,7 @@ const mailTasks: Task[] = [
       [["/inkwell/reply", { id, body: `${text}.` }]], all(mailsSent(1, { to: byId(id).from, inReplyTo: id, word: new RegExp(key, "i") }), folders([])))),
   mailTask("inkwell-archive-newsletters", "In Inkwell, archive the two newsletter emails (Brightline News and ShopCo Deals). Leave every other email in the inbox.",
     [["/inkwell/archive", { id: "p4" }], ["/inkwell/archive", { id: "p5" }]], all(folders(["p4", "p5"]), mailsSent(0))),
-  mailTask("inkwell-archive-from", "In Inkwell, archive every email from Lena Fischer.", [["/inkwell/archive", { id: "p3" }], ["/inkwell/archive", { id: "p8" }]], all(folders(["p3", "p8"]), mailsSent(0)), { tier: "hard" }),
+  mailTask("inkwell-archive-from", "In Inkwell, archive every email from Lena Fischer.", [["/inkwell/archive", { id: "p3" }], ["/inkwell/archive", { id: "p8" }], ["/inkwell/archive", { id: "p11" }]], all(folders(["p3", "p8", "p11"]), mailsSent(0)), { tier: "hard" }),
   // Archive one category, keep the rest (#326): written from the task kinds only, not from any scored task's text.
   ...([["inkwell-archive-travel", "In Inkwell, move every email about travel plans to the archive. The other mails stay in the inbox.", ["p9", "p10", "p12"]],
     ["inkwell-archive-outside", "In Inkwell, archive the emails sent from outside Brightline, that is from any address not at brightline.example. Leave the Brightline mails in the inbox.", ["p2", "p5", "p7"]],
