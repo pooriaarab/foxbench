@@ -75,8 +75,8 @@ function form(state: State, kind: "reply" | "forward" | "compose", q: URLSearchP
   const body = `<h1>${kind === "reply" ? "Reply" : kind === "forward" ? "Forward" : "New mail"}</h1><form class="card" method="post" action="/inkwell/${kind}">${m ? `<input type="hidden" name="id" value="${esc(m.data.id)}">` : ""}
 <label for="to">To</label><input id="to" name="to" value="${esc(to)}"${kind === "reply" ? " readonly" : ""}>${err(errors, "to")}
 <label for="subject">Subject</label><input id="subject" name="subject" value="${esc(subject)}"${kind === "compose" ? "" : " readonly"}>${err(errors, "subject")}
-<label for="body">${kind === "forward" ? "Note" : "Message"}</label><textarea id="body" name="body" rows="5">${esc(f?.get("body") ?? "")}</textarea>${err(errors, "body")}
-${m ? `<p class="muted" style="white-space:pre-wrap">${esc(quote(m).trim())}</p>` : ""}<p><button type="submit">Send</button></p></form>`;
+<label for="body">${kind === "forward" ? "Note" : "Message"}</label><textarea id="body" name="body" rows="8">${esc(f?.get("body") ?? (kind === "reply" ? quote(m!) : ""))}</textarea>${err(errors, "body")}
+${m && kind === "forward" ? `<p class="muted" style="white-space:pre-wrap">${esc(quote(m).trim())}</p>` : ""}<p><button type="submit">Send</button></p></form>`;
   return view(kind === "reply" ? "Reply" : kind === "forward" ? "Forward" : "New mail", body, Object.keys(errors).length ? 400 : 200);
 }
 
@@ -85,7 +85,11 @@ function send(state: State, kind: "reply" | "forward" | "compose", f: URLSearchP
   if (kind !== "compose" && !m) return null;
   const to = (kind === "reply" ? m!.data.from! : f.get("to") ?? "").trim().toLowerCase();
   const subject = kind === "reply" ? `Re: ${m!.data.subject}` : kind === "forward" ? `Fwd: ${m!.data.subject}` : (f.get("subject") ?? "").trim();
-  const text = (f.get("body") ?? "").trim();
+  // A reply's box starts with the quoted mail, as many mail apps do: the agent writes above it, or clears it. The
+  // stored body is the agent's own text and the quote once, whatever the agent kept of it.
+  const typed = f.get("body") ?? "";
+  const kept = m ? quote(m).trim() : "";
+  const text = (m ? (typed.includes(kept) ? typed.replace(kept, "") : typed.split(/\n*--- .* wrote on .* ---\n/)[0]!) : typed).trim();
   const errors: Record<string, string> = {};
   if (!ADDRESS.test(to)) errors.to = "Enter one email address.";
   if (kind === "compose" && subject.length < 2) errors.subject = "Write a subject.";
