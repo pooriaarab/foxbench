@@ -260,6 +260,13 @@ const mailTasks: Task[] = [
   mailTask("inkwell-archive-newsletters", "In Inkwell, archive the two newsletter emails (Brightline News and ShopCo Deals). Leave every other email in the inbox.",
     [["/inkwell/archive", { id: "p4" }], ["/inkwell/archive", { id: "p5" }]], all(folders(["p4", "p5"]), mailsSent(0))),
   mailTask("inkwell-archive-from", "In Inkwell, archive every email from Lena Fischer.", [["/inkwell/archive", { id: "p3" }], ["/inkwell/archive", { id: "p8" }]], all(folders(["p3", "p8"]), mailsSent(0)), { tier: "hard" }),
+  // Archive one category, keep the rest (#326): written from the task kinds only, not from any scored task's text.
+  ...([["inkwell-archive-travel", "In Inkwell, move every email about travel plans to the archive. The other mails stay in the inbox.", ["p9", "p10", "p12"]],
+    ["inkwell-archive-outside", "In Inkwell, archive the emails sent from outside Brightline, that is from any address not at brightline.example. Leave the Brightline mails in the inbox.", ["p2", "p5", "p7"]],
+    ["inkwell-archive-bills", "In Inkwell, file the bills and renewal notices (the printing invoice and the parking permit) in the archive, and nothing else.", ["p2", "p7"]],
+    ["inkwell-archive-day", "In Inkwell, archive every mail dated October 13, 2026. Mails from other days stay where they are.", ["p6", "p8", "p9", "p11", "p12"]],
+    ["inkwell-archive-review", "In Inkwell, archive Lena Fischer's two emails about Thursday's review (the draft slides and the room booking). Her CSV bug email stays in the inbox.", ["p3", "p8"]]] as const)
+    .map(([id, goal, ids]) => mailTask(id, goal, ids.map((m) => ["/inkwell/archive", { id: m }] as Post), all(folders([...ids]), mailsSent(0)), { tier: "hard" })),
   ...([["accounts@brightline.example", "Please pay this by Friday"], ["finance@brightline.example", "Can you approve this invoice"]] as const).map(([to, note], i) =>
     mailTask(`inkwell-forward-${i + 1}`, `In Inkwell, forward the PrintHouse invoice email to ${to} with the note "${note}."`, [["/inkwell/forward", { id: "p7", to, body: `${note}.` }]],
       all(mailsSent(1, { to, forwardOf: "p7", word: new RegExp(note.split(" ").slice(-2).join(" "), "i") }), folders([])))),
